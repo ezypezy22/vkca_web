@@ -1,0 +1,509 @@
+/**
+ * app.js v3 — WebSocket, tab routing, load dialog, refresh, countdown, LIVE button
+ */
+;(function () {
+  'use strict';
+
+  function emit(name, detail) {
+    window.dispatchEvent(new CustomEvent(name, { detail }));
+  }
+
+// ── Splash screen ─────────────────────────────────────────────────────────────
+(function () {
+  const MESSAGES = [
+    "Initialising interface...",
+    "Loading contest data...",
+    "Preparing multiplier tables...",
+    "Building band analysis...",
+    "Ready — please read the notice below.",
+  ];
+  const DISCLAIMER = `⚠  DISCLAIMER
+
+This software is provided on a best-effort basis and is intended as a supplemental tool only. While reasonable efforts have been made to ensure accuracy, the software may contain errors, omissions, or discrepancies.
+
+Users should rely on N1MM Logger+ as the authoritative source for contest logging, scoring, and official results.
+
+The developers of this software make no guarantees regarding the accuracy or completeness of any calculations, scores, or data presented.
+
+Users are responsible for verifying all information against N1MM before making decisions or submitting contest entries.`;
+
+  try { if (localStorage.getItem('vkca_splash_accepted') === '1') return; } catch {}
+
+  const el = document.createElement('div');
+  el.id = 'splash-overlay';
+  el.innerHTML = `
+    <div id="splash-box">
+      <canvas id="splash-canvas" width="620" height="200"></canvas>
+      <div id="splash-bar-wrap">
+        <div id="splash-bar"></div>
+      </div>
+      <div id="splash-msg">${MESSAGES[0]}</div>
+      <div id="splash-disclaimer">${DISCLAIMER.replace(/\n/g,'<br>')}</div>
+      <label id="splash-ack-wrap">
+        <input type="checkbox" id="splash-ack">
+        I have read and understood the above. I accept all risks.
+      </label>
+      <button id="splash-btn" disabled>Let's Get Started  ›</button>
+    </div>`;
+  document.body.appendChild(el);
+
+  // ── Canvas header (hexagon + title) ───────────────────────────────────────
+  const cv = document.getElementById('splash-canvas');
+  const ctx = cv.getContext('2d');
+  const W = 620, cy2 = 72, r = 36;
+  ctx.strokeStyle = '#00d4aa'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI/2 + (Math.PI/3)*i;
+    i===0 ? ctx.moveTo(W/2+r*Math.cos(a), cy2+r*Math.sin(a))
+           : ctx.lineTo(W/2+r*Math.cos(a), cy2+r*Math.sin(a));
+  }
+  ctx.closePath(); ctx.stroke();
+  ctx.fillStyle='#00d4aa'; ctx.font='bold 28px Consolas,monospace';
+  ctx.textAlign='center'; ctx.fillText('⬡', W/2, cy2+10);
+  ctx.fillStyle='#e6edf3'; ctx.font='bold 22px Consolas,monospace';
+  ctx.fillText('VK CONTEST ANALYZER', W/2, 135);
+  ctx.fillStyle='#8b949e'; ctx.font='11px Consolas,monospace';
+  ctx.fillText('N1MM+ LOG INTELLIGENCE', W/2, 155);
+  ctx.fillStyle='#8b949e'; ctx.font='12px Consolas,monospace';
+  ctx.fillText('by VK2YI', W/2, 178);
+  ctx.fillStyle='#8b949e'; ctx.font='9px Consolas,monospace';
+  ctx.fillText('v2.0', W/2, 196);
+
+  // ── Progress bar animation ─────────────────────────────────────────────────
+  const bar = document.getElementById('splash-bar');
+  const msgEl = document.getElementById('splash-msg');
+  let pct = 0, msgIdx = 0;
+  const anim = setInterval(() => {
+    const remaining = 100 - pct;
+    pct = Math.min(pct + Math.max(0.5, remaining * 0.045), 100);
+    bar.style.width = pct + '%';
+    const tick = Math.min(Math.floor(pct / (100 / MESSAGES.length)), MESSAGES.length - 1);
+    if (tick !== msgIdx) { msgIdx = tick; msgEl.textContent = MESSAGES[tick]; }
+    if (pct >= 100) clearInterval(anim);
+  }, 30);
+
+  // ── Checkbox + button ─────────────────────────────────────────────────────
+  const ack = document.getElementById('splash-ack');
+  const btn = document.getElementById('splash-btn');
+  ack.addEventListener('change', () => { btn.disabled = !ack.checked; });
+  btn.addEventListener('click', () => {
+    try { localStorage.setItem('vkca_splash_accepted', '1'); } catch {}
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 400);
+  });
+})();
+ 
+  // ── Tab routing ───────────────────────────────────────────────────────────
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b===btn));
+      document.querySelectorAll('.tab-panel').forEach(p =>
+        p.classList.toggle('active', p.id===`tab-${btn.dataset.tab}`));
+      emit('vka:tabchange', { tab: btn.dataset.tab });
+    });
+  });
+
+  // ── Status helpers ────────────────────────────────────────────────────────
+  const statusDot  = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+  const liveBtn    = document.getElementById('live-btn');
+
+  function setStatus(state, text) {
+    if (statusDot)  statusDot.className = `dot dot--${state}`;
+    if (statusText) statusText.textContent = text;
+  }
+
+  function setLive(on) {
+    if (!liveBtn) return;
+    liveBtn.className = 'live-badge ' + (on ? 'live--on' : 'live--off');
+    liveBtn.title     = on ? 'WebSocket connected — receiving live updates' : 'WebSocket disconnected';
+  }
+
+  // ── WebSocket ─────────────────────────────────────────────────────────────
+  let ws=null, wsRetry=0, _lastSnap=null;
+
+  function connectWS() {
+    ws = new WebSocket(`ws://${location.host}/ws/live`);
+    setStatus('loading','Connecting…');
+
+    ws.onopen = () => { wsRetry=0; setLive(true); };
+
+    ws.onmessage = ev => {
+      let msg; try { msg=JSON.parse(ev.data); } catch { return; }
+      if (msg.type==='ping') return;
+      if (msg.type==='snapshot') {
+        _lastSnap = msg.data;
+        emit('vka:snapshot', msg.data);
+        const d = msg.data||{};
+        if (Object.keys(d).length) {
+          const valid=d.valid||d.total||0, score=d.score||0;
+          const plugin=d._plugin_name||'';
+          setStatus('connected',
+            `${plugin?plugin+' · ':''}${valid.toLocaleString()} QSOs · ${score.toLocaleString()} pts`);
+        } else {
+          setStatus('connected','Connected — no data');
+        }
+        const hasSess=d?.session_status?.state;
+        document.body.classList.toggle('has-session-bar',!!hasSess);
+      }
+    };
+
+    ws.onclose = () => {
+      setLive(false);
+      setStatus('disconnected','Disconnected — retrying…');
+      setTimeout(connectWS, Math.min(500*2**wsRetry++, 8000));
+    };
+    ws.onerror = () => ws.close();
+  }
+
+  window.VKA = window.VKA || {};
+  window.VKA.lastSnap = () => _lastSnap;
+
+  // ── Manual refresh ────────────────────────────────────────────────────────
+  const btnRefresh = document.getElementById('btn-refresh');
+  let _refreshing  = false;
+
+  async function doRefresh() {
+    if (_refreshing) return;
+    _refreshing = true;
+    if (btnRefresh) { btnRefresh.textContent='↻ …'; btnRefresh.disabled=true; }
+    try {
+      const res  = await fetch('/api/snapshot');
+      const snap = await res.json();
+      if (snap && Object.keys(snap).length) {
+        _lastSnap = snap;
+        emit('vka:snapshot', snap);
+      }
+    } catch(e) { console.warn('Refresh failed:',e); }
+    finally {
+      _refreshing=false;
+      if (btnRefresh) { btnRefresh.textContent='↻ Refresh'; btnRefresh.disabled=false; }
+    }
+  }
+
+  btnRefresh?.addEventListener('click', ()=>{ doRefresh(); resetCountdown(); });
+
+  // ── Auto-refresh + countdown timer ───────────────────────────────────────
+  const autoSelect  = document.getElementById('auto-refresh-select');
+  const cdArc       = document.getElementById('countdown-arc');
+  const cdVal       = document.getElementById('countdown-val');
+  const CIRCUMF     = 2 * Math.PI * 11;  // r=11 → 69.1px
+  let _autoSecs     = 15;
+  let _cdRemaining  = 0;
+  let _cdTimer      = null;
+  let _cdInterval   = null;
+
+  function resetCountdown() {
+    if (_cdInterval) clearInterval(_cdInterval);
+    if (_cdTimer)    clearTimeout(_cdTimer);
+    if (_autoSecs <= 0) {
+      if (cdArc) cdArc.style.strokeDashoffset = '0';
+      if (cdVal)  cdVal.textContent = '—';
+      return;
+    }
+    _cdRemaining = _autoSecs;
+    tick();
+    _cdInterval = setInterval(()=>{ _cdRemaining--; tick(); }, 1000);
+    _cdTimer    = setTimeout(()=>{
+      doRefresh();
+      resetCountdown();
+    }, _autoSecs * 1000);
+  }
+
+  function tick() {
+    if (!cdArc || !cdVal) return;
+    const pct    = _cdRemaining / _autoSecs;
+    const offset = CIRCUMF * (1 - pct);
+    cdArc.style.strokeDashoffset = offset;
+    cdVal.textContent = _cdRemaining > 0 ? _cdRemaining : '';
+  }
+
+  function setAutoRefresh(secs) {
+    _autoSecs = secs;
+    resetCountdown();
+    try { localStorage.setItem('vkca_autorefresh', secs); } catch {}
+  }
+
+  if (autoSelect) {
+    autoSelect.addEventListener('change', ()=>setAutoRefresh(parseInt(autoSelect.value,10)));
+    try {
+      const saved=localStorage.getItem('vkca_autorefresh');
+      if (saved) { autoSelect.value=saved; setAutoRefresh(parseInt(saved,10)); }
+      else setAutoRefresh(15);
+    } catch { setAutoRefresh(15); }
+  }
+
+  // ── Zoom slider ───────────────────────────────────────────────────────────
+  (function(){
+    const slider=document.getElementById('zoom-slider');
+    const label =document.getElementById('zoom-label');
+    if (!slider) return;
+
+    function applyZoom(pct) {
+      pct = Math.max(70, Math.min(150, parseInt(pct,10)));
+      document.documentElement.style.fontSize = pct+'%';
+      if (label)  label.textContent = pct+'%';
+      slider.value = pct;
+      if (window.VKA?.setZoom) window.VKA.setZoom(pct);
+      try { localStorage.setItem('vkca_zoom',pct); } catch {}
+    }
+
+    slider.addEventListener('input', ()=>applyZoom(slider.value));
+    try { applyZoom(localStorage.getItem('vkca_zoom')||107); } catch { applyZoom(107); }
+  })();
+
+  // ── Load dialog ───────────────────────────────────────────────────────────
+  const overlay     = document.getElementById('load-dialog');
+  const stepPath    = document.getElementById('step-path');
+  const stepPicker  = document.getElementById('step-picker');
+  const pathInput   = document.getElementById('load-path-input');
+  const errDiv      = document.getElementById('load-error');
+  const contestList = document.getElementById('contest-list');
+  const pickerLabel = document.getElementById('picker-path-label');
+  const btnOpen     = document.getElementById('btn-load');
+  const btnBrowse   = document.getElementById('btn-browse');
+  const btnScan     = document.getElementById('btn-scan');
+  const btnBack     = document.getElementById('btn-back');
+  const btnCancel   = document.getElementById('btn-load-cancel');
+  const btnConfirm  = document.getElementById('btn-load-confirm');
+
+  let _selectedContest=null, _scannedPath='';
+
+  function showDialog() { overlay.classList.remove('hidden'); showStep('path'); setTimeout(()=>pathInput?.focus(),50); }
+  function hideDialog() { overlay.classList.add('hidden'); errDiv.classList.add('hidden'); _selectedContest=null; btnConfirm.disabled=true; }
+  function showStep(step) {
+    stepPath.classList.toggle('hidden',step!=='path');
+    stepPicker.classList.toggle('hidden',step!=='picker');
+    btnConfirm.style.display=step==='picker'?'':'none';
+  }
+  function showError(msg) { errDiv.textContent=msg; errDiv.classList.remove('hidden'); }
+
+  btnOpen?.addEventListener('click', showDialog);
+  btnCancel?.addEventListener('click', hideDialog);
+  btnBack?.addEventListener('click', ()=>showStep('path'));
+  overlay?.addEventListener('click', e=>{ if(e.target===overlay) hideDialog(); });
+
+  btnBrowse?.addEventListener('click', async ()=>{
+    btnBrowse.disabled=true; btnBrowse.textContent='…';
+    try {
+      const res=await fetch('/api/browse'); const data=await res.json();
+      if (data.error) { showError(data.error); return; }
+      if (data.path)  { pathInput.value=data.path; errDiv.classList.add('hidden'); await doScan(); }
+    } catch(e) { showError(`Browse failed: ${e.message}`); }
+    finally { btnBrowse.disabled=false; btnBrowse.textContent='📁'; }
+  });
+
+  async function doScan() {
+    const path=pathInput.value.trim();
+    if (!path) { showError('Enter or browse to a .s3db file path.'); return; }
+    errDiv.classList.add('hidden');
+    btnScan.disabled=true; btnScan.textContent='Scanning…';
+    try {
+      const res=await fetch('/api/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
+      const data=await res.json();
+      if (data.error) { showError(data.error); return; }
+      const contests=data.contests||[];
+      if (!contests.length) { showError('No contests with QSOs found in this database.'); return; }
+	  if (contests.length===1) { await doLoad(data.path,contests[0].contest_nr,contests[0].plugin); hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown(); return; }
+      _scannedPath=data.path;
+      pickerLabel.textContent=data.path.split(/[\\\/]/).pop();
+      buildContestList(contests);
+      showStep('picker');
+    } catch(e) { showError(`Scan failed: ${e.message}`); }
+    finally { btnScan.disabled=false; btnScan.textContent='Scan for Contests →'; }
+  }
+
+  btnScan?.addEventListener('click', doScan);
+  pathInput?.addEventListener('keydown', e=>{ if(e.key==='Enter') doScan(); });
+
+  const PLUGIN_COLS={'CQ WPX':'#f0c040','VK Shires':'#00d4aa','CQWW':'#f0c040',
+    'VK RD':'#ff6b35','Trans-Tasman':'#64b5f6','Oceania DX':'#2ed573',
+    'WPX':'#e040fb','Generic':'#8b949e'};
+
+  function buildContestList(contests) {
+    contestList.innerHTML=''; _selectedContest=null; btnConfirm.disabled=true;
+    contests.forEach((ct,i)=>{
+      const col=PLUGIN_COLS[ct.plugin]||'#8b949e';
+      const row=document.createElement('div');
+      row.className='contest-row';
+      row.innerHTML=`<div class="contest-row-accent" style="background:${col}"></div>
+        <div class="contest-row-body">
+          <div class="contest-row-name">${ct.display_name}</div>
+          <div class="contest-row-meta">
+            <span style="color:${col};font-weight:bold">${ct.plugin}</span>
+            <span>${ct.start_date}</span>
+            <span>${ct.qso_count.toLocaleString()} QSOs</span>
+          </div>
+        </div>
+        <div class="contest-row-arrow">›</div>`;
+      row.addEventListener('click',()=>{
+        document.querySelectorAll('.contest-row').forEach(r=>r.classList.remove('selected'));
+        row.classList.add('selected'); _selectedContest=ct; btnConfirm.disabled=false;
+      });
+      row.addEventListener('dblclick', async()=>{ _selectedContest=ct; await confirmLoad(); });
+      contestList.appendChild(row);
+      if (i===0) { row.classList.add('selected'); _selectedContest=ct; btnConfirm.disabled=false; }
+    });
+  }
+
+  async function confirmLoad() {
+    if (!_selectedContest) return;
+    btnConfirm.disabled=true; btnConfirm.textContent='Loading…';
+    try {
+      await doLoad(_scannedPath||pathInput.value.trim(), _selectedContest.contest_nr, _selectedContest.plugin);
+      hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown();
+    } catch {}
+    finally { btnConfirm.disabled=false; btnConfirm.textContent='Load Selected'; }
+  }
+
+  btnConfirm?.addEventListener('click', confirmLoad);
+
+  async function doLoad(path, contest_nr, plugin_name) {
+    setStatus('loading','Loading contest data…');
+    const res=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({path,contest_nr,plugin_name})});
+    const data=await res.json();
+    if (data.error) { showError(data.error); throw new Error(data.error); }
+    return data;
+  }
+
+
+  // ── Theme selector ────────────────────────────────────────────────────────
+  (function(){
+    const sel = document.getElementById('theme-select');
+    if (!sel) return;
+
+    async function applyTheme(name) {
+      try {
+        const res     = await fetch('/api/themes');
+        const data    = await res.json();
+        const palette = data.palette?.[name];
+        if (!palette) return;
+
+        // Apply CSS variables to :root
+        const root = document.documentElement;
+        Object.entries(palette).forEach(([k, v]) => {
+          if (typeof v === 'string') {
+            root.style.setProperty(`--${k}`, v);
+          }
+        });
+
+        // Special: light theme needs dark text on inputs etc.
+        const isLight = palette.bg && (palette.bg.startsWith('#f') || palette.bg.startsWith('#e'));
+        root.style.setProperty('--input-bg', isLight ? palette.bg3 : palette.bg3);
+
+        // Notify canvas modules
+        if (window.VKA?.onTheme) window.VKA.onTheme(palette);
+
+        try { localStorage.setItem('vkca_theme', name); } catch {}
+      } catch(e) { console.warn('Theme error:', e); }
+    }
+
+    sel.addEventListener('change', () => applyTheme(sel.value));
+
+    // Restore saved theme
+    try {
+      const saved = localStorage.getItem('vkca_theme');
+      if (saved) { sel.value = saved; applyTheme(saved); }
+    } catch {}
+  })();
+
+  // ── CSV Export + Snapshot — wired via event delegation on document
+  //    (buttons live in #tb-row2 which is parsed before these scripts run,
+  //     but getElementById at module-eval time can still return null in some
+  //     WebView environments; delegation is rock-solid regardless) ────────────
+  document.addEventListener('click', async function (e) {
+
+    // ── CSV ────────────────────────────────────────────────────────────────
+
+
+    // ── Snapshot ───────────────────────────────────────────────────────────
+    if (e.target.closest('#btn-csv')) {
+      // Show export menu near the button
+      const existingMenu = document.getElementById('csv-export-menu');
+      if (existingMenu) { existingMenu.remove(); return; }
+
+      const btn  = e.target.closest('#btn-csv');
+      const rect = btn.getBoundingClientRect();
+      const menu = document.createElement('div');
+      menu.id    = 'csv-export-menu';
+      menu.style.cssText = `position:fixed;top:${rect.bottom+4}px;right:${window.innerWidth-rect.right}px;
+        background:var(--bg2);border:1px solid var(--accent);border-radius:6px;z-index:9998;
+        font-family:var(--font-mono);font-size:0.77em;box-shadow:0 8px 24px rgba(0,0,0,.6);
+        min-width:220px;overflow:hidden;`;
+
+      const options = [
+        { label: '📋 All QSOs',       dataset: 'qsos',    desc: 'Full QSO log with scoring' },
+        { label: '🎯 Missing Mults',  dataset: 'missing', desc: 'Unworked multipliers list' },
+        { label: '📡 Band Breakdown', dataset: 'bands',   desc: 'Per-band efficiency stats' },
+        { label: '⚡ Hourly Rate',    dataset: 'rate',    desc: 'QSO count per hour' },
+        { label: '⚠️ Dupes',         dataset: 'dupes',   desc: 'Duplicate QSO analysis' },
+      ];
+
+      options.forEach((opt, idx) => {
+        const row = document.createElement('div');
+        row.style.cssText = `padding:8px 14px;cursor:pointer;transition:background .1s;
+          ${idx < options.length-1 ? 'border-bottom:1px solid var(--bg3)' : ''}`;
+        row.innerHTML = `<div style="color:var(--fg)">${opt.label}</div>
+          <div style="color:var(--muted);font-size:0.85em">${opt.desc}</div>`;
+        row.addEventListener('mouseover', ()=>row.style.background='var(--bg3)');
+        row.addEventListener('mouseout',  ()=>row.style.background='');
+        row.addEventListener('click', async () => {
+          menu.remove();
+          btn.textContent='⬇ …'; btn.disabled=true;
+          try {
+            const csvFname=`vkcontest_${opt.dataset}_${new Date().toISOString().slice(0,10)}.csv`;
+            const res=await fetch(`/api/export/csv/${opt.dataset}`);
+            if (!res.ok) {
+              const errData=await res.json().catch(()=>({error:res.statusText}));
+              throw new Error(errData.error||res.statusText);
+            }
+            const blob=await res.blob();
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement('a');
+            a.href=url; a.download=csvFname;
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a); URL.revokeObjectURL(url);
+            const loc=await fetch('/api/save_location').then(r=>r.json()).catch(()=>({}));
+            showToast('✓ CSV Saved',(loc.folder||'Downloads')+'\\'+csvFname,'📄');
+            btn.textContent='✓'; setTimeout(()=>{btn.textContent='⬇ CSV';btn.disabled=false;},2000);
+          } catch(err) {
+            showToast('CSV Export Failed',err.message,'✗',true);
+            btn.textContent='⬇ CSV'; btn.disabled=false;
+          }
+        });
+        menu.appendChild(row);
+      });
+      document.body.appendChild(menu);
+      setTimeout(()=>{
+        document.addEventListener('click', function closeMenu(ev){
+          if (!menu.contains(ev.target)&&ev.target!==btn){menu.remove();document.removeEventListener('click',closeMenu);}
+        });
+      }, 50);
+    }
+
+  });   // end document.addEventListener click
+
+  // ── Toast notification ─────────────────────────────────────────────────────
+  const _toast = document.createElement('div');
+  _toast.id = 'save-toast';
+  _toast.innerHTML = `<div class="toast-icon"></div>
+    <div class="toast-body"><div class="toast-title"></div><div class="toast-path"></div></div>
+    <div class="toast-close" onclick="this.closest('#save-toast').classList.remove('show')">✕</div>`;
+  document.body.appendChild(_toast);
+  let _toastTimer = null;
+
+  function showToast(title, path, icon, isError) {
+    isError = isError || false;
+    _toast.querySelector('.toast-icon').textContent = icon || '✓';
+    _toast.querySelector('.toast-title').textContent = title;
+    _toast.querySelector('.toast-title').style.color = isError ? 'var(--red)' : 'var(--accent)';
+    _toast.querySelector('.toast-path').textContent = path || '';
+    _toast.style.borderColor = isError ? 'var(--red)' : 'var(--accent)';
+    _toast.classList.add('show');
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => _toast.classList.remove('show'), isError ? 8000 : 5000);
+  }
+
+})();

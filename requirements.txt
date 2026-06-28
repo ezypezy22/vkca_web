@@ -1,0 +1,31 @@
+# VK Contest Analyzer — Full Requirements
+# Install with: pip install -r requirements.txt
+#
+# This file covers BOTH the tkinter app and the web mode.
+# Web-only dependencies are also listed in web/requirements-web.txt
+
+# ── Core (shared by both modes) ───────────────────────────────────────────────
+matplotlib>=3.7.0          # charts in tkinter mode + server-side PNG snapshots
+numpy>=1.24.0              # used by matplotlib
+pillow>=10.0.0             # image handling
+
+# ── Web server ────────────────────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+starlette>=0.37.0
+pydantic>=2.0.0
+anyio>=4.0.0
+websockets>=12.0
+h11>=0.14.0
+
+# ── PyWebView (desktop window) ────────────────────────────────────────────────
+pywebview>=5.0.0
+# Windows WebView2 backend (pywebview uses this on Windows):
+# No extra install needed — WebView2 is pre-installed on Windows 11 and
+# Windows 10 20H2+. For older machines, the installer will prompt.
+
+# ── Windows extras (for OS theme detection) ───────────────────────────────────
+pywin32>=306; sys_platform == 'win32'
+
+# ── Optional: faster JSON (auto-detected by fastapi/uvicorn) ─────────────────
+orjson>=3.9.0

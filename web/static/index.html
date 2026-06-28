@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VK Contest Analyzer v2.0</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- ── Title bar ─────────────────────────────────────────────────────────────
+     Two-row layout:
+       Row 1 (top): logo | title | status | [spacer] | Open Log
+       Row 2 (bot): LIVE | zoom | auto | countdown | refresh | sep | theme | sep | csv | snapshot
+──────────────────────────────────────────────────────────────────────────── -->
+<div id="titlebar">
+
+  <!-- Row 1: identity + primary action -->
+  <div id="tb-row1">
+    <div id="titlebar-logo">⬡</div>
+    <div id="titlebar-title">VK CONTEST ANALYZER <span style="color:var(--muted);font-size:0.75em">v2.0</span></div>
+    <div id="titlebar-status">
+      <span id="status-dot" class="dot dot--disconnected"></span>
+      <span id="status-text">No log loaded</span>
+    </div>
+    <div class="tb-spacer"></div>
+    <button id="btn-load" class="tb-btn tb-btn--primary tb-btn--open">📂 Open Log</button>
+  </div>
+
+  <!-- Row 2: controls -->
+  <div id="tb-row2">
+    <!-- LIVE indicator -->
+    <span id="live-btn" class="live-badge live--off" title="WebSocket live feed">● LIVE</span>
+
+    <div class="tb-sep"></div>
+
+    <!-- Zoom -->
+    <label class="tb-label">ZOOM</label>
+    <input id="zoom-slider" type="range" min="70" max="140" value="107" class="tb-slider" title="Double-click to reset to 100%">
+    <span id="zoom-label" class="tb-label" id="zoom-label">100%</span>
+
+    <div class="tb-sep"></div>
+
+    <!-- Auto-refresh + countdown -->
+    <label class="tb-label">AUTO</label>
+    <select id="auto-refresh-select" class="tb-select tb-select--narrow">
+      <option value="0">Off</option>
+      <option value="5">5s</option>
+      <option value="15" selected>15s</option>
+      <option value="30">30s</option>
+      <option value="60">60s</option>
+      <option value="120">2m</option>
+      <option value="300">5m</option>
+    </select>
+    <div id="countdown-wrap" class="countdown-wrap" title="Next auto-refresh in...">
+      <svg class="countdown-svg" viewBox="0 0 28 28">
+        <circle class="countdown-track" cx="14" cy="14" r="11"/>
+        <circle id="countdown-arc" class="countdown-arc" cx="14" cy="14" r="11"/>
+      </svg>
+      <span id="countdown-val" class="countdown-val">—</span>
+    </div>
+    <button id="btn-refresh" class="tb-btn">↻ Refresh</button>
+
+    <div class="tb-sep"></div>
+
+    <!-- Theme -->
+    <label class="tb-label">THEME</label>
+    <select id="theme-select" class="tb-select tb-select--theme">
+      <option value="Dark (Default)">Dark (Default)</option>
+      <option value="Light">Light</option>
+      <option value="High Contrast">High Contrast</option>
+      <option value="Deuteranopia-Safe">Deuteranopia-Safe</option>
+      <option value="Protanopia-Safe">Protanopia-Safe</option>
+    </select>
+
+    <div class="tb-sep"></div>
+
+    <!-- Export -->
+    <button id="btn-csv" class="tb-btn" title="Export current tab data as CSV">⬇ CSV</button>
+    <button id="btn-snapshot" class="tb-btn" title="Save gauges as PNG">📷 Snapshot</button>
+  </div>
+
+</div>
+
+<!-- ── Session bar ─────────────────────────────────────────────────────────── -->
+<div id="session-bar" style="display:none"></div>
+
+<!-- ── Tab bar ────────────────────────────────────────────────────────────── -->
+<nav id="tabbar">
+  <button class="tab-btn active" data-tab="overview">
+    <span class="tab-icon">📊</span><span class="tab-label">Overview</span>
+  </button>
+  <button class="tab-btn" data-tab="cluster">
+    <span class="tab-icon">📡</span><span class="tab-label">DX Cluster</span>
+  </button>
+  <button class="tab-btn" data-tab="map">
+    <span class="tab-icon">🌍</span><span class="tab-label">World Map</span>
+  </button>
+  <button class="tab-btn" data-tab="rate">
+    <span class="tab-icon">⚡</span><span class="tab-label">Rate</span>
+  </button>
+  <button class="tab-btn" data-tab="missing">
+    <span class="tab-icon">🎯</span><span class="tab-label">Missing Mults</span>
+  </button>
+  <button class="tab-btn" data-tab="bands">
+    <span class="tab-icon">📻</span><span class="tab-label">Bands</span>
+  </button>
+  <button class="tab-btn" data-tab="fatigue">
+    <span class="tab-icon">😴</span><span class="tab-label">Fatigue</span>
+  </button>
+  <button class="tab-btn" data-tab="yoy">
+    <span class="tab-icon">📈</span><span class="tab-label">Year on Year</span>
+  </button>
+  <button class="tab-btn" data-tab="pace">
+    <span class="tab-icon">🏁</span><span class="tab-label">Pace</span>
+  </button>
+  <button class="tab-btn" data-tab="dupes">
+    <span class="tab-icon">⚠️</span><span class="tab-label">Dupes</span>
+  </button>
+  <button class="tab-btn" data-tab="debug">
+    <span class="tab-icon">🛠</span><span class="tab-label">Debug Mults</span>
+  </button>
+  <button class="tab-btn" data-tab="worked">
+    <span class="tab-icon">📋</span><span class="tab-label">Worked</span>
+  </button>
+</nav>
+
+<!-- ── Content ────────────────────────────────────────────────────────────── -->
+<main id="content">
+
+  <!-- ══ OVERVIEW ══ -->
+  <section id="tab-overview" class="tab-panel active">
+    <div id="gauge-row" class="gauge-row"></div>
+
+    <div class="spark-row">
+      <div class="spark-card">
+        <div class="spark-hero" id="sp-qsos-val">—</div>
+        <div class="spark-title">QSOs / Hour</div>
+        <div class="spark-canvas-wrap"><canvas id="spark-qsos"></canvas></div>
+      </div>
+      <div class="spark-card">
+        <div class="spark-hero" id="sp-score-val">—</div>
+        <div class="spark-title">Running Score</div>
+        <div class="spark-canvas-wrap"><canvas id="spark-score"></canvas></div>
+      </div>
+      <div class="spark-card">
+        <div class="spark-hero" id="sp-mults-val">—</div>
+        <div class="spark-title">New Mults / Hr</div>
+        <div class="spark-canvas-wrap"><canvas id="spark-mults"></canvas></div>
+      </div>
+    </div>
+
+    <div class="info-panels-row">
+      <div class="info-panel" id="panel-contest-time">
+        <div class="ip-hdr"><span style="color:var(--accent3)">[ T ]</span>
+          <span class="ip-title" style="color:var(--accent3)">CONTEST TIME</span></div>
+        <div style="color:var(--muted);font-size:0.85em;padding:8px 0">Loading…</div>
+      </div>
+      <div class="info-panel" id="panel-band-eff">
+        <div class="ip-hdr"><span style="color:var(--accent)">[ ~ ]</span>
+          <span class="ip-title" style="color:var(--accent)">BAND EFFICIENCY</span></div>
+        <div style="color:var(--muted);font-size:0.85em;padding:8px 0">Loading…</div>
+      </div>
+      <div class="info-panel" id="panel-personal-bests">
+        <div class="ip-hdr"><span style="color:var(--accent2)">[ * ]</span>
+          <span class="ip-title" style="color:var(--accent2)">PERSONAL BESTS</span></div>
+        <div style="color:var(--muted);font-size:0.85em;padding:8px 0">Loading…</div>
+      </div>
+      <div class="info-panel" id="panel-qso-value">
+        <div class="ip-hdr"><span style="color:var(--accent3)">[ $ ]</span>
+          <span class="ip-title" style="color:var(--accent3)">QSO VALUE</span></div>
+        <div style="color:var(--muted);font-size:0.85em;padding:8px 0">Loading…</div>
+      </div>
+      <div class="info-panel" id="panel-last-worked">
+        <div class="ip-hdr"><span style="color:var(--green)">[ » ]</span>
+          <span class="ip-title" style="color:var(--green)">LAST WORKED</span></div>
+        <div style="color:var(--muted);font-size:0.85em;padding:8px 0">Loading…</div>
+      </div>
+      <div class="info-panel" id="panel-op-times">
+        <div class="ip-hdr"><span style="color:var(--accent)">[ O ]</span>
+          <span class="ip-title" style="color:var(--accent)">OPERATOR TIMES</span></div>
+        <div style="color:var(--muted);font-size:0.85em;padding:8px 0">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Contest-over summary notification (shown only when contest is ended) -->
+    <div id="contest-over-panel" class="contest-over-panel" style="display:none">
+      <div class="cop-icon">🏆</div>
+      <div class="cop-body">
+        <div class="cop-title" id="cop-title">Contest Complete</div>
+        <div class="cop-stats" id="cop-stats"></div>
+      </div>
+      <div class="cop-meta" id="cop-meta"></div>
+    </div>
+
+    <!-- Extra analytics row -->
+    <div class="extra-analytics-row">
+      <div class="ea-card" id="ea-rate-trend">
+        <div class="ea-label">RATE TREND</div>
+        <div class="ea-value" id="eat-trend">—</div>
+        <div class="ea-sub" id="eat-sub">vs prev hour</div>
+      </div>
+      <div class="ea-card" id="ea-mult-pct">
+        <div class="ea-label">MULT EFFICIENCY</div>
+        <div class="ea-value" id="eat-mult-pct">—</div>
+        <div class="ea-sub">worked / total possible</div>
+      </div>
+      <div class="ea-card" id="ea-dupe-rate">
+        <div class="ea-label">DUPE RATE</div>
+        <div class="ea-value" id="eat-dupe-rate">—</div>
+        <div class="ea-sub">of total QSOs</div>
+      </div>
+      <div class="ea-card" id="ea-pts-qso">
+        <div class="ea-label">AVG PTS / QSO</div>
+        <div class="ea-value" id="eat-pts-qso">—</div>
+        <div class="ea-sub">current average</div>
+      </div>
+      <div class="ea-card" id="ea-best-band">
+        <div class="ea-label">BEST BAND NOW</div>
+        <div class="ea-value" id="eat-best-band">—</div>
+        <div class="ea-sub">by mult efficiency</div>
+      </div>
+    </div>
+
+    <!-- QSO incentive insight bar -->
+    <div class="overview-insight" id="overview-insight">
+      <span style="color:var(--accent)">[ → ]</span>
+      <span id="insight-text">Load a contest log to see real-time QSO value insights.</span>
+    </div>
+
+    <div class="panel-box" id="bars-row">
+      <div class="panel-header">
+        <span class="panel-dot" style="color:var(--accent)">●</span>REGION COMPLETION
+      </div>
+      <div class="region-canvas-wrap"><canvas id="chart-region-bars"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ══ DX CLUSTER ══ -->
+  <section id="tab-cluster" class="tab-panel">
+    <div class="cluster-header panel-box">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span id="cluster-status-dot" class="cluster-dot dot-disc"></span>
+        <span id="cluster-status-text" style="font-family:var(--font-mono);font-size:0.85em;color:var(--muted)">Not connected</span>
+        <div class="tb-sep"></div>
+        <label class="tb-label">Preset</label>
+        <select id="cluster-host-select" class="tb-select" style="width:160px">
+          <option value="">— choose —</option>
+        </select>
+        <label class="tb-label">Host</label>
+        <input id="cluster-host-input" class="tb-input" value="vk2rcg.ampr.org" style="width:180px">
+        <label class="tb-label">Port</label>
+        <input id="cluster-port-input" class="tb-input" value="7300" style="width:60px">
+        <label class="tb-label">Callsign</label>
+        <input id="cluster-callsign" class="tb-input" value="VK2YI" style="width:90px">
+        <button id="cluster-connect-btn" class="btn btn--primary btn--sm">Connect</button>
+        <button id="cluster-disconnect-btn" class="btn btn--ghost btn--sm" disabled>Disconnect</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:10px;flex:1;min-height:0">
+      <!-- Spot list -->
+      <div class="panel-box" style="display:flex;flex-direction:column;min-height:0">
+        <div class="panel-header" style="flex-shrink:0">
+          <span style="color:var(--accent)">●</span> DX SPOTS
+          <span class="badge" id="cluster-spot-count">0</span>
+          <div style="display:flex;gap:4px;margin-left:8px">
+            <button class="cluster-band-btn active" data-band="ALL">ALL</button>
+            <button class="cluster-band-btn" data-band="160M">160</button>
+            <button class="cluster-band-btn" data-band="80M">80</button>
+            <button class="cluster-band-btn" data-band="40M">40</button>
+            <button class="cluster-band-btn" data-band="20M">20</button>
+            <button class="cluster-band-btn" data-band="15M">15</button>
+            <button class="cluster-band-btn" data-band="10M">10</button>
+          </div>
+          <input id="cluster-filter" class="filter-input" placeholder="Filter call…" style="width:140px;margin-left:auto">
+        </div>
+        <div class="table-wrap" style="flex:1;max-height:none">
+          <table class="data-table">
+            <thead><tr><th>DX Call</th><th>Freq</th><th>Band</th><th>Spotter</th><th>Comment</th><th>Time</th></tr></thead>
+            <tbody id="cluster-spots-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Raw feed + command -->
+      <div class="panel-box" style="display:flex;flex-direction:column;min-height:0">
+        <div class="panel-header" style="flex-shrink:0">
+          <span style="color:var(--muted)">●</span> RAW TELNET FEED
+        </div>
+        <div id="cluster-raw-feed" class="cluster-raw-feed"></div>
+        <input id="cluster-cmd-input" class="tb-input" placeholder="Type command, Enter to send…"
+               style="margin-top:6px;width:100%">
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ RATE ══ -->
+  <section id="tab-rate" class="tab-panel">
+    <div class="panel-box" style="min-height:260px">
+      <div class="panel-header"><span style="color:var(--accent)">●</span> QSOs PER HOUR</div>
+      <div style="position:relative;height:220px"><canvas id="chart-rate"></canvas></div>
+    </div>
+    <div class="panel-box">
+      <div class="panel-header"><span style="color:var(--accent3)">●</span> SESSION BREAKDOWN</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Session</th><th>QSOs</th><th>New Mults</th><th>Cum Mults</th><th>Pts</th><th>Running Score</th></tr></thead>
+          <tbody id="rate-sess-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ MISSING MULTS ══ -->
+  <section id="tab-missing" class="tab-panel">
+    <div class="panel-header">
+      <span style="color:var(--accent2)">●</span> MISSING MULTIPLIERS
+      <span class="badge" id="missing-count">0</span>
+      <input id="missing-filter" class="filter-input" placeholder="Filter…" type="text">
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Mult Code</th><th>Region</th></tr></thead>
+        <tbody id="missing-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══ BANDS ══ -->
+  <section id="tab-bands" class="tab-panel">
+    <div class="panel-header"><span style="color:var(--green)">●</span> BAND BREAKDOWN</div>
+    <div class="bands-grid">
+      <div class="bands-chart-wrap"><canvas id="chart-band-eff"></canvas></div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Band</th><th>QSOs</th><th>New Mults</th><th>Efficiency</th></tr></thead>
+          <tbody id="bands-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ FATIGUE ══ -->
+  <section id="tab-fatigue" class="tab-panel">
+    <div class="panel-header"><span style="color:var(--accent2)">●</span> OPERATOR FATIGUE &amp; RATE ANALYSIS</div>
+    <div id="fatigue-cards" class="fatigue-cards-row"></div>
+    <div class="panel-box" style="min-height:240px">
+      <div class="panel-header">
+        <span style="color:var(--accent)">●</span> HOURLY QSO RATE
+        <span style="color:var(--muted);font-size:0.77em;margin-left:6px">— red = dead zones below 50% avg · dashed = average line</span>
+      </div>
+      <div style="position:relative;height:200px"><canvas id="chart-fatigue"></canvas></div>
+    </div>
+    <div class="panel-box">
+      <div class="panel-header"><span style="color:var(--accent3)">●</span> NAP SCHEDULE ADVISORY</div>
+      <div id="fatigue-advice" style="font-family:var(--font-mono);font-size:0.85em;
+           color:var(--fg);padding:6px 0;line-height:1.6">
+        Load a contest log to generate fatigue advice.
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ YEAR ON YEAR ══ -->
+  <section id="tab-yoy" class="tab-panel">
+    <div class="panel-header"><span style="color:var(--accent3)">●</span> YEAR ON YEAR</div>
+    <div id="yoy-loading" style="display:none;padding:30px;color:var(--muted);font-family:var(--font-mono);font-size:0.85em">Loading historical data…</div>
+    <div id="yoy-msg" style="display:none;color:var(--muted);padding:20px;font-family:var(--font-mono);font-size:0.85em"></div>
+    <div class="yoy-grid">
+      <div class="panel-box" style="min-height:260px">
+        <div class="panel-header"><span style="color:var(--accent3)">●</span> Score &amp; Mults</div>
+        <div style="position:relative;height:220px"><canvas id="chart-yoy-score"></canvas></div>
+      </div>
+      <div class="panel-box" style="min-height:260px">
+        <div class="panel-header"><span style="color:var(--green)">●</span> QSO Trend</div>
+        <div style="position:relative;height:220px"><canvas id="chart-yoy-qsos"></canvas></div>
+      </div>
+    </div>
+    <div class="panel-box">
+      <div class="panel-header"><span style="color:var(--muted)">●</span> HISTORY TABLE</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Year</th><th>QSOs</th><th>Mults</th><th>Band Mults</th><th>Score</th><th></th></tr></thead>
+          <tbody id="yoy-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ PACE ══ -->
+  <section id="tab-pace" class="tab-panel">
+    <div class="panel-header"><span style="color:var(--green)">●</span> PACE TRACKER — Score Projection vs Current Rate</div>
+    <div id="pace-alarm" class="pace-alarm" style="display:none"></div>
+    <div class="pace-cards-row">
+      <div class="pace-card"><div class="pace-val" id="pace-cur-rate">—</div><div class="pace-label">Current Rate/hr</div></div>
+      <div class="pace-card"><div class="pace-val" id="pace-prev-rate" style="color:var(--muted)">—</div><div class="pace-label">Prev Hour Rate</div></div>
+      <div class="pace-card"><div class="pace-val" id="pace-best-rate" style="color:var(--accent3)">—</div><div class="pace-label">Best Hour Rate</div></div>
+      <div class="pace-card"><div class="pace-val" id="pace-rem-hrs" style="color:var(--accent2)">—</div><div class="pace-label">Remaining</div></div>
+      <div class="pace-card"><div class="pace-val" id="pace-proj-qsos">—</div><div class="pace-label">Projected QSOs</div></div>
+      <div class="pace-card"><div class="pace-val" id="pace-proj-mults" style="color:var(--accent3)">—</div><div class="pace-label">Projected Mults</div></div>
+      <div class="pace-card" style="border-top-color:var(--accent)"><div class="pace-val" id="pace-proj-score" style="color:var(--accent)">—</div><div class="pace-label">Projected Score</div></div>
+    </div>
+    <div class="panel-box" style="min-height:220px">
+      <div class="panel-header"><span style="color:var(--accent3)">●</span> SCORE PROJECTION</div>
+      <div style="position:relative;height:180px"><canvas id="chart-pace-proj"></canvas></div>
+    </div>
+    <div class="panel-box">
+      <div class="panel-header"><span style="color:var(--green)">●</span> SCORE TARGETS</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Target</th><th>Still Needed</th><th>Extra QSOs</th><th>Hours at Current Rate</th><th>Feasible?</th></tr></thead>
+          <tbody id="pace-targets-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ DUPES ══ -->
+  <section id="tab-dupes" class="tab-panel">
+    <div class="panel-header">
+      <span style="color:var(--accent2)">●</span> DUPE ANALYSIS
+      <span class="badge" id="dupe-total">0</span>
+      <span style="color:var(--muted);font-size:0.77em;margin-left:8px">
+        In WPX: a station may be worked once per band. Dupes score 0 pts and are not penalised.
+      </span>
+    </div>
+    <div class="dupes-grid">
+      <div class="panel-box" style="min-height:200px">
+        <div class="panel-header"><span style="color:var(--accent2)">●</span> DUPES BY BAND</div>
+        <div style="position:relative;height:160px"><canvas id="chart-dupes-band"></canvas></div>
+      </div>
+      <div class="panel-box">
+        <div class="panel-header"><span style="color:var(--accent2)">●</span> REPEAT CALLERS</div>
+        <div class="table-wrap" style="max-height:200px">
+          <table class="data-table">
+            <thead><tr><th>Callsign</th><th>Dupe Count</th></tr></thead>
+            <tbody id="dupes-call-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <!-- All dupe QSOs -->
+    <div class="panel-box" id="dupes-qso-wrap" style="display:none">
+      <div class="panel-header"><span style="color:var(--accent2)">●</span> DUPE QSO LIST (not scored)</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Call</th><th>Band</th><th>Mode</th><th>Time UTC</th><th>Mult</th></tr></thead>
+          <tbody id="dupes-qso-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ DEBUG MULTS ══ -->
+  <section id="tab-debug" class="tab-panel">
+    <div class="panel-header">
+      <span style="color:var(--muted)">●</span> DEBUG MULTS
+      <span class="badge" id="debug-count">0</span>
+      <input id="debug-filter" class="filter-input" placeholder="Filter call, band, mult…" type="text">
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Call</th><th>Band</th><th>Mode</th><th>Mult1</th><th>Raw Mult</th><th>Source</th><th>Pts</th><th>Dupe</th><th>Time UTC</th></tr></thead>
+        <tbody id="debug-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══ WORKED ══ -->
+  <section id="tab-worked" class="tab-panel">
+    <div class="panel-header">
+      <span style="color:var(--accent3)">●</span> ALL WORKED QSOs
+      <span class="badge" id="worked-count">0</span>
+      <input id="worked-filter" class="filter-input" placeholder="Filter call, band, mode…" type="text">
+      <div style="margin-left:8px;display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:0.77em">
+        <button id="worked-prev" class="btn btn--ghost btn--sm" disabled>‹ Prev</button>
+        <span id="worked-page" style="color:var(--muted)">1 / 1</span>
+        <button id="worked-next" class="btn btn--ghost btn--sm" disabled>Next ›</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Call</th><th>Band</th><th>Mode</th><th>Mult</th><th>Pts</th><th>Time (UTC)</th><th>Dupe</th></tr></thead>
+        <tbody id="worked-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══ WORLD MAP ══ -->
+  <section id="tab-map" class="tab-panel">
+    <div class="map-toolbar panel-box" style="flex-direction:row;align-items:center;gap:10px;flex-shrink:0">
+      <div class="panel-header" style="margin:0">
+        <span style="color:var(--accent)">●</span> QSO WORLD MAP
+      </div>
+      <span id="map-stats" style="font-family:var(--font-mono);font-size:0.77em;color:var(--muted)"></span>
+      <div style="display:flex;gap:4px;margin-left:8px">
+        <button class="map-band-btn active" data-band="ALL">ALL</button>
+        <button class="map-band-btn" data-band="160M">160</button>
+        <button class="map-band-btn" data-band="80M">80</button>
+        <button class="map-band-btn" data-band="40M">40</button>
+        <button class="map-band-btn" data-band="20M">20</button>
+        <button class="map-band-btn" data-band="15M">15</button>
+        <button class="map-band-btn" data-band="10M">10</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:0.77em;color:var(--muted);cursor:pointer">
+        <input id="map-toggle-short" type="checkbox" checked>
+        <span style="color:var(--accent)">── Short path</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:0.77em;color:var(--muted);cursor:pointer">
+        <input id="map-toggle-long" type="checkbox">
+        <span style="color:var(--muted)">╌╌ Long path</span>
+      </label>
+      <div class="tb-sep"></div>
+      <label class="tb-label">BASEMAP</label>
+      <select id="map-basemap-select" class="tb-select" style="width:160px">
+        <optgroup label="── Dark">
+          <option value="Dark (CartoDB)" selected>Dark (CartoDB)</option>
+          <option value="Voyager (CartoDB)">Voyager (CartoDB)</option>
+          <option value="ESRI Dark Gray">ESRI Dark Gray</option>
+          <option value="Stadia Alidade Dark">Stadia Dark</option>
+        </optgroup>
+        <optgroup label="── Satellite">
+          <option value="ESRI Satellite">ESRI Satellite</option>
+          <option value="ESRI Satellite + Labels">ESRI Satellite + Labels</option>
+          <option value="Stadia Alidade Satellite">Stadia Satellite</option>
+        </optgroup>
+        <optgroup label="── Terrain">
+          <option value="ESRI Topo">ESRI Topo</option>
+          <option value="ESRI Ocean">ESRI Ocean</option>
+          <option value="ESRI Terrain">ESRI Terrain</option>
+          <option value="ESRI Physical">ESRI Physical</option>
+          <option value="ESRI NatGeo">ESRI NatGeo</option>
+        </optgroup>
+        <optgroup label="── Street">
+          <option value="ESRI Streets">ESRI Streets</option>
+          <option value="OSM Standard">OpenStreetMap</option>
+          <option value="Stadia OSM Bright">Stadia Bright</option>
+        </optgroup>
+      </select>
+      <div class="tb-sep"></div>
+      <label class="tb-label">HOME</label>
+      <input id="map-home-input" class="tb-input" value="-33.9,151.2"
+             placeholder="lat,lon" title="Home station coordinates (lat,lon)"
+             style="width:110px">
+      <button id="map-home-btn" class="tb-btn" title="Apply home coordinates">Set</button>
+      <div id="map-legend" class="map-legend"></div>
+    </div>
+    <div id="world-map-container" class="world-map-container"></div>
+  </section>
+
+
+</main>
+
+<!-- ── Load dialog ─────────────────────────────────────────────────────────── -->
+<div id="load-dialog" class="dialog-overlay hidden">
+  <div class="dialog">
+    <div class="dialog-title">Open Contest Log</div>
+    <div class="dialog-body">
+      <div id="step-path">
+        <label class="dialog-label">Path to .s3db file</label>
+        <div class="path-row">
+          <input id="load-path-input" class="dialog-input" placeholder="C:\N1MM Logger+\Logs\contest.s3db" type="text">
+          <button id="btn-browse" class="btn btn--ghost btn--icon" title="Browse…">📁</button>
+        </div>
+        <div id="load-error" class="dialog-error hidden"></div>
+        <button id="btn-scan" class="btn btn--primary" style="margin-top:12px;width:100%">Scan for Contests →</button>
+      </div>
+      <div id="step-picker" class="hidden">
+        <div class="picker-header">
+          <button id="btn-back" class="btn btn--ghost btn--sm">← Back</button>
+          <span class="dialog-label" style="margin:0" id="picker-path-label"></span>
+        </div>
+        <div class="contest-list-wrap"><div id="contest-list" class="contest-list"></div></div>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button id="btn-load-cancel" class="btn btn--ghost">Cancel</button>
+      <button id="btn-load-confirm" class="btn btn--primary" disabled style="display:none">Load Selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Scripts ─────────────────────────────────────────────────────────────── -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.geodesic@2.7.1/dist/leaflet.geodesic.umd.min.js"></script>
+<script src="/static/app.js"></script>
+<script src="/static/overview.js"></script>
+<script src="/static/cluster.js"></script>
+<script src="/static/rate.js"></script>
+<script src="/static/missing.js"></script>
+<script src="/static/bands.js"></script>
+<script src="/static/fatigue.js"></script>
+<script src="/static/yoy.js"></script>
+<script src="/static/pace.js"></script>
+<script src="/static/dupes.js"></script>
+<script src="/static/debug.js"></script>
+<script src="/static/worked.js"></script>
+<script src="/static/worldmap.js"></script>
+</body>
+</html>

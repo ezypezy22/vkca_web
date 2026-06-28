@@ -1,0 +1,665 @@
+/**
+ * overview.js v7 — CORRECT gauge geometry verified by coordinate math:
+ *
+ * canvas y-DOWN: 0°=3-o'clock, 90°=6-o'clock, 270°=12-o'clock
+ * Desired: C-shape opening at bottom, arc goes over the top
+ *   Start = 30° (5-o'clock, lower-right)  cos=+0.87, sin=+0.50 ✓ lower-right
+ *   End   = 150° (7-o'clock, lower-left)  cos=-0.87, sin=+0.50 ✓ lower-left
+ *   Direction: CCW (anticlockwise=true) from 30° to 150° = 240° over the top ✓
+ *
+ * Fill: CCW from 30°, so fillEnd = 30° - frac*240°
+ *   frac=0:   fillEnd=30°   (no fill, starts at lower-right)
+ *   frac=0.5: fillEnd=-90°=270° (top of arc, half full) ✓
+ *   frac=1:   fillEnd=-210°=150° (lower-left, full) ✓
+ */
+;(function () {
+  'use strict';
+
+  // ── Theme-aware colour state (updated by applyTheme) ─────────────────────
+  let T = {
+    accent:'#00d4aa', accent2:'#ff6b35', accent3:'#f0c040',
+    green:'#2ed573',  red:'#ff4757',     muted:'#8b949e',
+    bg:'#0d1117',     bg2:'#161b22',     bg3:'#21262d',    fg:'#e6edf3',
+  };
+  let BAND_COLS = {
+    '160M':'#e040fb','80M':'#ff6b35','60M':'#f0c040','40M':'#2ed573',
+    '30M':'#00bcd4','20M':'#00d4aa','17M':'#64b5f6','15M':'#ff5252',
+    '12M':'#ffab40','10M':'#69f0ae','6M':'#ea80fc','2M':'#80d8ff',
+  };
+  let STATE_COLS = {
+    NSW:'#00d4aa',QLD:'#f0c040',VIC:'#64b5f6',SA:'#ff6b35',
+    WA:'#e040fb', TAS:'#2ed573',NT:'#ff5252',ACT:'#ffab40',
+  };
+
+  function onTheme(palette) {
+    if (!palette) return;
+    T = { ...T,
+      accent:palette.accent, accent2:palette.accent2, accent3:palette.accent3,
+      green:palette.green, red:palette.red, muted:palette.muted,
+      bg:palette.bg, bg2:palette.bg2, bg3:palette.bg3, fg:palette.fg,
+    };
+    if (palette.band_colours) {
+      Object.keys(palette.band_colours).forEach(k => {
+        BAND_COLS[k.toUpperCase()] = palette.band_colours[k];
+      });
+    }
+    if (palette.state_colours) {
+      Object.keys(palette.state_colours).forEach(k => {
+        STATE_COLS[k.toUpperCase()] = palette.state_colours[k];
+      });
+    }
+    Chart.defaults.color = T.muted;
+    // Rebuild charts that exist
+    if (regionChart) { regionChart.destroy(); regionChart = null; }
+    if (_snap) render(_snap);
+    redrawAll();
+  }
+
+  window.VKA = window.VKA || {};
+  window.VKA.onTheme = onTheme;
+
+  Chart.defaults.color       = T.muted;
+  Chart.defaults.font.family = 'Consolas, monospace';
+
+  // ══ GAUGE GEOMETRY (VERIFIED) ════════════════════════════════════════════════
+  // Convert Python matplotlib (CCW, y-UP) angles to canvas (CW, y-DOWN):
+  //   ts=210° CCW y-up  →  canvas -210° = 150° CW y-down
+  //   te=-30° CCW y-up  →  canvas  +30° = 30°  CW y-down
+  // Track: CW (anticlockwise=false) from 150° to 30° = 240° over the top ✓
+  // Fill:  CW from 150°, adding angle: fillEnd = 150° + frac*240°
+  //   frac=0:   150° (lower-left,  7-o'clock) — tip starts LEFT  ✓
+  //   frac=0.5: 270° (top,         12-o'clock) — halfway          ✓
+  //   frac=1:    30° (lower-right,  5-o'clock) — tip ends RIGHT   ✓
+  const DEG     = Math.PI / 180;
+  const G_START = 150 * DEG;   // 7-o'clock (lower-left)  — fill start, "0" label
+  const G_END   = 30  * DEG;   // 5-o'clock (lower-right) — fill end,   "max" label
+  const G_SWEEP = 240 * DEG;   // CW sweep over the top
+
+  function polarXY(cx, cy, r, a) {
+    return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+  }
+
+  function fmtVal(v, fmt) {
+    if (!fmt || fmt === '{v}')  return Math.round(v||0).toLocaleString('en-AU');
+    if (fmt.includes(':,'))      return Math.round(v||0).toLocaleString('en-AU');
+    const m = fmt.match(/\{v:\.(\d+)f\}/);
+    if (m) return (v||0).toFixed(parseInt(m[1]));
+    return String(Math.round(v||0));
+  }
+
+  function fmtMax(n) {
+    n = Math.round(n||0);
+    if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+    if (n >= 1e3) return (n/1e3).toFixed(0)+'k';
+    return n.toLocaleString();
+  }
+
+  function drawGauge(canvas, frac, colour, valStr, label, maxStr, fs) {
+    const dpr = window.devicePixelRatio || 1;
+    const w   = canvas.clientWidth;
+    const h   = canvas.clientHeight;
+    if (!w || !h) return;
+    canvas.width  = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    const cx  = w / 2;
+    const cy  = h * 0.50;
+    const ro  = Math.min(w, h) * 0.40;
+    const ri  = ro * 0.70;
+    const mid = (ro + ri) / 2;
+    const lw  = ro - ri;
+
+    // ── Track: CW (anticlockwise=false) from G_START(150°) to G_END(30°) = 240° over top
+    ctx.beginPath();
+    ctx.arc(cx, cy, mid, G_START, G_END, false);
+    ctx.strokeStyle = T.bg3;
+    ctx.lineWidth   = lw;
+    ctx.lineCap     = 'butt';
+    ctx.stroke();
+
+    // ── Fill: CW from 150°, add frac*240° (tip moves left→right)
+    if (frac > 0.001) {
+      const fillEnd = G_START + Math.min(frac, 1) * G_SWEEP;
+      ctx.beginPath();
+      ctx.arc(cx, cy, mid, G_START, fillEnd, false);
+      ctx.strokeStyle = colour;
+      ctx.lineWidth   = lw;
+      ctx.lineCap     = 'round';
+      ctx.stroke();
+
+      // White tip dot
+      const [tx, ty] = polarXY(cx, cy, mid, fillEnd);
+      ctx.beginPath();
+      ctx.arc(tx, ty, Math.max(3.5, lw*0.30), 0, Math.PI*2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+    }
+
+    // ── Tick marks at 0/25/50/75/100% (CCW = subtract)
+    [0, 0.25, 0.5, 0.75, 1.0].forEach(tf => {
+      const ta = G_START + tf * G_SWEEP;
+      const [x1,y1] = polarXY(cx, cy, ri*0.88, ta);
+      const [x2,y2] = polarXY(cx, cy, ri*1.00, ta);
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+      ctx.strokeStyle=T.muted; ctx.lineWidth=1.5; ctx.lineCap='butt'; ctx.stroke();
+    });
+
+    // ── Value text
+    const sf    = valStr.length > 7 ? (7/valStr.length) : valStr.length > 5 ? 0.88 : 1.0;
+    const valFs = fs * 1.1 * sf;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle=colour;
+    ctx.font=`bold ${valFs}px Consolas, monospace`;
+    ctx.fillText(valStr, cx, cy - ri*0.05);
+
+    // ── Label
+    ctx.fillStyle=T.muted;
+    ctx.font=`${fs*0.50}px Consolas, monospace`;
+    ctx.fillText(label, cx, cy + ri*0.33);
+
+    // ── 0 at G_START (150°=lower-left), max at G_END (30°=lower-right)
+    const [x0,y0] = polarXY(cx, cy, ro*1.10, G_START);
+    const [xm,ym] = polarXY(cx, cy, ro*1.10, G_END);
+    ctx.fillStyle=T.muted; ctx.font=`${fs*0.44}px Consolas, monospace`; ctx.textAlign='center';
+    ctx.fillText('0', x0, y0);
+    ctx.fillText(maxStr, xm, ym);
+  }
+
+  // ══ PLUGIN-DRIVEN GAUGES ═══════════════════════════════════════════════════
+  let _gaugeDefs=[], _gaugeState={}, _snap=null, _fs=14, _metaLoaded=false;
+
+  const _tip = document.createElement('div');
+  _tip.style.cssText=`position:fixed;display:none;pointer-events:none;z-index:9999;
+    background:#161b22;border:1px solid #00d4aa;border-radius:6px;padding:10px 14px;
+    font-family:Consolas,monospace;font-size:11px;color:#e6edf3;max-width:300px;
+    line-height:1.7;white-space:pre-wrap;box-shadow:0 8px 32px rgba(0,0,0,.7);`;
+  document.body.appendChild(_tip);
+  function showTip(t,x,y){_tip.textContent=t;_tip.style.display='block';
+    const tw=_tip.offsetWidth,th=_tip.offsetHeight,vw=window.innerWidth,vh=window.innerHeight;
+    _tip.style.left=Math.min(x+14,vw-tw-10)+'px'; _tip.style.top=Math.max(10,Math.min(y-th/2,vh-th-10))+'px';}
+  function hideTip(){_tip.style.display='none';}
+
+  async function loadPluginMeta() {
+    try {
+      const res=await fetch('/api/plugin_meta'); const meta=await res.json();
+      if (!meta.loaded) return;
+      _metaLoaded=true; _gaugeDefs=meta.gauge_defs||[];
+      setTabVisible('missing', meta.has_missing_tab!==false);
+      const br=document.getElementById('bars-row');
+      if (br) br.style.display=meta.has_state_bars?'':'none';
+      buildGaugeRow(_gaugeDefs);
+      if (_snap) updateGauges(_snap);
+    } catch(e){ console.warn('plugin_meta:',e); }
+  }
+
+  function setTabVisible(id,v){const b=document.querySelector(`.tab-btn[data-tab="${id}"]`);if(b)b.style.display=v?'':'none';}
+
+  function buildGaugeRow(defs) {
+    const row=document.getElementById('gauge-row'); if(!row) return;
+    row.innerHTML='';
+    row.style.gridTemplateColumns=`repeat(${defs.length},1fr)`;
+    _gaugeState={};
+    defs.forEach((g,i)=>{
+      const card=document.createElement('div'); card.className='gauge-card';
+      const canvas=document.createElement('canvas'); canvas.id=`gauge-${i}`;
+      card.appendChild(canvas); row.appendChild(card);
+      _gaugeState[i]={cur:0,raf:null};
+      if (g.tooltip){
+        card.addEventListener('mousemove',e=>showTip(g.tooltip,e.clientX,e.clientY));
+        card.addEventListener('mouseleave',hideTip);
+        card.style.cursor='help';
+      }
+    });
+    setTimeout(redrawAll,50);
+  }
+
+  function updateGauges(snap) {
+    if (!snap) return; _snap=snap;
+    if (!_metaLoaded){loadPluginMeta();return;}
+    _gaugeDefs.forEach((g,i)=>{
+      const val=snap[g.value_key]??0, maxVal=Number(g.max_val)||1;
+      animGauge(i,g,val,maxVal,Math.max(0,Math.min(1,val/maxVal)));
+    });
+  }
+
+  function animGauge(idx,gDef,val,maxVal,target){
+    const st=_gaugeState[idx]; if(!st) return;
+    const t0=performance.now(),s0=st.cur;
+    if(st.raf) cancelAnimationFrame(st.raf);
+    function step(now){
+      const t=Math.min((now-t0)/700,1);
+      st.cur=s0+(target-s0)*(1-Math.pow(1-t,3));
+      redrawGauge(idx,gDef,st.cur,val,maxVal);
+      if(t<1) st.raf=requestAnimationFrame(step);
+      else{st.cur=target;st.raf=null;}
+    }
+    st.raf=requestAnimationFrame(step);
+  }
+
+  function redrawGauge(idx,gDef,frac,val,maxVal){
+    const canvas=document.getElementById(`gauge-${idx}`); if(!canvas) return;
+    drawGauge(canvas,frac,gDef.colour||T.accent,fmtVal(val,gDef.fmt),gDef.label,fmtMax(maxVal),_fs);
+  }
+
+  function redrawAll(){
+    if(!_snap||!_metaLoaded) return;
+    _gaugeDefs.forEach((g,i)=>{
+      const val=_snap[g.value_key]??0,maxVal=Number(g.max_val)||1;
+      redrawGauge(i,g,_gaugeState[i]?.cur??0,val,maxVal);
+    });
+  }
+
+  window.VKA.setZoom=pct=>{_fs=14*(pct/100);redrawAll();};
+  window.addEventListener('resize',redrawAll);
+
+  // ══ SPARKLINES ═════════════════════════════════════════════════════════════
+  let _sparks={};
+  function makeSparkline(id,colour){
+    const canvas=document.getElementById(id); if(!canvas) return null;
+    const ctx=canvas.getContext('2d');
+    const grad=ctx.createLinearGradient(0,0,0,80);
+    grad.addColorStop(0,colour+'44'); grad.addColorStop(1,colour+'00');
+    return new Chart(ctx,{type:'line',
+      data:{labels:[],datasets:[{data:[],borderColor:colour,borderWidth:2,
+        backgroundColor:grad,fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4}]},
+      options:{responsive:true,maintainAspectRatio:false,animation:{duration:400},
+        plugins:{legend:{display:false},
+          tooltip:{mode:'index',intersect:false,backgroundColor:T.bg3,
+            borderColor:colour,borderWidth:1,titleColor:colour,bodyColor:T.fg}},
+        scales:{
+          x:{ticks:{color:T.muted,font:{size:9},maxTicksLimit:12,maxRotation:0},grid:{color:T.bg3+'60'}},
+          y:{ticks:{color:T.muted,font:{size:9}},grid:{color:T.bg3+'60'},beginAtZero:true},
+        }},
+    });
+  }
+
+  function initSparklines(){
+    _sparks={
+      qsos: makeSparkline('spark-qsos',T.accent),
+      score:makeSparkline('spark-score',T.accent3),
+      mults:makeSparkline('spark-mults',T.accent2),
+    };
+  }
+  initSparklines();
+
+  function updateSparklines(snap){
+    const sl=snap?.sparklines; if(!sl) return;
+    function apply(chart,data,heroId){
+      if(!chart||!data?.length) return;
+      chart.data.labels=data.map((_,i)=>String(i).padStart(2,'0'));
+      chart.data.datasets[0].data=data;
+      const peak=Math.max(...data,0),pi=data.lastIndexOf(peak);
+      chart.data.datasets[0].pointRadius=data.map((_,i)=>i===pi?5:0);
+      chart.data.datasets[0].pointBackgroundColor=
+        data.map((_,i)=>i===pi?chart.data.datasets[0].borderColor:'transparent');
+      chart.update();
+      const last=[...data].reverse().find(v=>v>0)||0;
+      const el=document.getElementById(heroId); if(el) el.textContent=last.toLocaleString('en-AU');
+    }
+    apply(_sparks.qsos, sl.qsos,'sp-qsos-val');
+    apply(_sparks.score,sl.running_score,'sp-score-val');
+    apply(_sparks.mults,sl.new_mults,'sp-mults-val');
+  }
+
+  // ══ CONTEST TIME PANEL ═════════════════════════════════════════════════════
+  function updateContestTime(snap){
+    const el=document.getElementById('panel-contest-time'); if(!el) return;
+    const ss=snap?.session_status||{}, sc=snap?.score||0;
+    const state=ss.state||'';
+    const col=state==='live'?T.accent:state==='over'?T.muted:T.accent3;
+    const uses_blocks=snap?._uses_block_structure??false;
+    const title=uses_blocks?'[ B ] BLOCK STATUS':'[ T ] CONTEST TIME';
+
+    let body='';
+    if (state==='over') {
+      body=`<div class="ct-label" style="color:${T.accent3}">FINAL SCORE</div>
+        <div class="ct-score" style="color:${T.accent3}">${(sc||0).toLocaleString('en-AU')}</div>
+        <div class="ct-sub">${snap?.valid||0} Q × ${snap?.band_mults||snap?.worked||0} mults</div>
+        <div class="ct-info" style="color:${T.muted}">Best rate: ${snap?.personal_bests?.best_hour_rate||0} Q/hr @ ${String(snap?.personal_bests?.best_hour_time||'').substring(11,16)||'—'} UTC</div>
+        <div class="ct-info" style="color:${T.red}">Dupes: ${(snap?.total||0)-(snap?.valid||0)}</div>
+        <div class="ct-info" style="color:${T.muted}">${ss.end_dt?String(ss.end_dt).substring(0,16)+' UTC':''}</div>`;
+    } else if (state==='live') {
+      const rem=Math.round(ss.total_remaining_mins??ss.remaining_mins??0);
+      const pct=((ss.total_pct_elapsed??ss.pct_elapsed)||0).toFixed(0);
+      body=`<div class="ct-label">${ss.session_label||''}</div>
+        <div class="ct-prog-wrap"><div class="ct-prog-bar" style="width:${pct}%;background:${col}55;border-right:2px solid ${col}"></div></div>
+        <div class="ct-sub" style="color:${col}">${rem}m remaining · ${pct}%</div>
+        <div class="ct-score" style="color:${T.accent}">${(sc||0).toLocaleString('en-AU')}</div>
+        <div class="ct-sub">${snap?.valid||0} Q × ${snap?.band_mults||snap?.worked||0} mults</div>`;
+    } else {
+      body=`<div class="ct-sub" style="color:${T.muted}">No contest loaded</div>`;
+    }
+
+    el.innerHTML=`<div class="ip-hdr"><span style="color:${col}">[ T ]</span>
+      <span class="ip-title" style="color:${col}">${title.replace(/\[.\] /,'')}</span></div>${body}`;
+  }
+
+  // ══ REGION BARS ════════════════════════════════════════════════════════════
+  let regionChart=null;
+  function updateRegionBars(snap){
+    const heat=snap?.region_heat; if(!heat?.length) return;
+    const br=document.getElementById('bars-row'); if(br?.style.display==='none') return;
+    const labels=heat.map(r=>r.state||r.region||'?');
+    const worked=heat.map(r=>r.worked||0);
+    const total=heat.map(r=>r.total||0);
+    const missing=heat.map(r=>Math.max(0,(r.total||0)-(r.worked||0)));
+    const colours=labels.map(s=>STATE_COLS[s]||T.muted);
+    const canvas=document.getElementById('chart-region-bars'); if(!canvas) return;
+    if(regionChart){
+      regionChart.data.labels=labels;
+      regionChart.data.datasets[0].data=worked;
+      regionChart.data.datasets[1].data=missing;
+      regionChart.data.datasets[0].backgroundColor=colours.map(c=>c+'e6');
+      regionChart.data.datasets[1].backgroundColor=colours.map(c=>c+'28');
+      regionChart.update(); return;
+    }
+    regionChart=new Chart(canvas.getContext('2d'),{type:'bar',
+      data:{labels,datasets:[
+        {label:'Worked',data:worked,backgroundColor:colours.map(c=>c+'e6'),borderRadius:3,stack:'s'},
+        {label:'Missing',data:missing,backgroundColor:colours.map(c=>c+'28'),
+         borderColor:colours.map(c=>c+'60'),borderWidth:1,borderRadius:3,stack:'s'},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,animation:{duration:600},
+        plugins:{legend:{display:false},tooltip:{backgroundColor:T.bg3,borderColor:T.bg3,
+          borderWidth:1,titleColor:T.accent,bodyColor:T.fg,
+          callbacks:{label(item){const i=item.dataIndex,w=worked[i],t=total[i];
+            return item.datasetIndex===0?` ${w}/${t} worked (${t?((w/t)*100).toFixed(0):0}%)`
+              :` ${missing[i]} still needed`;}}}},
+        scales:{
+          x:{stacked:true,ticks:{color:colours,font:{size:11,weight:'bold'}},grid:{display:false}},
+          y:{stacked:true,ticks:{color:T.muted,font:{size:9}},grid:{color:T.bg3+'80'}},
+        }},
+    });
+  }
+
+  // ══ INFO PANELS ════════════════════════════════════════════════════════════
+  function ip(id){return document.getElementById(id);}
+  function hdr(icon,col,title){
+    return `<div class="ip-hdr"><span style="color:${col}">${icon}</span><span class="ip-title" style="color:${col}">${title}</span></div>`;
+  }
+
+  function updateBandEfficiency(snap){
+    const be=snap?.band_efficiency; if(!be?.length) return;
+    const el=ip('panel-band-eff'); if(!el) return;
+    const maxEff=Math.max(...be.map(r=>r.efficiency||0),0.001);
+    el.innerHTML=hdr('[ ~ ]',T.accent,'BAND EFFICIENCY')+`
+      <table class="ip-tbl">
+        <tr><th>Band</th><th>Mults/QSO</th><th class="tr">QSOs</th></tr>
+        ${be.map(r=>{const b=(r.band||'?').toUpperCase(),col=BAND_COLS[b]||T.muted;
+          const bw=Math.round(((r.efficiency||0)/maxEff)*60);
+          return `<tr><td style="color:${col};font-weight:bold">${b.toLowerCase()}</td>
+            <td><div class="ibar"><div style="width:${bw}px;height:3px;background:${col};border-radius:2px"></div>
+            <span style="color:${col}">${(r.efficiency||0).toFixed(3)}</span></div></td>
+            <td class="tr" style="color:${T.muted}">${r.qsos||0}</td></tr>`;
+        }).join('')}
+      </table>`;
+  }
+
+  function updatePersonalBests(snap){
+    const pb=snap?.personal_bests; const el=ip('panel-personal-bests'); if(!el) return;
+    const cur=pb?.current_hour_rate||0,prev=pb?.prev_hour_rate||0,best=pb?.best_hour_rate||0;
+    const bt=String(pb?.best_hour_time||'').substring(11,16);
+    const tr=cur-prev, tc=tr>0?T.green:tr<0?T.red:T.muted;
+    el.innerHTML=hdr('[ * ]',T.accent2,'PERSONAL BESTS')+`
+      <table class="ip-tbl">
+        <tr><td>Current hr rate</td><td style="color:${T.accent};font-weight:bold">${cur} Q/hr</td></tr>
+        <tr><td>Prev hr rate</td><td style="color:${T.muted}">${prev} Q/hr</td></tr>
+        <tr><td>Rate trend</td><td style="color:${tc}">${tr>0?'+':''}${tr} Q/hr</td></tr>
+        <tr><td>Best hour</td><td style="color:${T.accent3};font-weight:bold">${best} Q/hr</td></tr>
+        <tr><td></td><td style="color:${T.muted};font-size:0.85em">${bt?'at '+bt+' UTC':''}</td></tr>
+        <tr><td colspan="2"><div class="ip-div"></div></td></tr>
+        <tr><td>Mult 1</td><td style="color:${T.accent}">${snap?.worked||0}</td></tr>
+        <tr><td>Mult 2 (zones)</td><td style="color:${(snap?.zone_cnt||0)?T.accent:T.muted}">${snap?.zone_cnt||0}</td></tr>
+        <tr><td>Total mults</td><td style="color:${T.accent3};font-weight:bold">${snap?.band_mults||snap?.worked||0}</td></tr>
+      </table>`;
+  }
+
+  function updateQsoValue(snap){
+    const qv=snap?.qso_value; const el=ip('panel-qso-value'); if(!el||!qv) return;
+    const bands=qv.band_order||Object.keys(qv.bands||{});
+    const sc=qv.scenarios||['no_mult'], labs=qv.scenario_labels||{no_mult:'+Q'};
+    el.innerHTML=hdr('[ $ ]',T.accent3,'QSO VALUE')+`
+      <table class="ip-tbl">
+        <tr><th>Band</th><th>Avg</th>${sc.map(s=>`<th>${labs[s]||s}</th>`).join('')}</tr>
+        ${bands.map(b=>{const d=qv.bands[b]||{},col=BAND_COLS[b.toUpperCase()]||T.muted;
+          return `<tr><td style="color:${col};font-weight:bold">${b.toLowerCase()}</td>
+            <td style="color:${T.muted}">${(d.avg_pts||0).toFixed(1)}</td>
+            ${sc.map(s=>`<td style="color:${col}">${Math.round(d[s]||0).toLocaleString()}</td>`).join('')}
+          </tr>`;}).join('')}
+        <tr><td colspan="${2+sc.length}"><div class="ip-div"></div>
+          <span style="color:${T.muted};font-size:0.85em">
+            now: ${Math.round(qv.total_pts||0).toLocaleString()} pts × ${qv.total_mults||0} mults
+          </span></td></tr>
+      </table>`;
+  }
+
+  function updateLastWorked(snap){
+    const lw=snap?.last_worked; const el=ip('panel-last-worked'); if(!el||!lw?.length) return;
+    el.innerHTML=hdr('[ » ]',T.green,'LAST WORKED')+`
+      <table class="ip-tbl">
+        <tr><th>Call</th><th>Band/Mode</th><th>Mult</th></tr>
+        ${lw.slice(0,5).map(q=>{const band=(q.band||'').toUpperCase(),col=BAND_COLS[band]||T.muted;
+          return `<tr>
+            <td><div style="color:${T.accent};font-weight:bold">${q.call||'—'}</div>
+                <div style="color:${T.muted};font-size:0.85em">${String(q.time||'').substring(11,16)}</div></td>
+            <td style="color:${col}">${band.toLowerCase()} ${q.mode||'—'}</td>
+            <td style="color:${T.muted}">${q.mult1||q.prefix||'—'}</td></tr>`;
+        }).join('')}
+      </table>`;
+  }
+
+  function updateOperatorTimes(snap){
+    const ops=snap?.operator_times; const el=ip('panel-op-times'); if(!el||!ops?.length) return;
+    const fmH=m=>{const h=Math.floor(m/60),mm=Math.round(m%60);return h?`${h}h ${mm}m`:`${mm}m`;};
+    const pal=[T.accent,T.accent3,T.accent2,'#a78bfa'];
+    el.innerHTML=hdr('[ O ]',T.accent,'OPERATOR TIMES')+`
+      <table class="ip-tbl">
+        <tr><th>Operator</th><th>On Air</th><th>Off</th></tr>
+        ${ops.slice(0,4).map((op,i)=>`
+          <tr><td style="color:${pal[i%4]};font-weight:bold">${op.operator||'—'}</td>
+              <td style="color:${T.green}">${fmH(op.on_minutes||0)}</td>
+              <td style="color:${T.muted}">${fmH(op.off_minutes||0)}</td></tr>
+          <tr><td colspan="3" style="color:${T.muted};font-size:0.85em;padding-bottom:3px">
+            ${(op.qsos||0).toLocaleString()} QSOs · ${fmH(op.span_minutes||0)} span</td></tr>`
+        ).join('')}
+      </table>`;
+  }
+
+  // ══ SESSION BAR ════════════════════════════════════════════════════════════
+  function updateSessionStatus(snap){
+    const ss=snap?.session_status,pb=snap?.personal_bests;
+    const bar=document.getElementById('session-bar'); if(!bar) return;
+    if(!ss?.state){bar.style.display='none';document.body.classList.remove('has-session-bar');return;}
+    bar.style.display='flex'; document.body.classList.add('has-session-bar');
+    const col=ss.state==='live'?T.accent:ss.state==='over'?T.muted:T.accent3;
+    const rem=Math.round(ss.total_remaining_mins??ss.remaining_mins??0);
+    const pct=((ss.total_pct_elapsed??ss.pct_elapsed)||0).toFixed(0);
+    bar.innerHTML=`
+      <span style="color:${col};font-size:0.7em">●</span>
+      <span class="sess-label">${ss.session_label||''}</span>
+      <span class="sess-sep">|</span>
+      <span class="sess-stat">${rem}m remaining</span>
+      <div class="sess-prog-wrap">
+        <div class="sess-prog-bar" style="width:${pct}%;background:${col}55;border-right:2px solid ${col}"></div>
+      </div>
+      <span class="sess-pct" style="color:${col}">${pct}%</span>
+      <span class="sess-sep">|</span>
+      <span class="sess-stat">Rate: <b style="color:${T.accent}">${pb?.current_hour_rate||0}/hr</b></span>
+      <span class="sess-sep">|</span>
+      <span class="sess-stat">Best hr: <b style="color:${T.accent3}">${pb?.best_hour_rate||0}</b></span>
+      <span class="sess-sep">|</span>
+      <span class="sess-stat">Best session: <b style="color:${T.accent2}">${pb?.best_session_qsos||0} QSOs</b></span>`;
+  }
+
+
+  // ══ QSO VALUE INSIGHT BAR ══════════════════════════════════════════════════
+  function updateInsightBar(snap) {
+    const el = document.getElementById('insight-text'); if (!el) return;
+    const qv = snap?.qso_value;
+    const pb = snap?.personal_bests || {};
+    const ss = snap?.session_status || {};
+    const cur = pb.current_hour_rate || 0;
+    const rem = Math.round(ss.total_remaining_mins ?? ss.remaining_mins ?? 0);
+
+    if (!qv || !qv.bands) {
+      el.innerHTML = 'Load a contest log to see real-time QSO value insights.';
+      return;
+    }
+
+    // Find best band by current scenario
+    const bands = qv.band_order || Object.keys(qv.bands);
+    const sc    = (qv.scenarios || ['no_mult'])[0];  // first scenario = no new mult
+    let bestBand = null, bestVal = 0;
+    bands.forEach(b => {
+      const v = qv.bands[b]?.[sc] || 0;
+      if (v > bestVal) { bestVal = v; bestBand = b; }
+    });
+
+    // Find best band for new mult
+    const scMult = qv.scenarios?.includes('one_mult') ? 'one_mult' : sc;
+    let bestMultBand = null, bestMultVal = 0;
+    bands.forEach(b => {
+      const v = qv.bands[b]?.[scMult] || 0;
+      if (v > bestMultVal) { bestMultVal = v; bestMultBand = b; }
+    });
+
+    const parts = [];
+
+    if (bestBand) {
+      parts.push(`Next fill QSO worth most on <b style="color:var(--accent)">${bestBand.toLowerCase()}</b> (+${Math.round(bestVal).toLocaleString()} pts)`);
+    }
+    if (bestMultBand && scMult !== sc) {
+      parts.push(`New mult most valuable on <b style="color:var(--accent3)">${bestMultBand.toLowerCase()}</b> (+${Math.round(bestMultVal).toLocaleString()} pts)`);
+    }
+    if (cur > 0 && rem > 0) {
+      parts.push(`At ${cur} Q/hr with ${rem}m remaining → ~<b style="color:var(--green)">${Math.round(cur * rem / 60)}</b> more QSOs possible`);
+    }
+
+    el.innerHTML = parts.length ? parts.join(' &nbsp;|&nbsp; ') : 'No QSO value data available.';
+  }
+
+
+  // ══ EXTRA ANALYTICS ROW ════════════════════════════════════════════════════
+  function updateExtraAnalytics(snap) {
+    const pb   = snap?.personal_bests || {};
+    const cur  = pb.current_hour_rate  || 0;
+    const prev = pb.prev_hour_rate     || 0;
+    const total= snap?.total || 0;
+    const valid= snap?.valid || 0;
+    const score= snap?.score || 0;
+
+    function setEA(id, val, sub, col) {
+      const el = document.getElementById(id); if (!el) return;
+      el.textContent = val;
+      if (col) el.style.color = col;
+    }
+
+    // Rate trend
+    const trend = cur - prev;
+    const trendStr = trend > 0 ? `+${trend} ▲` : trend < 0 ? `${trend} ▼` : `0 →`;
+    const trendCol = trend > 0 ? T.green : trend < 0 ? T.red : T.muted;
+    setEA('eat-trend', trendStr, '', trendCol);
+    setEA('eat-sub', `cur: ${cur} | prev: ${prev}`, '', '');
+
+    // Mult efficiency
+    const worked  = snap?.worked  || 0;
+    const missing = snap?.missing || 0;
+    const possible = worked + missing;
+    const multPct = possible > 0 ? ((worked/possible)*100).toFixed(1)+'%' : '—';
+    const multCol = possible > 0 ? (worked/possible > 0.7 ? T.green : worked/possible > 0.4 ? T.accent3 : T.red) : T.muted;
+    setEA('eat-mult-pct', multPct, '', multCol);
+
+    // Dupe rate
+    const dupes    = total - valid;
+    const dupeRate = total > 0 ? ((dupes/total)*100).toFixed(1)+'%' : '—';
+    const dupeCol  = total > 0 ? (dupes/total > 0.1 ? T.red : dupes/total > 0.05 ? T.accent3 : T.green) : T.muted;
+    setEA('eat-dupe-rate', dupeRate, '', dupeCol);
+
+    // Avg pts/QSO
+    const avgPts = valid > 0 ? (score/valid).toFixed(2) : '—';
+    setEA('eat-pts-qso', avgPts, '', T.accent);
+
+    // Best band by efficiency
+    const be = snap?.band_efficiency || [];
+    const best = be.reduce((a,b) => (b.efficiency||0) > (a.efficiency||0) ? b : a, {});
+    const bestBand = best.band ? best.band.toLowerCase() : '—';
+    const bestCol  = BAND_COLS[((best.band||'').toUpperCase())] || T.accent;
+    setEA('eat-best-band', bestBand, '', bestCol);
+  }
+
+  // ══ CONTEST-OVER PANEL ══════════════════════════════════════════════════════
+  function updateContestOverPanel(snap) {
+    const panel = document.getElementById('contest-over-panel'); if (!panel) return;
+    const ss    = snap?.session_status || {};
+
+    if (ss.state !== 'over') {
+      panel.style.display = 'none';
+      return;
+    }
+
+    panel.style.display = 'flex';
+
+    const score   = snap?.score   || 0;
+    const valid   = snap?.valid   || 0;
+    const total   = snap?.total   || 0;
+    const worked  = snap?.worked  || 0;
+    const band_m  = snap?.band_mults || worked;
+    const dupes   = total - valid;
+    const pb      = snap?.personal_bests || {};
+
+    const titleEl = document.getElementById('cop-title');
+    const statsEl = document.getElementById('cop-stats');
+    const metaEl  = document.getElementById('cop-meta');
+
+    // Translate block labels:
+    //   WPX uses label_prefix="B", num_sessions=4 → "B1".."B4" = 12-hr operating blocks
+    //   "B4 (ended)" means the 4th 12-hour block has ended (i.e. the full 48-hr contest)
+    const rawLabel = ss.session_label || 'CONTEST COMPLETE';
+    const blockMatch = rawLabel.match(/^([A-Z])(\d+)(.*)/);
+    let displayLabel;
+    if (blockMatch) {
+      const prefixMap = { B:'Block', S:'Session', R:'Round', P:'Period' };
+      const word = prefixMap[blockMatch[1]] || `Period`;
+      displayLabel = `${word} ${blockMatch[2]}${blockMatch[3]}`;
+    } else {
+      displayLabel = rawLabel;
+    }
+    if (titleEl) titleEl.textContent = `🏆 ${displayLabel} — FINAL SCORE: ${score.toLocaleString('en-AU')}`;
+    if (statsEl) statsEl.innerHTML =
+      `<span style="color:${T.accent}">${valid.toLocaleString()}</span> valid QSOs &nbsp;×&nbsp; ` +
+      `<span style="color:${T.accent3}">${band_m}</span> mults &nbsp;=&nbsp; ` +
+      `<span style="color:${T.accent3};font-weight:bold">${score.toLocaleString('en-AU')} pts</span>` +
+      `&nbsp;&nbsp;|&nbsp;&nbsp;` +
+      `Best rate: <span style="color:${T.green}">${pb.best_hour_rate || 0} Q/hr</span>` +
+      (pb.best_hour_time ? ` at <span style="color:${T.muted}">${String(pb.best_hour_time).substring(11,16)} UTC</span>` : '') +
+      `&nbsp;&nbsp;|&nbsp;&nbsp;Dupes: <span style="color:${dupes>0?T.red:T.green}">${dupes}</span>`;
+    if (metaEl) metaEl.innerHTML =
+      `${ss.end_dt ? String(ss.end_dt).substring(0,16)+' UTC' : ''}`;
+  }
+
+  // ══ MAIN ═══════════════════════════════════════════════════════════════════
+  function render(snap){
+    updateGauges(snap); updateSparklines(snap); updateRegionBars(snap);
+    updateSessionStatus(snap); updateContestTime(snap);
+    updateBandEfficiency(snap); updatePersonalBests(snap);
+    updateQsoValue(snap); updateLastWorked(snap); updateOperatorTimes(snap);
+    updateInsightBar(snap);
+    updateExtraAnalytics(snap);
+    updateContestOverPanel(snap);
+  }
+
+  let _firstSnap=true;
+  window.addEventListener('vka:snapshot',e=>{
+    if(_firstSnap){_firstSnap=false;loadPluginMeta().then(()=>render(e.detail));}
+    else render(e.detail);
+  });
+  window.addEventListener('vka:tabchange',e=>{
+    if(e.detail.tab!=='overview') return;
+    const snap=window.VKA.lastSnap(); if(snap) render(snap);
+  });
+  window.addEventListener('vka:loaded',()=>{_metaLoaded=false;_firstSnap=true;});
+
+})();

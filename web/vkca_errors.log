@@ -1,0 +1,734 @@
+2026-06-28 13:29:28,992 [INFO] __main__: Log file: C:\Users\Ezat Tizani\Downloads\vkca_web\web\vkca_errors.log
+2026-06-28 13:31:42,409 [INFO] __main__: Window closed — shutting down
+2026-06-28 13:31:47,796 [INFO] __main__: Log file: C:\Users\Ezat Tizani\Downloads\vkca_web\web\vkca_errors.log
+2026-06-28 13:32:11,273 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:32:11,276 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:32:11,282 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:32:11,284 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:32:11,286 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:32:11,292 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:32:11,311 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:32:11,444 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:32:11,449 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:32:11,449 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:32:11,450 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:32:11,450 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:32:11,455 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:32:11,473 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:32:11,488 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:32:11,490 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:32:11,491 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:32:11,491 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:32:11,491 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:32:11,496 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:32:11,498 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:32:25,125 [INFO] __main__: Window closed — shutting down
+2026-06-28 13:37:00,240 [INFO] __main__: Log file: C:\Users\Ezat Tizani\Downloads\vkca_web\web\vkca_errors.log
+2026-06-28 13:37:23,457 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:37:23,460 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:37:23,464 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:37:23,464 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:37:23,465 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:37:23,470 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:37:23,486 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:37:23,610 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:37:23,614 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:37:23,615 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:37:23,615 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:37:23,615 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:37:23,619 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:37:23,634 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:37:23,646 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:37:23,649 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:37:23,649 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:37:23,650 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:37:23,650 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:37:23,650 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:37:23,651 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:37:38,619 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:37:38,622 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:37:38,622 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:37:38,623 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:37:38,623 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:37:38,626 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:37:38,641 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:37:38,653 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:37:38,655 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:37:38,656 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:37:38,656 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:37:38,656 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:37:38,656 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:37:38,657 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:37:53,613 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:37:53,615 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:37:53,615 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:37:53,616 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:37:53,616 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:37:53,619 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:37:53,636 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:37:53,647 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:37:53,651 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:37:53,651 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:37:53,652 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:37:53,652 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:37:53,652 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:37:53,653 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:38:08,636 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:38:08,640 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:38:08,640 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:38:08,641 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:38:08,641 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:38:08,646 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:38:08,662 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:38:08,675 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:38:08,680 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:38:08,681 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:38:08,681 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:38:08,681 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:38:08,682 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:38:08,683 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:38:23,684 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:38:23,689 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:38:23,689 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:38:23,689 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:38:23,690 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:38:23,694 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:38:23,724 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:38:23,744 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:38:23,748 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:38:23,749 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:38:23,749 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:38:23,749 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:38:23,749 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:38:23,751 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:38:38,702 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:38:38,706 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:38:38,706 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:38:38,707 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:38:38,707 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:38:38,714 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:38:38,757 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:38:38,783 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:38:38,788 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:38:38,789 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:38:38,790 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:38:38,790 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:38:38,791 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:38:38,795 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:38:53,699 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:38:53,703 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:38:53,703 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:38:53,704 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:38:53,704 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:38:53,708 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:38:53,740 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:38:53,758 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:38:53,764 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:38:53,764 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:38:53,765 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:38:53,765 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:38:53,765 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:38:53,767 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:39:08,706 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:39:08,711 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:39:08,712 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:39:08,712 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:39:08,712 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:39:08,717 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:39:08,749 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:39:08,769 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:39:08,773 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:39:08,774 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:39:08,774 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:39:08,774 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:39:08,775 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:39:08,777 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:39:23,712 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:39:23,716 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:39:23,717 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:39:23,717 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:39:23,717 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:39:23,722 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:39:23,753 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:39:23,772 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:39:23,777 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:39:23,778 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:39:23,779 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:39:23,779 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:39:23,780 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:39:23,781 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:39:38,719 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:39:38,723 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:39:38,723 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:39:38,724 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:39:38,724 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:39:38,729 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:39:38,759 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:39:38,778 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:39:38,782 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:39:38,782 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:39:38,783 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:39:38,783 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:39:38,783 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:39:38,785 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:39:53,736 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:39:53,740 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:39:53,741 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:39:53,741 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:39:53,741 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:39:53,747 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:39:53,777 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:39:53,796 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:39:53,801 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:39:53,801 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:39:53,801 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:39:53,802 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:39:53,802 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:39:53,803 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:40:08,757 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:40:08,762 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:40:08,763 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:40:08,763 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:40:08,763 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:40:08,768 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:40:08,799 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:40:08,818 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:40:08,821 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:40:08,822 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:40:08,822 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:40:08,822 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:40:08,823 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:40:08,824 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:40:23,747 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:40:23,750 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:40:23,751 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:40:23,751 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:40:23,751 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:40:23,756 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:40:23,786 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:40:23,805 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:40:23,809 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:40:23,812 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:40:23,812 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:40:23,813 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:40:23,813 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:40:23,815 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:40:38,752 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:40:38,756 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:40:38,756 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:40:38,756 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:40:38,757 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:40:38,763 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:40:38,794 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:40:38,813 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:40:38,817 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:40:38,818 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:40:38,818 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:40:38,818 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:40:38,819 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:40:38,820 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:40:53,761 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:40:53,765 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:40:53,766 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:40:53,766 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:40:53,766 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:40:53,771 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:40:53,801 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:40:53,820 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:40:53,824 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:40:53,825 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:40:53,825 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:40:53,825 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:40:53,826 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:40:53,828 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:41:08,772 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:41:08,776 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:41:08,776 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:41:08,777 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:41:08,777 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:41:08,782 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:41:08,812 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:41:08,831 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:41:08,835 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:41:08,835 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:41:08,836 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:41:08,836 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:41:08,836 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:41:08,838 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:41:23,780 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:41:23,784 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:41:23,784 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:41:23,784 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:41:23,785 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:41:23,790 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:41:23,821 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:41:23,841 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:41:23,847 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:41:23,847 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:41:23,848 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:41:23,848 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:41:23,848 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:41:23,850 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:41:38,779 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:41:38,783 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:41:38,784 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:41:38,784 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:41:38,784 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:41:38,790 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:41:38,843 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:41:38,862 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:41:38,867 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:41:38,867 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:41:38,867 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:41:38,867 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:41:38,868 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:41:38,870 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:41:53,793 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:41:53,797 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:41:53,797 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:41:53,798 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:41:53,798 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:41:53,803 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:41:53,832 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:41:53,851 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:41:53,855 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:41:53,855 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:41:53,856 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:41:53,856 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:41:53,856 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:41:53,858 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:42:08,797 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:42:08,800 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:42:08,801 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:42:08,801 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:42:08,801 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:42:08,806 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:42:08,836 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:42:08,855 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:42:08,859 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:42:08,862 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:42:08,863 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:42:08,863 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:42:08,864 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:42:08,865 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:42:23,802 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:42:23,806 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:42:23,806 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:42:23,807 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:42:23,807 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:42:23,812 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:42:23,844 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:42:23,862 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:42:23,866 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:42:23,867 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:42:23,867 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:42:23,867 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:42:23,867 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:42:23,869 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:42:38,811 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:42:38,815 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:42:38,815 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:42:38,816 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:42:38,816 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:42:38,821 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:42:38,852 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:42:38,872 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:42:38,876 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:42:38,876 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:42:38,879 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:42:38,879 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:42:38,880 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:42:38,881 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:42:53,814 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:42:53,817 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:42:53,818 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:42:53,818 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:42:53,818 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:42:53,823 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:42:53,854 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:42:53,873 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:42:53,877 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:42:53,880 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:42:53,880 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:42:53,880 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:42:53,881 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:42:53,882 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:43:08,814 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:43:08,818 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:43:08,820 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:43:08,820 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:43:08,820 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:43:08,825 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:43:08,858 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:43:08,877 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:43:08,883 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:43:08,883 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:43:08,883 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:43:08,884 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:43:08,884 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:43:08,885 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:43:23,830 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:43:23,833 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:43:23,834 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:43:23,834 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:43:23,834 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:43:23,839 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:43:23,872 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:43:23,892 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:43:23,897 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:43:23,898 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:43:23,898 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:43:23,899 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:43:23,899 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:43:23,900 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:43:38,847 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:43:38,851 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:43:38,852 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:43:38,852 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:43:38,852 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:43:38,857 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:43:38,888 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:43:38,907 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:43:38,912 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:43:38,912 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:43:38,913 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:43:38,913 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:43:38,914 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:43:38,915 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:43:53,848 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:43:53,851 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:43:53,852 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:43:53,852 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:43:53,852 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:43:53,857 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:43:53,888 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:43:53,907 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:43:53,913 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:43:53,913 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:43:53,914 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:43:53,914 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:43:53,914 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:43:53,916 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:44:08,859 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:44:08,864 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:44:08,865 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:44:08,865 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:44:08,865 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:44:08,870 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:44:08,900 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:44:08,919 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:44:08,923 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:44:08,923 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:44:08,924 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:44:08,924 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:44:08,924 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:44:08,929 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:44:23,866 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:44:23,869 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:44:23,870 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:44:23,870 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:44:23,870 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:44:23,876 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:44:23,906 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:44:23,925 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:44:23,930 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:44:23,931 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:44:23,931 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:44:23,931 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:44:23,932 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:44:23,933 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:44:38,883 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:44:38,887 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:44:38,887 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:44:38,888 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:44:38,888 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:44:38,893 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:44:38,927 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:44:38,944 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:44:38,948 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:44:38,949 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:44:38,949 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:44:38,949 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:44:38,950 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:44:38,951 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:44:53,878 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:44:53,883 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:44:53,883 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:44:53,884 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:44:53,884 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:44:53,889 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:44:53,919 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:44:53,938 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:44:53,943 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:44:53,944 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:44:53,945 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:44:53,945 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:44:53,946 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:44:53,947 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:45:08,883 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:45:08,886 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:45:08,887 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:45:08,887 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:45:08,887 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:45:08,892 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:45:08,924 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:45:08,943 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:45:08,948 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:45:08,948 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:45:08,949 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:45:08,949 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:45:08,949 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:45:08,951 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:45:23,899 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:45:23,902 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:45:23,903 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:45:23,903 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:45:23,903 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:45:23,908 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:45:23,940 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:45:23,960 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:45:23,964 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:45:23,965 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:45:23,965 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:45:23,965 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:45:23,966 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:45:23,967 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:45:38,902 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:45:38,906 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:45:38,906 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:45:38,906 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:45:38,907 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:45:38,912 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:45:38,942 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:45:38,961 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:45:38,965 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:45:38,966 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:45:38,966 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:45:38,966 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:45:38,967 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:45:38,968 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:45:53,910 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:45:53,914 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:45:53,915 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:45:53,915 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:45:53,915 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:45:53,921 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:45:53,952 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:45:53,971 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:45:53,974 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:45:53,975 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:45:53,975 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:45:53,978 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:45:53,979 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:45:53,980 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:46:08,905 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:46:08,909 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:46:08,910 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:46:08,911 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:46:08,911 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:46:08,916 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:46:08,948 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:46:08,966 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:46:08,971 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:46:08,971 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:46:08,971 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:46:08,972 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:46:08,972 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:46:08,973 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:46:23,915 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:46:23,919 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:46:23,920 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:46:23,920 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:46:23,920 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:46:23,925 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:46:23,956 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:46:23,975 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:46:23,980 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:46:23,980 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:46:23,981 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:46:23,981 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:46:23,981 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:46:23,983 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:46:38,924 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:46:38,932 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:46:38,933 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:46:38,933 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:46:38,933 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:46:38,938 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:46:38,969 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:46:38,988 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:46:38,991 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:46:38,992 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:46:38,992 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:46:38,996 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:46:38,996 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:46:38,998 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:46:53,971 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:46:53,976 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:46:53,977 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:46:53,978 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:46:53,978 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:46:53,984 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:46:54,020 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:46:54,043 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:46:54,048 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:46:54,048 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:46:54,049 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:46:54,049 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:46:54,049 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:46:54,051 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:47:08,953 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:47:08,957 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:47:08,958 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:47:08,958 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:47:08,958 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:47:08,964 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:47:08,996 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:47:09,016 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:47:09,020 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:47:09,020 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:47:09,021 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:47:09,022 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:47:09,022 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:47:09,024 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:47:23,946 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:47:23,949 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:47:23,950 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:47:23,950 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:47:23,950 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:47:23,955 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:47:23,985 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:47:24,006 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:47:24,010 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:47:24,011 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:47:24,011 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:47:24,011 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:47:24,012 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:47:24,013 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:47:38,966 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:47:38,970 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:47:38,971 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:47:38,971 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:47:38,972 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:47:38,977 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:47:39,009 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:47:39,026 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:47:39,030 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:47:39,031 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:47:39,031 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:47:39,031 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:47:39,032 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:47:39,033 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:47:53,972 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:47:53,976 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:47:53,977 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:47:53,978 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:47:53,979 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:47:53,984 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:47:54,015 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:47:54,035 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:47:54,039 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:47:54,039 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:47:54,040 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:47:54,040 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:47:54,040 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:47:54,042 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:48:08,964 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:48:08,967 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:48:08,968 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:48:08,968 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:48:08,969 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:48:08,973 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:48:09,002 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:48:09,022 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:48:09,026 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:48:09,028 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:48:09,029 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:48:09,029 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:48:09,029 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:48:09,031 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:48:23,963 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:48:23,966 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:48:23,967 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:48:23,967 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:48:23,967 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:48:23,972 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:48:24,003 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:48:24,023 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:48:24,027 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:48:24,028 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:48:24,029 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:48:24,029 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:48:24,029 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:48:24,031 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:48:38,979 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:48:38,982 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:48:38,983 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:48:38,983 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:48:38,983 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:48:38,988 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:48:39,018 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:48:39,037 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:48:39,041 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:48:39,041 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:48:39,042 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:48:39,042 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:48:39,043 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:48:39,046 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:48:53,989 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:48:53,994 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:48:53,994 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:48:53,994 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:48:53,995 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:48:53,999 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:48:54,031 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:48:54,050 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:48:54,054 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:48:54,054 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:48:54,055 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:48:54,055 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:48:54,055 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:48:54,057 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:49:08,996 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:49:08,999 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:49:09,000 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:49:09,000 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:49:09,000 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:49:09,005 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:49:09,037 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:49:09,056 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:49:09,060 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:49:09,061 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:49:09,061 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:49:09,062 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:49:09,062 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:49:09,064 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:49:24,015 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:49:24,019 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:49:24,019 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:49:24,020 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:49:24,020 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:49:24,025 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:49:24,058 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:49:24,076 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:49:24,081 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:49:24,081 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:49:24,082 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:49:24,082 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:49:24,082 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:49:24,084 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:49:39,013 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:49:39,017 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:49:39,017 [INFO] root: Contest start from DB: 2026-03-28 00:00:00 -> 2026-03-28 00:00:00
+2026-06-28 13:49:39,018 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:49:39,018 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:49:39,022 [INFO] root: Filtering to ContestNR=23 — 1297 rows
+2026-06-28 13:49:39,056 [INFO] root: Loaded 1297 QSOs (plugin: CQ WPX)
+2026-06-28 13:49:39,077 [INFO] root: Opening database: C:\n1mm\Databases\vk2yi_new.s3db
+2026-06-28 13:49:39,081 [INFO] root: Discovered tables: ['Contest', 'ContestInstance', 'DBInfo', 'DBVersionV2', 'DXLOG', 'Station', 'Skeds', 'sqlite_stat1', 'sqlite_stat4']
+2026-06-28 13:49:39,082 [INFO] root: Contest start from DB: 2025-03-29 00:00:00 -> 2025-03-29 00:00:00
+2026-06-28 13:49:39,082 [INFO] root: Columns in DXLOG: ['TS', 'Call', 'Freq', 'QSXFreq', 'Mode', 'ContestName', 'SNT', 'RCV', 'CountryPrefix', 'StationPrefix', 'QTH', 'Name', 'Comment', 'NR', 'Sect', 'Prec', 'CK', 'ZN', 'SentNr', 'Points', 'IsMultiplier1', 'IsMultiplier2', 'Power', 'Band', 'WPXPrefix', 'Exchange1', 'RadioNR', 'ContestNR', 'isMultiplier3', 'MiscText', 'IsRunQSO', 'ContactType', 'Run1Run2', 'GridSquare', 'Operator', 'Continent', 'RoverLocation', 'RadioInterfaced', 'NetworkedCompNr', 'NetBiosName', 'IsOriginal', 'ID', 'CLAIMEDQSO']
+2026-06-28 13:49:39,082 [INFO] root: Using columns: call=call band=band freq=freq mode=mode time=ts mult=Exchange1 sect=WPXPrefix zone=ZN m1=IsMultiplier1 m2=IsMultiplier2 dupe=ContactType pts=points op=Operator
+2026-06-28 13:49:39,083 [INFO] root: Filtering to ContestNR=10 — 1 rows
+2026-06-28 13:49:39,085 [INFO] root: Loaded 1 QSOs (plugin: CQ WPX)
+2026-06-28 13:49:42,145 [INFO] __main__: Window closed — shutting down

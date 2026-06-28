@@ -1,0 +1,28 @@
+{
+  "active_tabs": {
+    "tab_overview": true,
+    "tab_cluster": true,
+    "tab_missing": true,
+    "tab_worked": true,
+    "tab_rate": true,
+    "tab_bands": true,
+    "tab_dupes": true,
+    "tab_propagation": false,
+    "tab_debug": true,
+    "tab_replay": false,
+    "tab_fatigue": false,
+    "tab_yoy": false,
+    "tab_pace": false
+  },
+  "overview_zoom": 1.0,
+  "tab_order": [
+    "\ud83d\udcca Overview",
+    "\ud83d\udce1 DX Cluster",
+    "\ud83c\udfaf Missing Mults",
+    "\ud83d\udccb Worked",
+    "\u26a1 Rate Analysis",
+    "\ud83d\udce1 Band Breakdown",
+    "\u26a0\ufe0f Dupe Checker",
+    "\ud83d\udee0 Debug Mults"
+  ]
+}
