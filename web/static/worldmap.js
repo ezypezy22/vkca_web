@@ -110,9 +110,7 @@
   //     fixed the coastal misalignment, but HOME's own dot then visibly
   //     moved between zoom levels as the rounding snapped to a different
   //     tile boundary, which is worse.
-  // Real coordinates have neither problem and need no rounding/snapping —
-  // the only job left is stopping the basemap from tiling multiple world
-  // copies once zoomed out past one world-width, handled by `noWrap` below.
+  // Real coordinates have neither problem and need no rounding/snapping.
   let _map          = null;
   let _tileLayer    = null;
   let _markerLayer  = null;
@@ -175,10 +173,8 @@
   // ── Map init ────────────────────────────────────────────────────────────────
   // At low zoom a single world copy (256*2^zoom px) is narrower than most
   // browser windows, so pick the smallest zoom whose world width covers the
-  // container — `noWrap` then shows blank margin rather than a repeat for
-  // any leftover width. This is only ever used to raise the zoom, never to
-  // clamp it — the user can still freely zoom out (and accept some empty
-  // margin) with +/-/scroll.
+  // container. This is only ever used to raise the zoom, never to clamp it —
+  // the user can still freely zoom out with +/-/scroll.
   function _fitZoomToWidth() {
     if (!_map) return;
     const el = document.getElementById('world-map-container');
@@ -197,7 +193,12 @@
       center: [HOME[0], HOME[1]],
       zoom: 2,
       preferCanvas: true,
-      worldCopyJump: false,
+      // A VK (Australia) station's DX contacts routinely span the
+      // antimeridian (e.g. into North America). noWrap previously cut that
+      // content off hard at +/-180; wrapping lets the map continue
+      // seamlessly across the date line in either direction. worldCopyJump
+      // keeps panning from drifting many world-widths away.
+      worldCopyJump: true,
     });
     _fitZoomToWidth();
 
@@ -206,7 +207,6 @@
       attribution: bm.attribution,
       subdomains: bm.subdomains || 'abc',
       maxZoom: 16,
-      noWrap: true,   // don't tile a second copy of the world past +/-180
     }).addTo(_map);
 
     _shortLayer  = L.layerGroup().addTo(_map);
@@ -234,7 +234,6 @@
       attribution: bm.attribution,
       subdomains:  bm.subdomains || 'abc',
       maxZoom:     bm.maxZoom    || 18,
-      noWrap: true,   // don't tile a second copy of the world past +/-180
     }).addTo(_map);
 
     // Label overlay for satellite+labels variant
@@ -242,7 +241,6 @@
     if (overlayUrl) {
       _labelLayer = L.tileLayer(overlayUrl, {
         opacity: 0.85, maxZoom: 20,
-        noWrap: true,
       }).addTo(_map);
     }
 
@@ -294,6 +292,30 @@
 
     const maxCount = Math.max(...filtered.map(d=>d.count), 1);
 
+    // worldCopyJump lets the tile layer repeat seamlessly when panning past
+    // +/-180, but vector layers (markers, geodesic lines) are placed once at
+    // their real coordinate and don't auto-follow into adjacent world-copies.
+    // Markers are cheap to just redraw shifted by a full world-width. Arcs are
+    // computed once at their real (canonical) coordinates — feeding
+    // L.geodesic already-shifted input broke its antimeridian-wrap math — and
+    // the resulting points are instead copied into shifted plain L.polyline
+    // duplicates, so whichever copy the user pans to still has a line.
+    const LON_SHIFTS = [-360, 360];
+
+    function shiftLngTree(node, dLon) {
+      if (Array.isArray(node)) return node.map(n => shiftLngTree(n, dLon));
+      return L.latLng(node.lat, node.lng + dLon);
+    }
+
+    function addShiftedCopies(arc, layerGroup, styleOpts) {
+      if (typeof arc.getLatLngs !== 'function') return;
+      const basePts = arc.getLatLngs();
+      if (!basePts || !basePts.length) return;
+      LON_SHIFTS.forEach(shift => {
+        layerGroup.addLayer(L.polyline(shiftLngTree(basePts, shift), styleOpts));
+      });
+    }
+
     filtered.forEach(d => {
       if (d.lat == null || d.lon == null) return;
       const col    = BAND_COLS[d._band] || '#8b949e';
@@ -305,18 +327,18 @@
       // L.geodesic draws the shortest great-circle arc automatically, handling
       // antimeridian wrapping correctly (unlike L.polyline which draws straight)
       if (_showShort && typeof L.geodesic !== 'undefined') {
+        const shortStyle = { weight: 1.3, color: col, opacity: 0.60 };
         const arc = L.geodesic(
           [[L.latLng(HOME[0], HOME[1]), L.latLng(d.lat, d.lon)]],
           {
-            weight: 1.3,
-            color: col,
-            opacity: 0.60,
+            ...shortStyle,
             steps: 100,      // more steps = shorter segments = better antimeridian handling
             wrap: true,      // split at the real antimeridian so each segment
                               // renders in the same world-copy as its marker
           }
         );
         _shortLayer.addLayer(arc);
+        addShiftedCopies(arc, _shortLayer, shortStyle);
       } else if (_showShort) {
         // Fallback: manual SLERP with antimeridian splitting
         const pts = gcPoints(HOME[0], HOME[1], d.lat, d.lon, 80);
@@ -335,39 +357,41 @@
       if (_showLong && typeof L.geodesic !== 'undefined') {
         const antiLat = -(d.lat);
         const antiLon = d.lon > 0 ? d.lon - 180 : d.lon + 180;
+        const longStyle = { weight: 1.2, color: col, opacity: 0.35, dashArray: '5 7' };
         const arc = L.geodesic(
           [[L.latLng(HOME[0], HOME[1]),
             L.latLng(antiLat, antiLon),
             L.latLng(d.lat, d.lon)]],
           {
-            weight: 1.2,
-            color: col,
-            opacity: 0.35,
-            dashArray: '5 7',
+            ...longStyle,
             steps: 120,
             wrap: true,      // split at the real antimeridian so each segment
                               // renders in the same world-copy as its marker
           }
         );
         _longLayer.addLayer(arc);
+        addShiftedCopies(arc, _longLayer, longStyle);
       }
 
-      // ── Station marker ────────────────────────────────────────────────────
-      const marker = L.circleMarker([d.lat, d.lon], {
-        radius: r,
-        color: col,
-        fillColor: col,
-        fillOpacity: 0.85,
-        weight: 1.5,
-      }).bindTooltip(`
-        <div style="font-family:Consolas,monospace;font-size:11px;line-height:1.7">
-          <b style="color:${col}">${d.call}</b><br>
-          ${d._band.toLowerCase()} · ${d.count} QSO${d.count>1?'s':''}
-          ${d.mult ? `<br><span style="color:#f0c040">✦ Mult: ${d.mult}</span>` : ''}
-          <br><span style="color:#8b949e">SP: ${dist.toLocaleString()} km</span>
-          <span style="color:#8b949e"> · LP: ${distLP.toLocaleString()} km</span>
-        </div>`, { direction:'top', offset:[0,-r], opacity:0.97 });
-      _markerLayer.addLayer(marker);
+      // ── Station marker (+ shifted copies, see note above) ──────────────────
+      [0, ...LON_SHIFTS].forEach(shift => {
+        const lon = d.lon + shift;
+        const marker = L.circleMarker([d.lat, lon], {
+          radius: r,
+          color: col,
+          fillColor: col,
+          fillOpacity: 0.85,
+          weight: 1.5,
+        }).bindTooltip(`
+          <div style="font-family:Consolas,monospace;font-size:11px;line-height:1.7">
+            <b style="color:${col}">${d.call}</b><br>
+            ${d._band.toLowerCase()} · ${d.count} QSO${d.count>1?'s':''}
+            ${d.mult ? `<br><span style="color:#f0c040">✦ Mult: ${d.mult}</span>` : ''}
+            <br><span style="color:#8b949e">SP: ${dist.toLocaleString()} km</span>
+            <span style="color:#8b949e"> · LP: ${distLP.toLocaleString()} km</span>
+          </div>`, { direction:'top', offset:[0,-r], opacity:0.97 });
+        _markerLayer.addLayer(marker);
+      });
     });
 
     // Bring markers to front
