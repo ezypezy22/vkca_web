@@ -799,12 +799,13 @@ class ContestLog:
             "prev_hour_rate":    prev_hour_rate,
         }
 
-    def session_status(self):
+    def session_status(self, now: Optional[datetime] = None):
         cfg = self._session_cfg
         cs  = self.contest_start()
         if not cs:
             return {}
-        now           = datetime.now(timezone.utc).replace(tzinfo=None)
+        if now is None:
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
         total_mins    = cfg.num_sessions * cfg.duration_mins
         elapsed_total = (now - cs).total_seconds() / 60
 
@@ -1009,9 +1010,13 @@ class ContestLog:
             "multiplicative": multiplicative,
         }
 
-    def compute_snapshot(self) -> dict:
+    def compute_snapshot(self, now: Optional[datetime] = None) -> dict:
         """
         Single-pass computation of every value needed by _refresh_overview_cards.
+
+        `now` lets a caller pin "the current time" for session_status() — used
+        by compute_snapshot_at() so a historical replay's elapsed/remaining
+        time matches the QSOs actually included, instead of real wall-clock now.
 
         Previously that function issued 13+ separate calls into ContestLog /
         plugin, each iterating self.qsos independently.  Key problems that are
@@ -1226,7 +1231,7 @@ class ContestLog:
             "band_efficiency": plugin.band_efficiency(qsos),
             "region_heat":     plugin.region_heat(qsos),
             "personal_bests":  personal_bests,
-            "session_status":  self.session_status(),
+            "session_status":  self.session_status(now),
             "last_worked":     sorted(valid, key=lambda q: q["time"],
                                       reverse=True)[:5],
             "sparklines":      sparklines,
@@ -1245,3 +1250,15 @@ class ContestLog:
         # pair counts for its gauges).
         plugin.post_snapshot(return_dict, qsos)
         return return_dict
+
+    def compute_snapshot_at(self, cutoff: datetime) -> dict:
+        """Recompute the snapshot as it would have looked using only QSOs at
+        or before `cutoff` — powers the Overview replay scrubber. `now` is
+        pinned to `cutoff` too, so elapsed/remaining contest time in the
+        result matches the QSOs included rather than real wall-clock time."""
+        original_qsos = self.qsos
+        try:
+            self.qsos = [q for q in original_qsos if q["time"] <= cutoff]
+            return self.compute_snapshot(now=cutoff)
+        finally:
+            self.qsos = original_qsos

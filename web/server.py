@@ -105,6 +105,8 @@ class AppState:
         self._lock                                = threading.Lock()
         self._clients:      list                  = []
         self._webview_window                      = None  # set after webview starts
+        self._base_url:     Optional[str]         = None  # set after webview starts; used by /api/popout
+        self._hud_window                          = None  # the single Mini HUD window, if open
         self.yoy_extra_paths: list                = []    # extra .s3db files added on the YOY tab
         self.pace_extra_paths: list               = []    # [{"path":..., "kind":"s3db"|"adif"|"cabrillo"}]
         self.fatigue_extra_paths: list            = []    # extra .s3db files added on the Fatigue tab
@@ -252,6 +254,23 @@ async def index():
     return FileResponse(str(_STATIC / "index.html"))
 
 
+@app.get("/hud")
+async def hud_page():
+    """Serves the same SPA — index.html's bootstrap script detects this path
+    and renders hud-mode instead. A dedicated path (not a query string) is
+    used because pywebview/WebView2 was observed dropping query strings
+    entirely when navigating a secondary window created via create_window()."""
+    return FileResponse(str(_STATIC / "index.html"))
+
+
+@app.get("/popout/{key:path}")
+async def popout_page(key: str):
+    """Serves the same SPA — index.html's bootstrap script detects this path
+    and isolates the matching tile. See hud_page() for why this is a path,
+    not a query string."""
+    return FileResponse(str(_STATIC / "index.html"))
+
+
 # ── Status ────────────────────────────────────────────────────────────────────
 
 @app.get("/api/status")
@@ -309,6 +328,79 @@ async def api_browse():
         return {"path": chosen}
     except Exception as exc:
         log.exception("browse failed")
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+# ── Pop-out tile window (pywebview) ───────────────────────────────────────────
+
+@app.post("/api/popout")
+async def api_popout(body: dict):
+    """Open a single Overview tile in its own pywebview window (/popout/<key>)."""
+    key = (body.get("key") or "").strip()
+    if not key:
+        return JSONResponse({"error": "No key supplied"}, status_code=400)
+    if STATE._webview_window is None or not STATE._base_url:
+        return JSONResponse({"error": "PyWebView window not ready"}, status_code=503)
+
+    title  = (body.get("title") or "Tile").strip()
+    width  = int(body.get("width")  or 480)
+    height = int(body.get("height") or 380)
+
+    def _open():
+        import webview as _wv
+        from urllib.parse import quote
+        _wv.create_window(
+            title=f"{title} — VK Contest Analyzer",
+            url=f"{STATE._base_url}/popout/{quote(key, safe='')}",
+            width=width, height=height,
+            min_size=(240, 180),
+            background_color="#0d1117",
+        )
+
+    try:
+        await asyncio.get_event_loop().run_in_executor(None, _open)
+        return {"ok": True}
+    except Exception as exc:
+        log.exception("popout failed")
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.post("/api/hud")
+async def api_hud():
+    """Open the tiny always-on-top score/rate HUD (/hud) in its own
+    pywebview window. Reuses/restores the existing HUD window instead of
+    spawning a new one if one is already open."""
+    if STATE._webview_window is None or not STATE._base_url:
+        return JSONResponse({"error": "PyWebView window not ready"}, status_code=503)
+
+    existing = STATE._hud_window
+    if existing is not None:
+        def _restore():
+            try:
+                existing.restore()
+            except Exception:
+                pass
+        await asyncio.get_event_loop().run_in_executor(None, _restore)
+        return {"ok": True, "reused": True}
+
+    def _open():
+        import webview as _wv
+        win = _wv.create_window(
+            title="VK Contest Analyzer — HUD",
+            url=f"{STATE._base_url}/hud",
+            width=700, height=110,
+            min_size=(360, 76),
+            background_color="#0d1117",
+            on_top=True,
+        )
+        STATE._hud_window = win
+        win.events.closed += lambda: setattr(STATE, "_hud_window", None)
+
+    try:
+        await asyncio.get_event_loop().run_in_executor(None, _open)
+        return {"ok": True}
+    except Exception as exc:
+        log.exception("hud failed")
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
@@ -373,6 +465,39 @@ async def api_load(body: dict):
 @app.get("/api/snapshot")
 async def api_snapshot():
     return STATE.snapshot()
+
+
+# ── Replay scrubber ───────────────────────────────────────────────────────────
+
+@app.get("/api/scrub_range")
+async def api_scrub_range():
+    """Returns the [earliest, latest] QSO timestamps — the scrubber's bounds."""
+    with STATE._lock:
+        cl = STATE.contest_log
+        if not cl or not cl.qsos:
+            return {"start": None, "end": None}
+        times = [q["time"] for q in cl.qsos]
+        return {"start": min(times).isoformat(), "end": max(times).isoformat()}
+
+
+@app.get("/api/scrub")
+async def api_scrub(t: str):
+    """Recompute the Overview snapshot using only QSOs at or before time `t`
+    (ISO 8601, naive UTC) — powers dragging the replay scrubber."""
+    try:
+        cutoff = datetime.fromisoformat(t)
+    except ValueError:
+        return JSONResponse({"error": "Invalid time"}, status_code=400)
+    with STATE._lock:
+        cl = STATE.contest_log
+        if not cl:
+            return JSONResponse({"error": "No contest loaded"}, status_code=400)
+        try:
+            snap = cl.compute_snapshot_at(cutoff)
+        except Exception as exc:
+            log.exception("scrub failed")
+            return JSONResponse({"error": str(exc)}, status_code=500)
+    return _json_safe(snap)
 
 
 @app.get("/api/missing")
@@ -1865,6 +1990,8 @@ def _find_free_port() -> int:
 def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
     port = port or _find_free_port()
     url  = f"http://127.0.0.1:{port}"
+    STATE._base_url = url
+    log.info("Web UI: %s  (open this in a normal browser to debug /hud or /popout/<key> rendering)", url)
 
     # Pre-load if a valid file was passed on the command line
     if db_path and os.path.isfile(db_path):
@@ -1906,6 +2033,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
             height=860,
             min_size=(900, 600),
             background_color="#0d1117",
+            maximized=True,
         )
 
         def _on_loaded():

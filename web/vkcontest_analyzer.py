@@ -10774,7 +10774,7 @@ class SplashScreen:
         disc_text.tag_configure("warn", foreground=self.AMBER,
                                 font=("Consolas", 9, "bold"))
         disc_text.tag_add("warn", "1.0", "1.end")
-        disc_text.configure(state="disabled")
+        disc_text.configure(state="disabled", takefocus=0)
         disc_text.pack(fill="both", expand=True)
 
         self._ack_var = tk.BooleanVar(value=False)
@@ -10803,8 +10803,32 @@ class SplashScreen:
         )
         self._btn.place(x=self.W // 2 - 110, y=504, width=220, height=26)
         self.win.update()
+        self.win.lift()
+        self._grab_focus()
         self._msg_idx = 0
         self._animate()
+
+    def _grab_focus(self):
+        # On Windows, an overrideredirect Toplevel often isn't actually
+        # activated by the OS yet at the moment it's mapped, so a
+        # focus_force() called synchronously here can silently lose to
+        # whatever window had focus before. Retry a couple of times on
+        # a short delay so the splash reliably ends up with the keyboard.
+        try:
+            self.win.focus_force()
+            self._chk.focus_set()
+        except Exception:
+            pass
+        if not self._closed:
+            self.win.after(120, self._grab_focus_once_more)
+
+    def _grab_focus_once_more(self):
+        try:
+            if self.win.focus_get() is None:
+                self.win.focus_force()
+                self._chk.focus_set()
+        except Exception:
+            pass
 
     def _draw_static(self):
         cv, W, H = self.cv, self.W, self.H

@@ -107,7 +107,7 @@
 
     const cx  = w / 2;
     const cy  = h * 0.50;
-    const ro  = Math.min(w, h) * 0.40;
+    const ro  = Math.min(w, h) * 0.46;
     const ri  = ro * 0.70;
     const mid = (ro + ri) / 2;
     const lw  = ro - ri;
@@ -120,9 +120,12 @@
     ctx.lineCap     = 'butt';
     ctx.stroke();
 
-    // ── Fill: CW from 150°, add frac*240° (tip moves left→right)
+    // ── Fill: CW from 150°, add frac*240° (tip moves left→right) — glowing
     if (frac > 0.001) {
       const fillEnd = G_START + Math.min(frac, 1) * G_SWEEP;
+      ctx.save();
+      ctx.shadowColor = colour;
+      ctx.shadowBlur  = Math.max(5, lw * 0.4);
       ctx.beginPath();
       ctx.arc(cx, cy, mid, G_START, fillEnd, false);
       ctx.strokeStyle = colour;
@@ -130,12 +133,14 @@
       ctx.lineCap     = 'round';
       ctx.stroke();
 
-      // White tip dot
+      // White tip dot (glowing)
       const [tx, ty] = polarXY(cx, cy, mid, fillEnd);
       ctx.beginPath();
       ctx.arc(tx, ty, Math.max(3.5, lw*0.30), 0, Math.PI*2);
       ctx.fillStyle = '#ffffff';
+      ctx.shadowBlur = Math.max(5, lw * 0.4);
       ctx.fill();
+      ctx.restore();
     }
 
     // ── Tick marks at 0/25/50/75/100% (CCW = subtract)
@@ -169,7 +174,7 @@
   }
 
   // ══ PLUGIN-DRIVEN GAUGES ═══════════════════════════════════════════════════
-  let _gaugeDefs=[], _gaugeState={}, _snap=null, _fs=14, _metaLoaded=false;
+  let _gaugeDefs=[], _gaugeState={}, _snap=null, _fs=15, _metaLoaded=false;
 
   const _tip = document.createElement('div');
   _tip.style.cssText=`position:fixed;display:none;pointer-events:none;z-index:9999;
@@ -204,6 +209,7 @@
     _gaugeState={};
     defs.forEach((g,i)=>{
       const card=document.createElement('div'); card.className='gauge-card';
+      card.dataset.tileKey=(g.label||('gauge'+i)).toLowerCase().replace(/[^a-z0-9]+/g,'-');
       const canvas=document.createElement('canvas'); canvas.id=`gauge-${i}`;
       card.appendChild(canvas); row.appendChild(card);
       _gaugeState[i]={cur:0,raf:null};
@@ -213,6 +219,11 @@
         card.style.cursor='help';
       }
     });
+    Array.from(row.children).forEach(addPopoutButton);
+    markDraggable(row);
+    applyTileOrder(row,'vkca_layout_gauge');
+    setupReorder(row,'vkca_layout_gauge');
+    applyPopoutFilter();
     setTimeout(redrawAll,50);
   }
 
@@ -252,26 +263,34 @@
     });
   }
 
-  window.VKA.setZoom=pct=>{_fs=14*(pct/100);redrawAll();};
+  window.VKA.setZoom=pct=>{_fs=15*(pct/100);redrawAll();};
   window.addEventListener('resize',redrawAll);
 
   // ══ SPARKLINES ═════════════════════════════════════════════════════════════
   let _sparks={};
   function makeSparkline(id,colour){
     const canvas=document.getElementById(id); if(!canvas) return null;
+    canvas.style.filter=`drop-shadow(0 0 4px ${colour}80)`;
     const ctx=canvas.getContext('2d');
-    const grad=ctx.createLinearGradient(0,0,0,80);
-    grad.addColorStop(0,colour+'44'); grad.addColorStop(1,colour+'00');
+    const grad=ctx.createLinearGradient(0,0,0,100);
+    grad.addColorStop(0,   colour+'59');
+    grad.addColorStop(0.65,colour+'14');
+    grad.addColorStop(1,   colour+'00');
     return new Chart(ctx,{type:'line',
-      data:{labels:[],datasets:[{data:[],borderColor:colour,borderWidth:2,
-        backgroundColor:grad,fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4}]},
+      data:{labels:[],datasets:[{data:[],borderColor:colour,borderWidth:2.5,
+        backgroundColor:grad,fill:true,tension:0,cubicInterpolationMode:'monotone',
+        borderCapStyle:'round',borderJoinStyle:'round',
+        pointRadius:0,pointHoverRadius:5,pointHoverBackgroundColor:colour,
+        pointHoverBorderColor:'#fff',pointHoverBorderWidth:2}]},
       options:{responsive:true,maintainAspectRatio:false,animation:{duration:400},
+        interaction:{mode:'index',intersect:false},
         plugins:{legend:{display:false},
           tooltip:{mode:'index',intersect:false,backgroundColor:T.bg3,
-            borderColor:colour,borderWidth:1,titleColor:colour,bodyColor:T.fg}},
+            borderColor:colour,borderWidth:1,titleColor:colour,bodyColor:T.fg,
+            displayColors:false,padding:8}},
         scales:{
-          x:{ticks:{color:T.muted,font:{size:9},maxTicksLimit:12,maxRotation:0},grid:{color:T.bg3+'60'}},
-          y:{ticks:{color:T.muted,font:{size:9}},grid:{color:T.bg3+'60'},beginAtZero:true},
+          x:{display:false},
+          y:{display:false,beginAtZero:true},
         }},
     });
   }
@@ -292,9 +311,13 @@
       chart.data.labels=data.map((_,i)=>String(i).padStart(2,'0'));
       chart.data.datasets[0].data=data;
       const peak=Math.max(...data,0),pi=data.lastIndexOf(peak);
-      chart.data.datasets[0].pointRadius=data.map((_,i)=>i===pi?5:0);
+      chart.data.datasets[0].pointRadius=data.map((_,i)=>i===pi?4:0);
       chart.data.datasets[0].pointBackgroundColor=
         data.map((_,i)=>i===pi?chart.data.datasets[0].borderColor:'transparent');
+      chart.data.datasets[0].pointBorderColor=
+        data.map((_,i)=>i===pi?'#fff':'transparent');
+      chart.data.datasets[0].pointBorderWidth=
+        data.map((_,i)=>i===pi?2:0);
       chart.update();
       const last=[...data].reverse().find(v=>v>0)||0;
       const el=document.getElementById(heroId); if(el) el.textContent=last.toLocaleString('en-AU');
@@ -590,6 +613,40 @@
     setEA('eat-best-band', bestBand, '', bestCol);
   }
 
+  // ══ TIME SINCE LAST QSO (live ticker, independent of snapshot cadence) ════
+  let _lastQsoTime=null;   // Date, parsed from the most recent snapshot
+
+  function trackLastQso(snap){
+    const t=snap?.last_worked?.[0]?.time;
+    _lastQsoTime = t ? new Date(t+'Z') : null;   // server times are naive UTC
+  }
+
+  function fmtElapsed(totalSec){
+    totalSec=Math.max(0,Math.floor(totalSec));
+    const h=Math.floor(totalSec/3600), m=Math.floor((totalSec%3600)/60), s=totalSec%60;
+    if (h>0) return `${h}h ${String(m).padStart(2,'0')}m`;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
+  function tickSinceLastQso(){
+    const valEl=document.getElementById('eat-since-last');
+    const subEl=document.getElementById('eat-since-sub');
+    const hudEl=document.getElementById('hud-since');
+    if (!_lastQsoTime){
+      if (valEl) { valEl.textContent='—'; valEl.style.color=T.muted; }
+      if (subEl) subEl.textContent='—';
+      if (hudEl) hudEl.textContent='—';
+      return;
+    }
+    const sec=(Date.now()-_lastQsoTime.getTime())/1000;
+    const str=fmtElapsed(sec);
+    const col = sec<120?T.green : sec<300?T.accent3 : T.red;
+    if (valEl) { valEl.textContent=str; valEl.style.color=col; }
+    if (subEl) subEl.textContent = sec<120?'on pace':sec<300?'getting quiet':'go find a QSO';
+    if (hudEl) { hudEl.textContent=str; hudEl.style.color=col; }
+  }
+  setInterval(tickSinceLastQso,1000);
+
   // ══ CONTEST-OVER PANEL ══════════════════════════════════════════════════════
   function updateContestOverPanel(snap) {
     const panel = document.getElementById('contest-over-panel'); if (!panel) return;
@@ -640,6 +697,260 @@
       `${ss.end_dt ? String(ss.end_dt).substring(0,16)+' UTC' : ''}`;
   }
 
+  // ══ TILE REORDERING (drag-and-drop, persisted per-section) ═════════════════
+  function tileKey(el){ return el.dataset.tileKey || el.id || ''; }
+
+  function saveTileOrder(container,storageKey){
+    const order=Array.from(container.children).map(tileKey).filter(Boolean);
+    try{ localStorage.setItem(storageKey,JSON.stringify(order)); }catch{}
+  }
+
+  function applyTileOrder(container,storageKey){
+    let saved;
+    try{ saved=JSON.parse(localStorage.getItem(storageKey)||'null'); }catch{ saved=null; }
+    if(!saved||!saved.length) return;
+    const byKey=new Map(Array.from(container.children).map(c=>[tileKey(c),c]));
+    saved.forEach(k=>{ const el=byKey.get(k); if(el){ container.appendChild(el); byKey.delete(k); } });
+    byKey.forEach(el=>container.appendChild(el));
+  }
+
+  function markDraggable(container){
+    Array.from(container.children).forEach(c=>{
+      c.setAttribute('draggable','true');
+      c.classList.add('reorderable-tile');
+    });
+  }
+
+  function setupReorder(container,storageKey){
+    if(!container||container._reorderBound) return;
+    container._reorderBound=true;
+    container.classList.add('reorderable-row');
+    let dragEl=null;
+    container.addEventListener('dragstart',e=>{
+      const tile=e.target.closest('.reorderable-tile');
+      if(!tile||tile.parentElement!==container) return;
+      dragEl=tile; tile.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+      try{ e.dataTransfer.setData('text/plain',''); }catch{}
+    });
+    container.addEventListener('dragover',e=>{
+      if(!dragEl) return;
+      e.preventDefault();
+      const tile=e.target.closest('.reorderable-tile');
+      if(!tile||tile===dragEl||tile.parentElement!==container) return;
+      const rect=tile.getBoundingClientRect();
+      const before=(e.clientX-rect.left)<rect.width/2;
+      container.insertBefore(dragEl,before?tile:tile.nextSibling);
+    });
+    container.addEventListener('dragend',()=>{
+      if(dragEl){ dragEl.classList.remove('dragging'); dragEl=null; saveTileOrder(container,storageKey); }
+    });
+  }
+
+  // ══ POP-OUT TILES (own OS window, live-updating) ═══════════════════════════
+  // Path-based (/popout/<key>), not query-string — see index.html bootstrap
+  // script for why.
+  const POPOUT_KEY=location.pathname.startsWith('/popout/')
+    ? decodeURIComponent(location.pathname.slice('/popout/'.length))
+    : null;
+
+  function addPopoutButton(el){
+    if (POPOUT_KEY || el.querySelector('.popout-btn')) return;
+    const btn=document.createElement('button');
+    btn.className='popout-btn';
+    btn.type='button';
+    btn.title='Pop out to its own window';
+    btn.textContent='⤢';
+    btn.setAttribute('draggable','false');
+    btn.addEventListener('mousedown',e=>e.stopPropagation());
+    btn.addEventListener('click',async e=>{
+      e.stopPropagation();
+      const key=tileKey(el); if(!key) return;
+      const label=el.querySelector('.ip-title,.spark-title,.ea-label')?.textContent?.trim()||key;
+      const openInBrowserTab=()=>window.open(
+        `/popout/${encodeURIComponent(key)}`,
+        'vkca_popout_'+key, 'width=480,height=380,resizable=yes');
+      try {
+        const res=await fetch('/api/popout',{method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({key,title:label,width:480,height:380})});
+        if (!res.ok) { openInBrowserTab(); return; }
+        const data=await res.json();
+        if (!data.ok) openInBrowserTab();
+      } catch { openInBrowserTab(); }
+    });
+    el.appendChild(btn);
+  }
+
+  function applyPopoutFilter(){
+    if (!POPOUT_KEY) return;
+    const all=document.querySelectorAll('.gauge-card,.spark-card,.info-panel,.ea-card');
+    let target=null;
+    all.forEach(el=>{ if(tileKey(el)===POPOUT_KEY) target=el; });
+    if (!target) return;
+    const row=target.parentElement;
+    row.classList.add('popout-host-row');
+    target.classList.add('popout-host-tile');
+    const label=target.querySelector('.ip-title,.spark-title,.ea-label')?.textContent?.trim();
+    if (label) document.title=label+' — VK Contest Analyzer';
+    setTimeout(()=>{
+      redrawAll();
+      Object.values(_sparks).forEach(c=>c?.resize());
+    },60);
+  }
+
+  const REORDER_SECTIONS=[
+    {sel:'.spark-row',          key:'vkca_layout_spark'},
+    {sel:'.info-panels-row',    key:'vkca_layout_info'},
+    {sel:'.extra-analytics-row',key:'vkca_layout_ea'},
+  ];
+  const GAUGE_LAYOUT_KEY='vkca_layout_gauge';
+
+  function initReorder(){
+    REORDER_SECTIONS.forEach(({sel,key})=>{
+      const el=document.querySelector(sel); if(!el) return;
+      Array.from(el.children).forEach(addPopoutButton);
+      markDraggable(el);
+      applyTileOrder(el,key);
+      setupReorder(el,key);
+    });
+    applyPopoutFilter();
+  }
+  initReorder();
+
+  document.getElementById('btn-reset-layout')?.addEventListener('click',()=>{
+    REORDER_SECTIONS.forEach(({key})=>{ try{ localStorage.removeItem(key); }catch{} });
+    try{ localStorage.removeItem(GAUGE_LAYOUT_KEY); }catch{}
+    location.reload();
+  });
+
+  // ══ MINI HUD (own popped-out window, /hud) ══════════════════════════════════
+  // Path-based, not query-string — see index.html bootstrap script for why.
+  const HUD_MODE=location.pathname==='/hud';
+
+  function updateHud(snap){
+    const pb=snap?.personal_bests||{};
+    const ss=snap?.session_status||{};
+    const scoreEl=document.getElementById('hud-score');
+    const rateEl =document.getElementById('hud-rate');
+    const remEl  =document.getElementById('hud-remain');
+    if (scoreEl) scoreEl.textContent=(snap?.score||0).toLocaleString('en-AU');
+    if (rateEl)  rateEl.textContent=(pb.current_hour_rate||0)+'/hr';
+    if (remEl){
+      const rem=Math.round(ss.total_remaining_mins??ss.remaining_mins??0);
+      remEl.textContent = ss.state ? rem+'m' : '—';
+    }
+  }
+
+  document.getElementById('btn-hud')?.addEventListener('click', async ()=>{
+    try {
+      const res=await fetch('/api/hud',{method:'POST'});
+      const data=await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error||'failed');
+    } catch {
+      window.open('/hud','vkca_hud','width=620,height=70,resizable=yes');
+    }
+  });
+
+  // ══ REPLAY SCRUBBER (+ autoplay) ════════════════════════════════════════════
+  let _replaying=false, _lastReplaySnap=null, _scrubStartMs=null, _scrubEndMs=null;
+  let _playTimer=null, _playing=false;
+
+  const replayBar       = document.getElementById('replay-bar');
+  const replaySlider    = document.getElementById('replay-slider');
+  const replayTimeEl    = document.getElementById('replay-time');
+  const replaySpeedSel  = document.getElementById('replay-speed');
+  const replayToggleBtn = document.getElementById('btn-replay-toggle');
+  const replayPlayBtn   = document.getElementById('btn-replay-play');
+  const replayLiveBtn   = document.getElementById('btn-replay-live');
+
+  function fmtScrubTime(ms){
+    return new Date(ms).toISOString().slice(0,16).replace('T',' ')+' UTC';
+  }
+
+  async function openReplay(){
+    if (!replayBar||!replaySlider) return;
+    try {
+      const res=await fetch('/api/scrub_range');
+      const data=await res.json();
+      if (!data.start||!data.end) return;
+      _scrubStartMs=new Date(data.start+'Z').getTime();
+      _scrubEndMs  =new Date(data.end+'Z').getTime();
+      replaySlider.value=1000;
+      replayTimeEl.textContent=fmtScrubTime(_scrubEndMs);
+      replayBar.style.display='flex';
+    } catch(e){ console.warn('scrub_range failed:',e); }
+  }
+
+  function stopPlayback(){
+    if (_playTimer) { clearInterval(_playTimer); _playTimer=null; }
+    _playing=false;
+    if (replayPlayBtn) replayPlayBtn.textContent='▶';
+  }
+
+  function closeReplay(){
+    stopPlayback();
+    _replaying=false; _lastReplaySnap=null;
+    if (replayBar) replayBar.style.display='none';
+    const snap=window.VKA.lastSnap(); if (snap) render(snap);
+  }
+
+  // Fetches the snapshot at `frac` (0..1 across the contest's QSO range) and
+  // renders it. Shared by manual slider release and the autoplay timer.
+  let _scrubInFlight=false;
+  async function scrubToFrac(frac){
+    if (_scrubStartMs==null || _scrubInFlight) return;
+    _scrubInFlight=true;
+    frac=Math.max(0,Math.min(1,frac));
+    if (replaySlider) replaySlider.value=Math.round(frac*1000);
+    const ms=_scrubStartMs+(_scrubEndMs-_scrubStartMs)*frac;
+    if (replayTimeEl) replayTimeEl.textContent=fmtScrubTime(ms);
+    const iso=new Date(ms).toISOString().slice(0,19);   // naive — matches server format
+    try {
+      const res=await fetch('/api/scrub?t='+encodeURIComponent(iso));
+      const data=await res.json();
+      if (data.error) return;
+      _replaying=true; _lastReplaySnap=data;
+      render(data);
+    } catch(e){ console.warn('scrub failed:',e); }
+    finally { _scrubInFlight=false; }
+  }
+
+  const REPLAY_TICK_MS=250;   // short tick → smooth motion at every speed, incl. real-time "Live"
+
+  function startPlayback(){
+    if (_scrubStartMs==null || _playing) return;
+    _playing=true;
+    if (replayPlayBtn) replayPlayBtn.textContent='⏸';
+    _playTimer=setInterval(async ()=>{
+      // replay-speed value = contest-seconds advanced per real second (1 = Live/real-time pace)
+      const speedX   =Number(replaySpeedSel?.value||60);
+      const stepFrac =(speedX*REPLAY_TICK_MS)/(_scrubEndMs-_scrubStartMs);
+      const frac     =Number(replaySlider?.value||0)/1000 + stepFrac;
+      await scrubToFrac(frac);
+      if (frac>=1) stopPlayback();
+    }, REPLAY_TICK_MS);
+  }
+
+  replayToggleBtn?.addEventListener('click',()=>{
+    const open=replayBar && replayBar.style.display!=='none';
+    if (open) closeReplay(); else openReplay();
+  });
+  replayLiveBtn?.addEventListener('click', closeReplay);
+  replayPlayBtn?.addEventListener('click', ()=>{ _playing?stopPlayback():startPlayback(); });
+
+  replaySlider?.addEventListener('input',()=>{
+    if (_scrubStartMs==null) return;
+    if (_playing) stopPlayback();
+    const ms=_scrubStartMs+(_scrubEndMs-_scrubStartMs)*(replaySlider.value/1000);
+    replayTimeEl.textContent=fmtScrubTime(ms);
+  });
+
+  replaySlider?.addEventListener('change',()=>{
+    if (_scrubStartMs==null) return;
+    scrubToFrac(Number(replaySlider.value)/1000);
+  });
+
   // ══ MAIN ═══════════════════════════════════════════════════════════════════
   function render(snap){
     updateGauges(snap); updateSparklines(snap); updateRegionBars(snap);
@@ -653,11 +964,15 @@
 
   let _firstSnap=true;
   window.addEventListener('vka:snapshot',e=>{
+    trackLastQso(e.detail);
+    if (HUD_MODE) { updateHud(e.detail); return; }
+    if (_replaying) return;
     if(_firstSnap){_firstSnap=false;loadPluginMeta().then(()=>render(e.detail));}
     else render(e.detail);
   });
   window.addEventListener('vka:tabchange',e=>{
     if(e.detail.tab!=='overview') return;
+    if (_replaying && _lastReplaySnap) { render(_lastReplaySnap); return; }
     const snap=window.VKA.lastSnap(); if(snap) render(snap);
   });
   window.addEventListener('vka:loaded',()=>{_metaLoaded=false;_firstSnap=true;});

@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VK Contest Analyzer v2.0</title>
 <link rel="stylesheet" href="/static/style.css">
+<script>
+  // Applied synchronously, before paint, so a popped-out tile/HUD window
+  // never flashes the full dashboard chrome while the rest of the page loads.
+  // Path-based (not query-string) — pywebview/WebView2 was observed dropping
+  // the query string entirely when navigating secondary windows to a URL
+  // built from create_window(url=...), so mode is encoded in the path instead.
+  if (location.pathname === '/hud') document.documentElement.classList.add('hud-mode');
+  else if (location.pathname.startsWith('/popout/')) document.documentElement.classList.add('popout-mode');
+</script>
 </head>
 <body>
 
@@ -85,6 +94,15 @@
 <!-- ── Session bar ─────────────────────────────────────────────────────────── -->
 <div id="session-bar" style="display:none"></div>
 
+<!-- ── Mini HUD bar (only shown when loaded at /hud in its own popped-out
+     window — see overview.js HUD_MODE) ──────────────────────────────────── -->
+<div id="hud-bar">
+  <span class="hud-item"><span class="hud-label">SCORE</span><span class="hud-val" id="hud-score">—</span></span>
+  <span class="hud-item"><span class="hud-label">RATE</span><span class="hud-val" id="hud-rate">—</span></span>
+  <span class="hud-item"><span class="hud-label">REMAIN</span><span class="hud-val" id="hud-remain">—</span></span>
+  <span class="hud-item"><span class="hud-label">LAST QSO</span><span class="hud-val" id="hud-since">—</span></span>
+</div>
+
 <!-- ── Tab bar ────────────────────────────────────────────────────────────── -->
 <nav id="tabbar">
   <button class="tab-btn active" data-tab="overview">
@@ -130,20 +148,44 @@
 
   <!-- ══ OVERVIEW ══ -->
   <section id="tab-overview" class="tab-panel active">
+    <div class="layout-hint">
+      <span>⠿ Drag any tile to rearrange this tab — your layout is remembered.</span>
+      <div style="display:flex;gap:8px">
+        <button id="btn-hud" class="btn btn--ghost btn--sm" title="Open a tiny always-on-top HUD with score, rate and time since last QSO">📌 Mini HUD</button>
+        <button id="btn-replay-toggle" class="btn btn--ghost btn--sm" title="Scrub back through the contest's progression">⏪ Replay</button>
+        <button id="btn-reset-layout" class="btn btn--ghost btn--sm" title="Restore the default tile order">↺ Reset layout</button>
+      </div>
+    </div>
+
+    <div id="replay-bar" style="display:none">
+      <span class="replay-badge" id="replay-badge">REPLAY</span>
+      <button id="btn-replay-play" class="btn btn--ghost btn--sm" title="Auto-play the replay">▶</button>
+      <select id="replay-speed" class="tb-select" style="width:78px" title="Playback speed">
+        <option value="1">● Live</option>
+        <option value="60" selected>60×</option>
+        <option value="300">300×</option>
+        <option value="900">900×</option>
+        <option value="3600">3600×</option>
+      </select>
+      <input type="range" id="replay-slider" min="0" max="1000" value="1000">
+      <span id="replay-time">—</span>
+      <button id="btn-replay-live" class="btn btn--primary btn--sm">⏹ Back to Live</button>
+    </div>
+
     <div id="gauge-row" class="gauge-row"></div>
 
     <div class="spark-row">
-      <div class="spark-card">
+      <div class="spark-card" id="spark-card-qsos">
         <div class="spark-hero" id="sp-qsos-val">—</div>
         <div class="spark-title">QSOs / Hour</div>
         <div class="spark-canvas-wrap"><canvas id="spark-qsos"></canvas></div>
       </div>
-      <div class="spark-card">
+      <div class="spark-card" id="spark-card-score">
         <div class="spark-hero" id="sp-score-val">—</div>
         <div class="spark-title">Running Score</div>
         <div class="spark-canvas-wrap"><canvas id="spark-score"></canvas></div>
       </div>
-      <div class="spark-card">
+      <div class="spark-card" id="spark-card-mults">
         <div class="spark-hero" id="sp-mults-val">—</div>
         <div class="spark-title">New Mults / Hr</div>
         <div class="spark-canvas-wrap"><canvas id="spark-mults"></canvas></div>
@@ -219,6 +261,11 @@
         <div class="ea-label">BEST BAND NOW</div>
         <div class="ea-value" id="eat-best-band">—</div>
         <div class="ea-sub">by mult efficiency</div>
+      </div>
+      <div class="ea-card" id="ea-since-last">
+        <div class="ea-label">SINCE LAST QSO</div>
+        <div class="ea-value" id="eat-since-last">—</div>
+        <div class="ea-sub" id="eat-since-sub">—</div>
       </div>
     </div>
 

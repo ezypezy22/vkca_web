@@ -27,6 +27,7 @@ The developers of this software make no guarantees regarding the accuracy or com
 
 Users are responsible for verifying all information against N1MM before making decisions or submitting contest entries.`;
 
+  { if (location.pathname === '/hud' || location.pathname.startsWith('/popout/')) return; }
   try { if (localStorage.getItem('vkca_splash_accepted') === '1') return; } catch {}
 
   const el = document.createElement('div');
@@ -46,6 +47,30 @@ Users are responsible for verifying all information against N1MM before making d
       <button id="splash-btn" disabled>Let's Get Started  ›</button>
     </div>`;
   document.body.appendChild(el);
+
+  // ── Focus trap: keep Tab/Shift+Tab cycling within the splash only ─────────
+  // The overlay is just a div over the page, so without this the browser's
+  // natural tab order walks straight through into the app's nav tabs behind it.
+  el.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    const focusable = Array.from(el.querySelectorAll('input, button'))
+      .filter(node => !node.disabled);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey) {
+      if (active === first || !el.contains(active)) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (active === last || !el.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  });
 
   // ── Canvas header (hexagon + title) ───────────────────────────────────────
   const cv = document.getElementById('splash-canvas');
@@ -92,6 +117,7 @@ Users are responsible for verifying all information against N1MM before making d
     try { localStorage.setItem('vkca_splash_accepted', '1'); } catch {}
     showSupportedPlugins();
   });
+  ack.focus();
 
   // ── Second screen: supported contest plugins ───────────────────────────────
   async function showSupportedPlugins() {
@@ -118,10 +144,12 @@ Users are responsible for verifying all information against N1MM before making d
       <div id="splash-plugins-count">${plugins.length} contest ${plugWord} loaded</div>
       <button id="splash-launch-btn">Launch App &rsaquo;</button>`;
 
-    document.getElementById('splash-launch-btn').addEventListener('click', () => {
+    const launchBtn = document.getElementById('splash-launch-btn');
+    launchBtn.addEventListener('click', () => {
       el.style.opacity = '0';
       setTimeout(() => el.remove(), 400);
     });
+    launchBtn.focus();
   }
 })();
  
