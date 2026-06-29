@@ -40,23 +40,42 @@
     }
   }
 
-  function renderCleanLog() {
-    // Clear chart area and show success
-    const chartWrap = document.getElementById('chart-dupes-band')?.parentElement;
-    if (chartWrap) {
-      chartWrap.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;
-        height:140px;font-family:var(--font-mono);font-size:0.85em;color:var(--green);
-        flex-direction:column;gap:8px">
-        <span style="font-size:2em">✓</span>
-        <span>No duplicate QSOs detected — clean log!</span>
-      </div>`;
+  // Lazily creates (once) a sibling "clean log" message inside the chart's
+  // wrapper, so toggling it never touches the <canvas> itself — destroying
+  // the canvas via innerHTML used to permanently break renderBandChart's
+  // later getElementById lookup once any dupes did show up.
+  function getBandEmptyEl() {
+    const canvas = document.getElementById('chart-dupes-band');
+    if (!canvas) return null;
+    const wrap = canvas.parentElement;
+    let empty = document.getElementById('dupes-band-empty');
+    if (!empty && wrap) {
+      empty = document.createElement('div');
+      empty.id = 'dupes-band-empty';
+      empty.style.cssText = 'display:none;align-items:center;justify-content:center;' +
+        'height:140px;font-family:var(--font-mono);font-size:0.85em;color:var(--green);' +
+        'flex-direction:column;gap:8px';
+      empty.innerHTML = '<span style="font-size:2em">✓</span>' +
+        '<span>No duplicate QSOs detected — clean log!</span>';
+      wrap.appendChild(empty);
     }
+    return empty;
+  }
+
+  function renderCleanLog() {
+    const canvas = document.getElementById('chart-dupes-band');
+    if (canvas) canvas.style.display = 'none';
+    const empty = getBandEmptyEl();
+    if (empty) empty.style.display = 'flex';
     const tbody = document.getElementById('dupes-call-tbody');
     if (tbody) tbody.innerHTML = `<tr><td colspan="2" style="color:var(--green);padding:12px;
       font-family:var(--font-mono)">All QSOs unique — no dupes found.</td></tr>`;
   }
 
   function renderBandChart(byBand) {
+    const empty = getBandEmptyEl();
+    if (empty) empty.style.display = 'none';
+
     // Normalise band keys: strip spaces, uppercase
     const normalised = {};
     Object.entries(byBand).forEach(([k,v]) => {
@@ -75,7 +94,9 @@
     if (bandChart) { bandChart.destroy(); bandChart = null; }
 
     if (!bands.length) {
-      canvas.style.display = 'none'; return;
+      canvas.style.display = 'none';
+      if (empty) empty.style.display = 'flex';
+      return;
     }
     canvas.style.display = '';
 

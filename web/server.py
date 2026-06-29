@@ -11,12 +11,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
+import re
 import sys
 import threading
 import time
 import socket
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -37,21 +40,39 @@ _STATIC = _ROOT / 'web' / 'static'
 # In frozen mode _ROOT is _MEIPASS; in dev mode it's the project root.
 sys.path.insert(0, str(_ROOT))
 
+# A windowed (console=False) PyInstaller build has no console, so Windows
+# leaves sys.stdout/stderr as None. Anything that calls .write()/.isatty()
+# on them — e.g. uvicorn's default logging setup — crashes with
+# "AttributeError: 'NoneType' object has no attribute 'isatty'" the moment
+# it runs. Give them a harmless no-op stream instead of leaving them None.
+if getattr(_sys, 'frozen', False):
+    class _NullStream:
+        def write(self, *a, **k): pass
+        def flush(self, *a, **k): pass
+        def isatty(self): return False
+    if sys.stdout is None: sys.stdout = _NullStream()
+    if sys.stderr is None: sys.stderr = _NullStream()
+
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
 # Direct import — no tkinter mocking needed
 from contest_log import ContestLog
-from plugins.loader import plugin_for
+from plugins.loader import plugin_for, get_all_plugins
 
 log = logging.getLogger(__name__)
 
 def _setup_logging():
-    """Write logs to a file next to the exe (or script) — visible when frozen."""
+    """Write logs to a per-user-writable folder. A properly installed exe
+    typically lives under Program Files, which standard (non-admin) users
+    can't write to — writing the log next to the exe there raises
+    PermissionError the moment logging is set up, before anything else
+    even runs."""
     if getattr(sys, 'frozen', False):
-        log_dir = Path(sys.executable).parent
+        log_dir = Path(os.environ['LOCALAPPDATA']) / "VKContestAnalyzer"
+        log_dir.mkdir(parents=True, exist_ok=True)
     else:
         log_dir = Path(__file__).resolve().parent
     log_path = log_dir / "vkca_errors.log"
@@ -84,6 +105,9 @@ class AppState:
         self._lock                                = threading.Lock()
         self._clients:      list                  = []
         self._webview_window                      = None  # set after webview starts
+        self.yoy_extra_paths: list                = []    # extra .s3db files added on the YOY tab
+        self.pace_extra_paths: list               = []    # [{"path":..., "kind":"s3db"|"adif"|"cabrillo"}]
+        self.fatigue_extra_paths: list            = []    # extra .s3db files added on the Fatigue tab
 
     # ── Path validation (no DB open) ─────────────────────────────────────────
 
@@ -240,6 +264,24 @@ async def api_status():
     }
 
 
+# ── Supported contest plugins (shown on the splash screen) ───────────────────
+
+@app.get("/api/plugins")
+async def api_plugins():
+    try:
+        plugins = get_all_plugins()
+    except Exception:
+        log.exception("get_all_plugins failed")
+        plugins = []
+    return [
+        {
+            "display_name": getattr(p, "display_name", type(p).__name__),
+            "class_name":    type(p).__name__,
+        }
+        for p in plugins
+    ]
+
+
 # ── Native file browse (pywebview) ────────────────────────────────────────────
 
 @app.get("/api/browse")
@@ -267,6 +309,27 @@ async def api_browse():
         return {"path": chosen}
     except Exception as exc:
         log.exception("browse failed")
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.post("/api/upload_log")
+async def api_upload_log(file: UploadFile = File(...)):
+    """Browser-fallback file picker (no pywebview window available): saves
+    the uploaded file to a temp path on this same machine and hands back
+    that path, so the rest of the load/scan flow can treat it exactly like
+    a path chosen via the native dialog."""
+    import tempfile
+    import shutil
+    try:
+        name = os.path.basename(file.filename or "upload")
+        tmp_dir = Path(tempfile.gettempdir()) / "vkca_uploads"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        dest = tmp_dir / name
+        with open(dest, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        return {"path": str(dest)}
+    except Exception as exc:
+        log.exception("upload failed")
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
@@ -393,52 +456,673 @@ async def api_operators():
     return snap.get("operator_times", [])
 
 
+def _delete_qsos(qso_ids: list) -> dict:
+    with STATE._lock:
+        cl = STATE.contest_log
+        if not cl:
+            return {"deleted": [], "errors": ["No contest log loaded"]}
+        deleted, errors = [], []
+        for qid in qso_ids:
+            match = next((q for q in cl.qsos if q.get("qso_id") == qid), None)
+            if not match:
+                errors.append(f"{qid}: not found")
+                continue
+            try:
+                cl.delete_qso(qid, match.get("_table", "DXLOG"))
+                deleted.append(qid)
+            except Exception as e:
+                log.exception("Delete failed for QSO %s", qid)
+                errors.append(f"{qid}: {e}")
+        return {"deleted": deleted, "errors": errors}
+
+
+@app.post("/api/qsos/delete")
+async def api_qsos_delete(body: dict):
+    """Permanently delete one or more QSOs from the database. Body: {qso_ids: [...]}"""
+    qso_ids = body.get("qso_ids") or []
+    if not qso_ids:
+        return JSONResponse({"error": "No qso_ids supplied"}, status_code=400)
+    return await asyncio.get_event_loop().run_in_executor(None, _delete_qsos, qso_ids)
+
+
+def _yoy_build_trajectory(cl: "ContestLog") -> Optional[dict]:
+    """
+    Hourly-resolution score/QSO/mult trajectory + per-hour rate for one
+    ContestLog, for the Year-on-Year overlay chart.
+
+    Mirrors the old desktop app's _yoy_build_trajectory, but buckets by
+    elapsed contest-hour (like compute_snapshot's running_score sparkline)
+    instead of recomputing the score once per QSO — same O(hours) cost as
+    the rest of this codebase's sparklines instead of O(qsos²), which matters
+    here because the YOY endpoint may build this for many contest-years at once.
+    """
+    valid = sorted([q for q in cl.qsos if not q.get("dupe")], key=lambda q: q["time"])
+    if not valid:
+        return None
+
+    cs = cl.contest_start()
+    earliest = valid[0]["time"]
+    if cs is None or cs > earliest:
+        cs = earliest.replace(minute=0, second=0, microsecond=0)
+
+    total_hrs = (valid[-1]["time"] - cs).total_seconds() / 3600.0
+    n_buckets = max(1, int(math.ceil(max(total_hrs, 0))) + 1)
+
+    plugin = cl.plugin
+    seen_mults = set()
+    acc: list = []
+    elapsed_hrs, utc_hrs = [], []
+    cum_score, cum_qsos, cum_mults = [], [], []
+    rate_counts     = [0] * n_buckets
+    utc_rate_counts = [0] * 24
+
+    vi = 0
+    for h in range(n_buckets):
+        bucket_end = cs + timedelta(hours=h + 1)
+        while vi < len(valid) and valid[vi]["time"] < bucket_end:
+            q = valid[vi]
+            acc.append(q)
+            rate_counts[h] += 1
+            utc_rate_counts[q["time"].hour] += 1
+            plugin.sparkline_mults(q, seen_mults)
+            vi += 1
+        mid = cs + timedelta(hours=h + 0.5)
+        elapsed_hrs.append(h + 1.0)
+        utc_hrs.append(mid.hour + mid.minute / 60.0)
+        cum_qsos.append(len(acc))
+        cum_score.append(plugin.running_score_for_sparkline(acc))
+        cum_mults.append(len(seen_mults))
+
+    # Any QSOs landing after the nominal window still count toward the final point.
+    if vi < len(valid):
+        for q in valid[vi:]:
+            acc.append(q)
+            utc_rate_counts[q["time"].hour] += 1
+            plugin.sparkline_mults(q, seen_mults)
+        if cum_qsos:
+            rate_counts[-1] += len(valid) - vi
+            cum_qsos[-1]  = len(acc)
+            cum_score[-1] = plugin.running_score_for_sparkline(acc)
+            cum_mults[-1] = len(seen_mults)
+
+    return {
+        "elapsed_hrs":     elapsed_hrs,
+        "utc_hrs":         utc_hrs,
+        "cum_score":       cum_score,
+        "cum_qsos":        cum_qsos,
+        "cum_mults":       cum_mults,
+        "rate_hrs":        [b + 0.5 for b in range(n_buckets)],
+        "rate_counts":     rate_counts,
+        "utc_rate_hrs":    [h + 0.5 for h in range(24)],
+        "utc_rate_counts": utc_rate_counts,
+        "final_score":     cum_score[-1] if cum_score else 0,
+        "final_qsos":      cum_qsos[-1]  if cum_qsos  else 0,
+        "final_mults":     cum_mults[-1] if cum_mults else 0,
+        "total_hrs":       total_hrs,
+    }
+
+
+def _yoy_collect_series(db_path: str, existing_keys: set) -> list:
+    """Load every real contest (with QSOs) from db_path into YOY series dicts."""
+    out = []
+    try:
+        contests = ContestLog.available_contests(db_path)
+    except Exception:
+        log.exception("YOY: available_contests failed for %s", db_path)
+        return out
+
+    for ci in contests:
+        if not ci.get("QSOCount", 0):
+            continue
+        contest_name = str(ci.get("ContestName", "")).strip()
+        if contest_name.upper() in ("DX", "DELETEDQS", ""):
+            continue
+        key = f"{db_path}::{ci['ContestNR']}"
+        if key in existing_keys:
+            continue
+        try:
+            p  = plugin_for(contest_name)
+            cl = ContestLog(db_path, contest_nr=ci["ContestNR"], plugin=p)
+            if not cl.qsos:
+                continue
+            traj = _yoy_build_trajectory(cl)
+            if traj is None:
+                continue
+
+            sd = str(ci.get("StartDate", ""))[:4]
+            start_yr = int(sd) if sd.isdigit() else 0
+            qso_yr   = cl.qsos[0]["time"].year if cl.qsos else 0
+            year = qso_yr if (start_yr and qso_yr and abs(start_yr - qso_yr) > 1) else (start_yr or qso_yr)
+
+            display = str(ci.get("DisplayName") or contest_name or "?").strip()
+            out.append({
+                "key": key, "year": year,
+                "label": f"{year} — {display}",
+                "contest_name": contest_name, "display_name": display,
+                "db_path": db_path, "contest_nr": ci["ContestNR"],
+                **traj,
+            })
+            existing_keys.add(key)
+        except Exception:
+            log.exception("YOY: failed loading ContestNR %s from %s", ci.get("ContestNR"), db_path)
+    return out
+
+
+def _yoy_full_state() -> dict:
+    existing_keys: set = set()
+    series = []
+    with STATE._lock:
+        primary = STATE.db_path
+        extra_paths = list(STATE.yoy_extra_paths)
+    if primary:
+        series.extend(_yoy_collect_series(primary, existing_keys))
+    for p in extra_paths:
+        series.extend(_yoy_collect_series(p, existing_keys))
+    return {"series": _json_safe(series), "extra_paths": extra_paths}
+
+
 @app.get("/api/yoy")
 async def api_yoy():
+    """Year-on-Year comparison: trajectories for every contest-year found in
+    the current .s3db plus any extra logs added via /api/yoy/add_log."""
+    return await asyncio.get_event_loop().run_in_executor(None, _yoy_full_state)
+
+
+@app.post("/api/yoy/add_log")
+async def api_yoy_add_log(body: dict):
+    """Add another .s3db file's contests to the Year-on-Year comparison."""
+    path = (body.get("path") or "").strip()
+    if not path:
+        return JSONResponse({"error": "No path supplied"}, status_code=400)
+    err = STATE.validate_path(path)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
+    path = str(Path(path).resolve())
+    with STATE._lock:
+        is_primary = STATE.db_path and os.path.normcase(path) == os.path.normcase(STATE.db_path)
+        if not is_primary and path not in STATE.yoy_extra_paths:
+            STATE.yoy_extra_paths.append(path)
+    return await asyncio.get_event_loop().run_in_executor(None, _yoy_full_state)
+
+
+@app.post("/api/yoy/clear_logs")
+async def api_yoy_clear_logs():
+    """Remove all extra logs added on the Year-on-Year tab (primary log stays)."""
+    with STATE._lock:
+        STATE.yoy_extra_paths = []
+    return await asyncio.get_event_loop().run_in_executor(None, _yoy_full_state)
+
+
+# ── Pace Tracker ──────────────────────────────────────────────────────────────
+
+def _pace_trajectory_from_times(times: list, contest_start) -> Optional[dict]:
     """
-    Year-on-Year comparison: load every past instance of the same contest
-    from the same .s3db and return their final scores + QSO/mult totals.
+    Given a sorted list of valid-QSO datetimes and a contest-start datetime,
+    build the elapsed-hours cumulative-QSO trajectory plus hourly rate buckets
+    used by the Pace chart. Shared by the live log, .s3db references, and the
+    ADIF/Cabrillo reference parsers below.
     """
-    if not STATE.db_path or not STATE.contest_log:
-        return []
+    elapsed_hrs, cum_qsos = [], []
+    for t in times:
+        e = (t - contest_start).total_seconds() / 3600.0
+        if e < 0:
+            continue
+        elapsed_hrs.append(e)
+        cum_qsos.append(len(cum_qsos) + 1)
+    if not elapsed_hrs:
+        return None
+
+    max_e = elapsed_hrs[-1]
+    n_buckets = max(1, int(max_e) + 1)
+    rate_counts = [0] * n_buckets
+    for e in elapsed_hrs:
+        b = min(int(e), n_buckets - 1)
+        rate_counts[b] += 1
+    rate_hrs = [b + 0.5 for b in range(n_buckets)]
+
+    return {
+        "elapsed_hrs": elapsed_hrs, "cum_qsos": cum_qsos,
+        "rate_hrs": rate_hrs, "rate_counts": rate_counts,
+        "final_qsos": cum_qsos[-1], "total_hrs": max_e,
+    }
+
+
+def _pace_trajectory_for_log(cl: "ContestLog") -> Optional[dict]:
+    valid = sorted([q for q in cl.qsos if not q.get("dupe")], key=lambda q: q["time"])
+    cs = cl.contest_start()
+    if not cs or not valid:
+        return None
+    return _pace_trajectory_from_times([q["time"] for q in valid], cs)
+
+
+def _pace_collect_same_contest(db_path: str, current_contest_nr, current_plugin_type,
+                                existing_keys: set) -> list:
+    """Auto-load other contest-years owned by the SAME plugin from the primary
+    .s3db — mirrors the old desktop app's auto-load in _refresh_pace, so the
+    chart doesn't fill up with unrelated contests."""
+    out = []
     try:
-        current_name = getattr(STATE.contest_log, '_contest_name', None)
-        if not current_name:
-            # Derive from available_contests
-            all_ct = ContestLog.available_contests(STATE.db_path)
-            this   = next((c for c in all_ct
-                           if c['ContestNR'] == STATE.contest_nr), None)
-            if not this:
-                return []
-            current_name = this['ContestName']
-
-        all_ct = ContestLog.available_contests(STATE.db_path)
-        same   = [c for c in all_ct if c['ContestName'] == current_name]
-
-        results = []
-        for ct in same:
-            try:
-                cl   = ContestLog(STATE.db_path,
-                                  contest_nr=ct['ContestNR'],
-                                  plugin=plugin_for(current_name))
-                snap = cl.compute_snapshot()
-                results.append({
-                    "contest_nr":  ct['ContestNR'],
-                    "start_date":  str(ct.get('StartDate',''))[:10],
-                    "year":        str(ct.get('StartDate',''))[:4],
-                    "qsos":        snap.get('valid', 0),
-                    "mults":       snap.get('worked', 0),
-                    "score":       snap.get('score', 0),
-                    "band_mults":  snap.get('band_mults', 0),
-                    "is_current":  ct['ContestNR'] == STATE.contest_nr,
-                })
-            except Exception:
-                log.exception("YOY: failed loading ContestNR %s", ct['ContestNR'])
-        results.sort(key=lambda r: r['start_date'])
-        return results
+        contests = ContestLog.available_contests(db_path)
     except Exception:
-        log.exception("api_yoy failed")
-        return []
+        log.exception("Pace: available_contests failed for %s", db_path)
+        return out
+    for ci in contests:
+        if not ci.get("QSOCount", 0) or ci["ContestNR"] == current_contest_nr:
+            continue
+        contest_name = str(ci.get("ContestName", "")).strip()
+        ci_plugin = plugin_for(contest_name)
+        if type(ci_plugin) is not current_plugin_type:
+            continue
+        key = f"{db_path}::{ci['ContestNR']}"
+        if key in existing_keys:
+            continue
+        try:
+            cl = ContestLog(db_path, contest_nr=ci["ContestNR"], plugin=ci_plugin)
+            if not cl.qsos:
+                continue
+            traj = _pace_trajectory_for_log(cl)
+            if traj is None:
+                continue
+            sd = str(ci.get("StartDate", ""))[:4]
+            start_yr = int(sd) if sd.isdigit() else 0
+            qso_yr   = cl.qsos[0]["time"].year if cl.qsos else 0
+            year = qso_yr if (start_yr and qso_yr and abs(start_yr - qso_yr) > 1) else (start_yr or qso_yr)
+            display = str(ci.get("DisplayName") or contest_name or "?").strip()
+            out.append({
+                "key": key, "year": year, "label": f"{year} — {display}",
+                "contest_name": contest_name, "display_name": display, "source": "auto",
+                "db_path": db_path, "contest_nr": ci["ContestNR"], **traj,
+            })
+            existing_keys.add(key)
+        except Exception:
+            log.exception("Pace: failed loading ContestNR %s from %s", ci.get("ContestNR"), db_path)
+    return out
+
+
+def _pace_collect_all_from_db(db_path: str, existing_keys: set) -> list:
+    """Load every real contest from a manually-added reference .s3db file."""
+    out = []
+    try:
+        contests = ContestLog.available_contests(db_path)
+    except Exception:
+        log.exception("Pace: available_contests failed for %s", db_path)
+        return out
+    for ci in contests:
+        if not ci.get("QSOCount", 0):
+            continue
+        contest_name = str(ci.get("ContestName", "")).strip()
+        if contest_name.upper() in ("DX", "DELETEDQS", ""):
+            continue
+        key = f"{db_path}::{ci['ContestNR']}"
+        if key in existing_keys:
+            continue
+        try:
+            p  = plugin_for(contest_name)
+            cl = ContestLog(db_path, contest_nr=ci["ContestNR"], plugin=p)
+            if not cl.qsos:
+                continue
+            traj = _pace_trajectory_for_log(cl)
+            if traj is None:
+                continue
+            sd = str(ci.get("StartDate", ""))[:4]
+            start_yr = int(sd) if sd.isdigit() else 0
+            qso_yr   = cl.qsos[0]["time"].year if cl.qsos else 0
+            year = qso_yr if (start_yr and qso_yr and abs(start_yr - qso_yr) > 1) else (start_yr or qso_yr)
+            display = str(ci.get("DisplayName") or contest_name or "?").strip()
+            out.append({
+                "key": key, "year": year, "label": f"{year} — {display}",
+                "contest_name": contest_name, "display_name": display, "source": "manual",
+                "db_path": db_path, "contest_nr": ci["ContestNR"], **traj,
+            })
+            existing_keys.add(key)
+        except Exception:
+            log.exception("Pace: failed loading ContestNR %s from %s", ci.get("ContestNR"), db_path)
+    return out
+
+
+_ADIF_TAG_RE = re.compile(r"<([^:>]+)(?::(\d+)(?::[^>]*)?)?>", re.IGNORECASE)
+
+def _parse_adif_times(text: str) -> list:
+    """Yield QSO datetimes from an ADIF file (QSO_DATE + TIME_ON fields)."""
+    pos, text_len = 0, len(text)
+    eoh = re.search(r"<EOH>", text, re.IGNORECASE)
+    if eoh:
+        pos = eoh.end()
+    times = []
+    record = {}
+    while pos < text_len:
+        m = _ADIF_TAG_RE.search(text, pos)
+        if not m:
+            break
+        tag, lstr = m.group(1).upper(), m.group(2)
+        pos = m.end()
+        if tag == "EOR":
+            date_str = record.get("QSO_DATE", "").strip()
+            time_str = record.get("TIME_ON", "").strip().ljust(6, "0")[:6]
+            if date_str:
+                try:
+                    times.append(datetime.strptime(date_str + time_str, "%Y%m%d%H%M%S"))
+                except ValueError:
+                    try:
+                        times.append(datetime.strptime(date_str + time_str[:4], "%Y%m%d%H%M"))
+                    except ValueError:
+                        pass
+            record = {}
+            continue
+        if lstr is None:
+            continue
+        length = int(lstr)
+        record[tag] = text[pos:pos + length]
+        pos += length
+    return times
+
+
+def _pace_load_adif(path: str, existing_keys: set) -> Optional[dict]:
+    key = f"adif::{path}"
+    if key in existing_keys:
+        return None
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except Exception:
+        log.exception("Pace: could not read ADIF %s", path)
+        return None
+
+    times = sorted(_parse_adif_times(text))
+    if not times:
+        return None
+
+    contest_start = times[0].replace(minute=0, second=0, microsecond=0)
+    traj = _pace_trajectory_from_times(times, contest_start)
+    if traj is None:
+        return None
+
+    year  = contest_start.year
+    fname = os.path.splitext(os.path.basename(path))[0]
+    label = f"{year} — {fname} (ADIF)"
+    existing_keys.add(key)
+    return {
+        "key": key, "year": year, "label": label, "contest_name": fname,
+        "display_name": fname, "source": "manual", "db_path": None, "contest_nr": None, **traj,
+    }
+
+
+def _parse_cabrillo_times(text: str) -> tuple:
+    """Returns (header_dict, sorted_qso_datetimes) from a Cabrillo v2/v3 log."""
+    header, times = {}, []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("START-OF-LOG") or line.startswith("END-OF-LOG"):
+            continue
+        if line.upper().startswith("QSO:"):
+            parts = line[4:].split()
+            if len(parts) < 8:
+                continue
+            date_s = parts[2].replace("/", "-")
+            time_s = parts[3].replace(":", "")
+            try:
+                times.append(datetime.strptime(f"{date_s} {time_s}", "%Y-%m-%d %H%M"))
+            except ValueError:
+                continue
+        elif ":" in line:
+            k, _, v = line.partition(":")
+            header[k.strip().upper()] = v.strip()
+    return header, sorted(times)
+
+
+def _pace_load_cabrillo(path: str, existing_keys: set) -> Optional[dict]:
+    key = f"cabrillo::{path}"
+    if key in existing_keys:
+        return None
+
+    text = None
+    for enc in ("utf-8", "latin-1", "cp1252"):
+        try:
+            with open(path, "r", encoding=enc, errors="strict") as f:
+                text = f.read()
+            break
+        except (UnicodeDecodeError, LookupError):
+            continue
+    if text is None:
+        log.warning("Pace: could not decode Cabrillo file %s", path)
+        return None
+
+    upper = text[:500].upper()
+    if "START-OF-LOG" not in upper and "QSO:" not in upper:
+        log.warning("Pace: %s does not look like a Cabrillo log", path)
+        return None
+
+    header, times = _parse_cabrillo_times(text)
+    if not times:
+        return None
+
+    contest_start = None
+    start_hdr = header.get("QSO-DATE-START") or header.get("DATE-START")
+    if start_hdr:
+        for fmt in ("%Y-%m-%d %H%M", "%Y-%m-%d", "%Y-%m-%d %H:%M"):
+            try:
+                contest_start = datetime.strptime(start_hdr.strip()[:16], fmt)
+                break
+            except ValueError:
+                continue
+    if contest_start is None:
+        contest_start = times[0].replace(hour=0, minute=0, second=0, microsecond=0)
+
+    traj = _pace_trajectory_from_times(times, contest_start)
+    if traj is None:
+        return None
+
+    year         = contest_start.year
+    contest_name = header.get("CONTEST", "") or header.get("CONTEST-ID", "")
+    fname        = os.path.splitext(os.path.basename(path))[0]
+    display_name = contest_name if contest_name else fname
+    label        = f"{year} — {display_name} (Cabrillo)"
+    existing_keys.add(key)
+    return {
+        "key": key, "year": year, "label": label, "contest_name": display_name,
+        "display_name": display_name, "source": "manual", "db_path": None,
+        "contest_nr": None, **traj,
+    }
+
+
+def _pace_full_state() -> dict:
+    with STATE._lock:
+        primary            = STATE.db_path
+        cl                  = STATE.contest_log
+        current_contest_nr  = STATE.contest_nr
+        extra               = list(STATE.pace_extra_paths)
+
+    existing_keys: set = set()
+    refs = []
+    if primary and cl:
+        refs.extend(_pace_collect_same_contest(primary, current_contest_nr, type(cl.plugin), existing_keys))
+
+    for item in extra:
+        path, kind = item["path"], item["kind"]
+        try:
+            if kind == "s3db":
+                refs.extend(_pace_collect_all_from_db(path, existing_keys))
+            elif kind == "adif":
+                r = _pace_load_adif(path, existing_keys)
+                if r:
+                    refs.append(r)
+            elif kind == "cabrillo":
+                r = _pace_load_cabrillo(path, existing_keys)
+                if r:
+                    refs.append(r)
+        except Exception:
+            log.exception("Pace: failed loading extra reference %s", path)
+
+    live = _pace_trajectory_for_log(cl) if cl else None
+    return {
+        "live": _json_safe(live),
+        "refs": _json_safe(refs),
+        "extra_paths": [it["path"] for it in extra],
+    }
+
+
+@app.get("/api/pace")
+async def api_pace():
+    """Pace Tracker: live cumulative-QSO trajectory plus auto-loaded same-contest
+    reference years from the current .s3db, plus any manually-added .s3db/ADIF/
+    Cabrillo reference logs."""
+    return await asyncio.get_event_loop().run_in_executor(None, _pace_full_state)
+
+
+@app.get("/api/pace/live")
+async def api_pace_live():
+    """Cheap periodic poll target for the pace alarm — just the live
+    trajectory, without re-walking any reference .s3db/ADIF/Cabrillo files."""
+    with STATE._lock:
+        cl = STATE.contest_log
+    live = _pace_trajectory_for_log(cl) if cl else None
+    return _json_safe(live)
+
+
+@app.post("/api/pace/add_log")
+async def api_pace_add_log(body: dict):
+    """Add a reference log for the Pace tab. Accepts .s3db/.db/.sqlite, .adi/.adif,
+    or Cabrillo .log/.cbr/.txt files."""
+    path = (body.get("path") or "").strip()
+    if not path:
+        return JSONResponse({"error": "No path supplied"}, status_code=400)
+    p = Path(path)
+    if not p.exists():
+        return JSONResponse({"error": f"File not found: {path}"}, status_code=400)
+    if p.is_dir():
+        return JSONResponse({"error": f"That is a folder, not a file: {path}"}, status_code=400)
+
+    ext = p.suffix.lower()
+    if ext in (".s3db", ".db", ".sqlite"):
+        kind = "s3db"
+    elif ext in (".adi", ".adif"):
+        kind = "adif"
+    elif ext in (".log", ".cbr", ".txt"):
+        kind = "cabrillo"
+    else:
+        return JSONResponse({"error": f"Unsupported file type: {p.name}"}, status_code=400)
+
+    path = str(p.resolve())
+    with STATE._lock:
+        is_primary = STATE.db_path and os.path.normcase(path) == os.path.normcase(STATE.db_path)
+        already = any(os.path.normcase(it["path"]) == os.path.normcase(path) for it in STATE.pace_extra_paths)
+        if not is_primary and not already:
+            STATE.pace_extra_paths.append({"path": path, "kind": kind})
+    return await asyncio.get_event_loop().run_in_executor(None, _pace_full_state)
+
+
+@app.post("/api/pace/clear_refs")
+async def api_pace_clear_refs():
+    """Remove manually-added Pace reference logs (auto-loaded same-contest years
+    from the primary log are unaffected and will reappear)."""
+    with STATE._lock:
+        STATE.pace_extra_paths = []
+    return await asyncio.get_event_loop().run_in_executor(None, _pace_full_state)
+
+
+# ── Fatigue (cross-year hourly rate) ──────────────────────────────────────────
+
+def _fatigue_build_contest_entry(cl: "ContestLog", ci: dict, db_path: str) -> Optional[dict]:
+    """Per-contest UTC-hour-of-day QSO counts (all bands + per band), for the
+    cross-year fatigue overlay. Bucketed by real UTC hour (not elapsed contest
+    hour) so different years' day/night patterns line up on the same x-axis."""
+    valid = [q for q in cl.qsos if not q.get("dupe")]
+    if not valid:
+        return None
+
+    hour_all = [0] * 24
+    by_band: dict = {}
+    for q in valid:
+        h = q["time"].hour
+        hour_all[h] += 1
+        b = q.get("band") or "?"
+        by_band.setdefault(b, [0] * 24)[h] += 1
+
+    sd   = str(ci.get("StartDate", ""))[:4]
+    year = int(sd) if sd.isdigit() else (valid[0]["time"].year if valid else 0)
+    name = str(ci.get("DisplayName") or ci.get("ContestName") or "?").strip()
+
+    return {
+        "key": f"{db_path}::{ci['ContestNR']}", "year": year, "name": name,
+        "label": f"{year}  {name}", "db_path": db_path, "contest_nr": ci["ContestNR"],
+        "qso_count": len(valid), "hour_all": hour_all, "hour_by_band": by_band,
+    }
+
+
+def _fatigue_collect_from_db(db_path: str, existing_keys: set) -> list:
+    """Load every contest (any type) with QSOs from db_path — unlike Pace's
+    auto-load, Fatigue mixes everything in by default and lets the operator
+    narrow to one contest type via the client-side filter dropdown."""
+    out = []
+    try:
+        contests = ContestLog.available_contests(db_path)
+    except Exception:
+        log.exception("Fatigue: available_contests failed for %s", db_path)
+        return out
+    for ci in contests:
+        if not ci.get("QSOCount", 0):
+            continue
+        key = f"{db_path}::{ci['ContestNR']}"
+        if key in existing_keys:
+            continue
+        try:
+            p   = plugin_for(str(ci.get("ContestName", "")))
+            cl  = ContestLog(db_path, contest_nr=ci["ContestNR"], plugin=p)
+            entry = _fatigue_build_contest_entry(cl, ci, db_path)
+            if entry is None:
+                continue
+            out.append(entry)
+            existing_keys.add(key)
+        except Exception:
+            log.exception("Fatigue: failed loading ContestNR %s from %s", ci.get("ContestNR"), db_path)
+    return out
+
+
+def _fatigue_full_state() -> dict:
+    with STATE._lock:
+        primary = STATE.db_path
+        extra   = list(STATE.fatigue_extra_paths)
+
+    existing_keys: set = set()
+    contests = []
+    if primary:
+        contests.extend(_fatigue_collect_from_db(primary, existing_keys))
+    for p in extra:
+        contests.extend(_fatigue_collect_from_db(p, existing_keys))
+    return {"contests": _json_safe(contests), "extra_paths": extra}
+
+
+@app.get("/api/fatigue")
+async def api_fatigue():
+    """Cross-year fatigue data: UTC-hour QSO-rate arrays for every contest in
+    the primary .s3db plus any extra logs added via /api/fatigue/add_log."""
+    return await asyncio.get_event_loop().run_in_executor(None, _fatigue_full_state)
+
+
+@app.post("/api/fatigue/add_log")
+async def api_fatigue_add_log(body: dict):
+    """Add another .s3db file's contests to the Fatigue cross-year analysis."""
+    path = (body.get("path") or "").strip()
+    if not path:
+        return JSONResponse({"error": "No path supplied"}, status_code=400)
+    err = STATE.validate_path(path)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
+    path = str(Path(path).resolve())
+    with STATE._lock:
+        is_primary = STATE.db_path and os.path.normcase(path) == os.path.normcase(STATE.db_path)
+        already = any(os.path.normcase(p) == os.path.normcase(path) for p in STATE.fatigue_extra_paths)
+        if not is_primary and not already:
+            STATE.fatigue_extra_paths.append(path)
+    return await asyncio.get_event_loop().run_in_executor(None, _fatigue_full_state)
+
+
+@app.post("/api/fatigue/clear_logs")
+async def api_fatigue_clear_logs():
+    """Remove all extra logs added on the Fatigue tab (primary log stays)."""
+    with STATE._lock:
+        STATE.fatigue_extra_paths = []
+    return await asyncio.get_event_loop().run_in_executor(None, _fatigue_full_state)
 
 
 @app.get("/api/plugin_meta")
@@ -511,6 +1195,78 @@ _CLUSTER_PRESETS = [
     {"label": "WA9PIE (NA)",   "host": "hrd.wa9pie.net",      "port": 8000},
 ]
 
+_CLUSTER_BAND_EDGES = [
+    (1800,    2000,    "160M"),
+    (3500,    4000,     "80M"),
+    (5330,    5410,     "60M"),
+    (7000,    7300,     "40M"),
+    (10100,   10150,    "30M"),
+    (14000,   14350,    "20M"),
+    (18068,   18168,    "17M"),
+    (21000,   21450,    "15M"),
+    (24890,   24990,    "12M"),
+    (28000,   29700,    "10M"),
+    (50000,   54000,     "6M"),
+    (144000,  148000,    "2M"),
+]
+
+def _freq_to_band_str(freq_khz: float) -> str:
+    for lo, hi, name in _CLUSTER_BAND_EDGES:
+        if lo <= freq_khz <= hi:
+            return name
+    return f"{freq_khz:.0f}kHz"
+
+def _classify_spot(dx_call: str, freq_khz: float, comment: str) -> tuple:
+    """
+    Returns (status, mult_value, region) where:
+      status : "NEW_MULT" | "NEW_BAND" | "WORKED" | "NOT_MULT" | "NO_LOG"
+    Mirrors the old desktop app's _classify_spot: scan comment tokens against
+    plugin.mult_list() first, fall back to plugin.mult_of_qso() with a fake
+    QSO dict, then compare against worked_mults()/worked_primary_band_mults().
+    """
+    with STATE._lock:
+        cl = STATE.contest_log
+    if not cl:
+        return "NO_LOG", "", ""
+
+    band = _freq_to_band_str(freq_khz)
+    p    = cl.plugin
+    ml_set = set(p.mult_list())
+
+    mult_val = None
+    comment_upper = comment.strip().upper()
+    for token in comment_upper.split():
+        tok = token.strip(".,;:-")
+        if tok in ml_set:
+            mult_val = tok
+            break
+
+    if mult_val is None:
+        fake_q = {
+            "call": dx_call.upper(), "mult1": comment_upper, "band": band,
+            "mode": "SSB", "pts": 1, "dupe": False,
+            "is_mult1": None, "is_mult2": None, "cqz": None,
+            "time": datetime.utcnow(),
+        }
+        try:
+            mult_val = p.mult_of_qso(fake_q)
+        except Exception:
+            mult_val = None
+
+    if mult_val is None or mult_val not in ml_set:
+        return "NOT_MULT", "", ""
+
+    region = p.region_of_mult(mult_val) or ""
+    worked = cl.worked_mults()
+    if mult_val not in worked:
+        return "NEW_MULT", mult_val, region
+
+    band_wkd = cl.worked_primary_band_mults()
+    on_this_band = any(m == mult_val and b == band for m, b, _mode in band_wkd)
+    if not on_this_band:
+        return "NEW_BAND", mult_val, region
+    return "WORKED", mult_val, region
+
 @app.get("/api/cluster/presets")
 async def api_cluster_presets():
     return _CLUSTER_PRESETS
@@ -550,15 +1306,21 @@ async def ws_cluster(ws: WebSocket):
                     msg = {"type": "raw", "line": text}
                     m   = _SPOT_RE.match(text)
                     if m:
-                        freq = float(m.group(2))
+                        freq    = float(m.group(2))
+                        dx_call = m.group(3)
+                        comment = m.group(4).strip()
+                        status, mult_val, region = _classify_spot(dx_call, freq, comment)
                         msg = {
                             "type":    "spot",
                             "spotter": m.group(1),
                             "freq":    freq,
-                            "dx":      m.group(3),
-                            "comment": m.group(4).strip(),
+                            "dx":      dx_call,
+                            "comment": comment,
                             "time":    m.group(5),
                             "band":    _freq_to_band_str(freq),
+                            "status":  status,
+                            "mult":    mult_val,
+                            "region":  region,
                         }
                     await ws.send_text(json.dumps(msg))
             except Exception:
@@ -567,19 +1329,6 @@ async def ws_cluster(ws: WebSocket):
             await ws.send_text(json.dumps({"type":"status","connected":False,"msg":"Disconnected"}))
         except Exception:
             pass
-
-    def _freq_to_band_str(f):
-        if f > 1800:   return "160M"
-        if f > 3500:   return "80M"
-        if f > 7000:   return "40M"
-        if f > 10100:  return "30M"
-        if f > 14000:  return "20M"
-        if f > 18068:  return "17M"
-        if f > 21000:  return "15M"
-        if f > 24890:  return "12M"
-        if f > 28000:  return "10M"
-        if f > 50000:  return "6M"
-        return "?"
 
     try:
         while True:
@@ -603,6 +1352,8 @@ async def ws_cluster(ws: WebSocket):
                     reader_task = asyncio.create_task(_read_tcp())
                     await asyncio.sleep(1)
                     tcp.sendall((call+"\n").encode())
+                    await asyncio.sleep(1)
+                    tcp.sendall(b"SET/DX\n")
                     await ws.send_text(json.dumps({
                         "type":"status","connected":True,
                         "msg":f"Connected to {host}:{port}"}))
@@ -725,109 +1476,6 @@ async def api_snapshot_data():
     return STATE.snapshot()
 
 
-@app.get("/api/snapshot_png")
-async def api_snapshot_png():
-    """Server-side PNG of current gauges using matplotlib Agg backend."""
-    import io, math as _math
-    snap = STATE.snapshot()
-    if not snap:
-        return JSONResponse({"error": "No data loaded"}, status_code=400)
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.figure as _mplf
-        import matplotlib.patches as _mplp
-        import matplotlib.patheffects as _mplpe
-
-        with STATE._lock:
-            plugin = STATE.contest_log.plugin if STATE.contest_log else None
-        total_mults = snap.get("band_mults", snap.get("worked", 0))
-        try:
-            gdefs = plugin.gauge_defs(snap, total_mults) if plugin else []
-        except Exception:
-            gdefs = []
-
-        n  = max(len(gdefs), 1)
-        BG = "#0d1117"; BG2 = "#161b22"; BG3 = "#21262d"
-        MUTED = "#8b949e"; FG = "#e6edf3"
-
-        fig = _mplf.Figure(figsize=(n*2.4+0.4, 3.6), facecolor=BG, dpi=120)
-        fig.patch.set_facecolor(BG)
-
-        for i, g in enumerate(gdefs):
-            ax = fig.add_subplot(1, n, i+1, aspect="equal")
-            ax.set_facecolor(BG2); ax.axis("off")
-            ax.set_xlim(-1.3, 1.3); ax.set_ylim(-0.9, 1.3)
-            for sp in ax.spines.values(): sp.set_visible(False)
-
-            val    = snap.get(g.value_key, 0) or 0
-            maxVal = (snap.get(g.max_key, 1) if isinstance(g.max_key, str) else g.max_key) or 1
-            frac   = min(max(float(val)/float(maxVal), 0), 1)
-            col    = g.colour if isinstance(g.colour, str) else "#00d4aa"
-
-            # Arc geometry: theta1=-30 (5-oclock), theta2=210 (7-oclock), 240° span
-            # Fill from -30 to (-30 + frac*240)
-            theta1, theta2 = -30, 210
-            fill_end = theta1 + frac * 240
-            ro, ri = 1.0, 0.72
-            mid = (ro+ri)/2
-
-            # Background arc
-            ax.add_patch(_mplp.Arc((0,0), 2*mid, 2*mid, angle=0,
-                theta1=theta1, theta2=theta2, color=BG3, lw=18, zorder=1))
-            # Filled arc
-            if frac > 0.001:
-                ax.add_patch(_mplp.Arc((0,0), 2*mid, 2*mid, angle=0,
-                    theta1=theta1, theta2=fill_end, color=col, lw=18,
-                    solid_capstyle="round", zorder=2))
-                # Tip dot
-                tx = mid * _math.cos(_math.radians(fill_end))
-                ty = mid * _math.sin(_math.radians(fill_end))
-                ax.plot(tx, ty, "o", color="white", ms=5, zorder=3)
-
-            # Tick marks
-            for tf in [0, 0.25, 0.5, 0.75, 1.0]:
-                ta = _math.radians(theta1 + tf*240)
-                ax.plot([ri*0.88*_math.cos(ta), ri*_math.cos(ta)],
-                        [ri*0.88*_math.sin(ta), ri*_math.sin(ta)],
-                        color=MUTED, lw=1.2, zorder=4)
-
-            # Value text
-            try: vstr = g.fmt.format(v=val)
-            except: vstr = f"{round(val):,}" if val >= 1000 else str(round(val))
-            fs = 13 if len(vstr) <= 5 else max(7, int(13*5/len(vstr)))
-            ax.text(0, 0.08, vstr, ha="center", va="center",
-                    fontsize=fs, fontweight="bold", color=col, fontfamily="monospace", zorder=5)
-            ax.text(0, -0.32, g.label, ha="center", va="center",
-                    fontsize=6.5, color=MUTED, fontfamily="monospace", zorder=5)
-            # Min/max
-            for tf, label in [(0,"0"),(1,f"{maxVal:,.0f}" if maxVal>=1000 else str(round(maxVal)))]:
-                ta = _math.radians(theta1 + tf*240)
-                ax.text(1.12*_math.cos(ta), 1.12*_math.sin(ta), label,
-                        ha="center", va="center", fontsize=5.5, color=MUTED, fontfamily="monospace")
-
-        plugin_name = snap.get("_plugin_name","")
-        fig.suptitle(
-            f"VK Contest Analyzer  {'· ' + plugin_name if plugin_name else ''}  "
-            f"  {snap.get('valid',0):,} QSOs  ·  {snap.get('score',0):,} pts",
-            color=FG, fontfamily="monospace", fontsize=8.5, y=0.97)
-
-        buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=120, bbox_inches="tight",
-                    facecolor=BG, edgecolor="none")
-        buf.seek(0)
-
-        return StreamingResponse(iter([buf.getvalue()]), media_type="image/png",
-            headers={"Content-Disposition": 'attachment; filename="vkcontest_snapshot.png"'})
-
-    except ImportError:
-        return JSONResponse({"error": "matplotlib not installed. Run: pip install matplotlib"}, status_code=500)
-    except Exception as exc:
-        log.exception("snapshot_png failed")
-        return JSONResponse({"error": str(exc)}, status_code=500)
-
-
-
 # ── OS Theme detection ────────────────────────────────────────────────────────
 import subprocess as _subprocess
 
@@ -914,22 +1562,10 @@ _PFX = {}
 for k,v in [("KH6 ",(21,-158)),("KH8 ",(-14,-171)),("KP4 ",(18,-67))]:
     _PFX[k.strip()] = v
 
-# 3-char VK states
-for k,v in [("VK1",(-35,149)),("VK2",(-34,151)),("VK3",(-38,145)),
-            ("VK4",(-28,153)),("VK5",(-35,139)),("VK6",(-32,116)),
-            ("VK7",(-43,147)),("VK8",(-13,131)),("VK9",(-14,126))]:
-    _PFX[k] = v
-
-# VL = alternate VK prefix (VL4 = VK4, etc)
-for k,v in [("VL1",(-35,149)),("VL2",(-34,151)),("VL3",(-38,145)),
-            ("VL4",(-28,153)),("VL5",(-35,139)),("VL6",(-32,116)),
-            ("VL7",(-43,147)),("VL8",(-13,131))]:
-    _PFX[k] = v
-
 # Pacific / Oceania 3-char (BEFORE shorter prefixes like F)
 for k,v in [
     ("FK8",(-22,167)),  # New Caledonia
-    ("FK7",(-12,167)),  # Chesterfield Is
+    ("FK7",(-19,158)),  # Chesterfield Is
     ("FO8",(-18,-149)), # French Polynesia
     ("KH6",(21,-158)),  # Hawaii
     ("KH0",(15,146)),   # Mariana Is
@@ -937,7 +1573,7 @@ for k,v in [
     ("KL7",(61,-150)),  # Alaska
     ("KP4",(18,-67)),   # Puerto Rico
     ("P29",(-9,148)),   # Papua New Guinea
-    ("ZK2",(-19,170)),  # Niue
+    ("ZK2",(-19,-170)), # Niue
     ("3D2",(-18,178)),  # Fiji
     ("5W1",(-14,-172)), # Samoa
     ("T30",(0,174)),    # W Kiribati
@@ -959,7 +1595,7 @@ for k,v in [
     ("FW",(-14,-178)),  ("FY",(4,-53)),
     ("ZL",(-41,174)),   ("ZS",(-30,26)),   ("ZP",(-23,-58)),
     ("ZA",(41,20)),     ("ZB",(36,-5)),    ("ZF",(19,-81)),
-    ("ZK",(-19,170)),   ("ZD",(-16,-6)),
+    ("ZK",(-19,-170)),  ("ZD",(-16,-6)),
     ("VE",(45,-76)),    ("VK",(-25,134)),  ("VO",(47,-53)),
     ("VR",(22,114)),    ("VU",(21,78)),    ("V3",(17,-89)),
     ("V5",(-22,17)),    ("V6",(7,158)),    ("V7",(9,168)),
@@ -1043,9 +1679,6 @@ for k,v in [
     ("CE",(-30,-71)),
     ("JT",(47,106)),
     ("VE",(45,-76)),
-    # Australian special/alternate callsigns
-    ("VJ",(-25,134)), ("VN",(-25,134)),
-    ("AX",(-25,134)),  # AX = special Australian
     # 1-char LAST — only matched if nothing longer matched
     ("F",(47,2)),       # France
     ("W",(39,-98)),     # USA
@@ -1056,15 +1689,88 @@ for k,v in [
     _PFX[k] = v
 
 
+# ── Call-area digit refinement ────────────────────────────────────────────────
+# A single country-wide centroid is far too coarse for geographically huge
+# countries where the call-area digit itself names the region (e.g. K6 =
+# California, not "somewhere in the contiguous US"). These tables are checked
+# before the generic _PFX lookup so the digit wins when present.
+_US_CALL_AREA = {
+    "0": (41, -98),   # CO/IA/KS/MN/MO/NE/ND/SD
+    "1": (43, -71),   # New England
+    "2": (41, -74),   # NY/NJ
+    "3": (39, -77),   # PA/DE/MD/DC
+    "4": (33, -84),   # AL/FL/GA/KY/NC/SC/TN/VA
+    "5": (32, -97),   # AR/LA/MS/NM/OK/TX
+    "6": (37, -120),  # CA
+    "7": (44, -114),  # AZ/ID/MT/NV/OR/UT/WA/WY
+    "8": (40, -82),   # MI/OH/WV
+    "9": (41, -89),   # IL/IN/WI
+}
+
+# Brazilian amateur prefixes use second-letter P..Y (PP, PQ, PR, PS, PT, PU,
+# PV, PW, PX, PY); the digit names the call area/state. Approximation: the
+# canonical PY-digit regions are used for every P[P-Y] block, which is exact
+# for PY itself and a reasonable regional approximation for the others.
+_BR_CALL_AREA = {
+    "0": (-3.85, -32.4),   # oceanic (Fernando de Noronha etc.)
+    "1": (-22.9, -43.2),   # Rio de Janeiro
+    "2": (-23.5, -46.6),   # Sao Paulo
+    "3": (-30.0, -51.2),   # Rio Grande do Sul
+    "4": (-19.9, -43.9),   # Minas Gerais
+    "5": (-25.4, -49.3),   # Parana
+    "6": (-12.9, -38.5),   # Bahia
+    "7": (-8.1, -34.9),    # Pernambuco
+    "8": (-1.5, -48.5),    # Para
+    "9": (-15.6, -56.1),   # Mato Grosso
+}
+_BR_LETTERS = set("PQRSTUVWXY")
+
+_MX_CALL_AREA = {
+    "1": (19.4, -99.1),    # Central (CDMX)
+    "2": (28.0, -110.0),   # Northwest
+    "3": (19.0, -92.0),    # Southeast
+}
+
+# Australia allocates AX/VH/VI/VJ/VK/VL/VM/VN/VZ as one ITU block. VK is the
+# standard prefix; VI and AX substitute for VK on special-event callsigns
+# (Bicentennial, Olympics, Australia Day, etc); VJ/VK/VL are the official
+# "2x1" contest-callsign prefixes (e.g. VJ5W). All of them use the SAME
+# call-area digit -> state/territory mapping as standard VK callsigns.
+_AU_PREFIXES = ("VK", "VH", "VI", "VJ", "VL", "VM", "VN", "VZ", "AX")
+_AU_CALL_AREA = {
+    "0": (-54.5, 158.9),  # Macquarie Is / Antarctic stations
+    "1": (-35, 149),      # ACT
+    "2": (-34, 151),      # NSW
+    "3": (-38, 145),      # VIC
+    "4": (-28, 153),      # QLD
+    "5": (-35, 139),      # SA
+    "6": (-32, 116),      # WA
+    "7": (-43, 147),      # TAS
+    "8": (-13, 131),      # NT
+    "9": (-14, 126),      # external territories (Christmas I. etc)
+}
+
+
 def _call_to_latlon(callsign: str):
     """Best-effort callsign to [lat, lon]. Tries prefixes longest-first."""
     call = callsign.upper().strip()
+
+    if call[:1] in ("W", "K", "N") and len(call) > 1 and call[1] in _US_CALL_AREA:
+        return _US_CALL_AREA[call[1]]
+    if (len(call) > 2 and call[0] == "P" and call[1] in _BR_LETTERS
+            and call[2] in _BR_CALL_AREA):
+        return _BR_CALL_AREA[call[2]]
+    if call[:2] in ("XE", "XF") and len(call) > 2 and call[2] in _MX_CALL_AREA:
+        return _MX_CALL_AREA[call[2]]
+    if call[:2] in _AU_PREFIXES and len(call) > 2 and call[2] in _AU_CALL_AREA:
+        return _AU_CALL_AREA[call[2]]
+
     # Try 4, 3, 2, 1 char prefixes
     for n in [4, 3, 2, 1]:
         if n <= len(call) and call[:n] in _PFX:
             return _PFX[call[:n]]
-    # Ultimate fallback for anything Australian-looking
-    if call.startswith("VK") or call.startswith("VL") or call.startswith("VN"):
+    # Ultimate fallback for an Australian-looking call with no usable digit
+    if call[:2] in _AU_PREFIXES:
         return [-25, 134]
     return None
 
@@ -1157,9 +1863,6 @@ def _find_free_port() -> int:
 
 
 def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
-    import webview
-    import signal as _signal
-
     port = port or _find_free_port()
     url  = f"http://127.0.0.1:{port}"
 
@@ -1170,6 +1873,9 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
     config = uvicorn.Config(
         app, host="127.0.0.1", port=port,
         log_level="warning", loop="asyncio",
+        log_config=None,   # use our own logging setup, not uvicorn's default
+                            # (its formatter calls sys.stdout.isatty(), which
+                            # is None in a windowed/console=False build)
     )
     server = uvicorn.Server(config)
 
@@ -1187,67 +1893,86 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
         except OSError:
             time.sleep(0.1)
 
-    window = webview.create_window(
-        title="VK Contest Analyzer",
-        url=url,
-        width=1400,
-        height=860,
-        min_size=(900, 600),
-        background_color="#0d1117",
-    )
-
-    def _on_loaded():
-        STATE._webview_window = window
-
-    def _on_closed():
-        """Called by pywebview on the GUI thread when the window is destroyed."""
-        log.info("Window closed — shutting down")
-
-        # Redirect stderr to suppress the noisy WebView2/Chromium window-class
-        # unregister error that Windows logs during teardown:
-        #   "Failed to unregister class Chrome_WidgetWin_0. Error = 1411"
-        # This is benign (the class was already unregistered by the time the
-        # renderer tries again) but confusing in logs.
-        import io
-        _devnull = open(os.devnull, "w")
-        os.dup2(_devnull.fileno(), 2)   # redirect fd 2 (stderr) to /dev/null
-
-        # Close WebSocket clients gracefully
-        try:
-            loop = asyncio.get_event_loop()
-            for ws in list(STATE._clients):
-                try:
-                    asyncio.run_coroutine_threadsafe(ws.close(), loop)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        STATE._clients.clear()
-
-        # Signal uvicorn to stop
-        server.should_exit = True
-
-        # Give uvicorn up to 2 seconds to finish in-flight requests
-        server_thread.join(timeout=2.0)
-
-        # Hard exit — releases port binding and removes from Task Manager.
-        # os._exit skips atexit/finally blocks that can hang on Windows.
-        os._exit(0)
-
-    # Register the closing callback BEFORE webview.start()
-    window.events.closed += _on_closed
-
-    # webview.start() blocks here until the window closes.
-    # _on_closed will call os._exit(0) so execution never returns here
-    # under normal circumstances.
+    # If pywebview can't start for ANY reason (missing .NET Framework,
+    # missing WebView2 Runtime, etc.), log the real error and fall back to
+    # the system browser instead of failing with no visible error at all.
     try:
-        webview.start(_on_loaded, debug=False)
-    except Exception:
-        pass
+        import webview
 
-    # Fallback for non-PyWebView / browser-direct mode
+        window = webview.create_window(
+            title="VK Contest Analyzer",
+            url=url,
+            width=1400,
+            height=860,
+            min_size=(900, 600),
+            background_color="#0d1117",
+        )
+
+        def _on_loaded():
+            STATE._webview_window = window
+
+        def _on_closed():
+            """Called by pywebview on the GUI thread when the window is destroyed."""
+            log.info("Window closed — shutting down")
+
+            # Redirect stderr to suppress the noisy WebView2/Chromium window-class
+            # unregister error that Windows logs during teardown:
+            #   "Failed to unregister class Chrome_WidgetWin_0. Error = 1411"
+            # This is benign (the class was already unregistered by the time the
+            # renderer tries again) but confusing in logs.
+            _devnull = open(os.devnull, "w")
+            os.dup2(_devnull.fileno(), 2)   # redirect fd 2 (stderr) to /dev/null
+
+            # Close WebSocket clients gracefully
+            try:
+                loop = asyncio.get_event_loop()
+                for ws in list(STATE._clients):
+                    try:
+                        asyncio.run_coroutine_threadsafe(ws.close(), loop)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            STATE._clients.clear()
+
+            # Signal uvicorn to stop
+            server.should_exit = True
+
+            # Give uvicorn up to 2 seconds to finish in-flight requests
+            server_thread.join(timeout=2.0)
+
+            # Hard exit — releases port binding and removes from Task Manager.
+            # os._exit skips atexit/finally blocks that can hang on Windows.
+            os._exit(0)
+
+        # Register the closing callback BEFORE webview.start()
+        window.events.closed += _on_closed
+
+        # webview.start() blocks here until the window closes.
+        # _on_closed will call os._exit(0) so execution never returns here
+        # under normal circumstances.
+        webview.start(_on_loaded, debug=False)
+
+        # Fallback for non-PyWebView / browser-direct mode
+        server.should_exit = True
+        sys.exit(0)
+        return
+    except Exception:
+        log.exception(
+            "Embedded window failed to start — falling back to the default "
+            "browser. Common causes: the bundled .NET runtime failed to load "
+            "(see preceding log entry), or the Microsoft Edge WebView2 "
+            "Runtime is missing on this machine."
+        )
+
+    import webbrowser
+    webbrowser.open(url)
+    log.info("Opened %s in the default browser — close this process via Task Manager to stop the server.", url)
+    try:
+        server_thread.join()
+    except KeyboardInterrupt:
+        pass
     server.should_exit = True
-    sys.exit(0)
 
 
 if __name__ == "__main__":

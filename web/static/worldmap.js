@@ -101,6 +101,18 @@
     'ESRI Satellite + Labels': 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
   };
 
+  // Every station is plotted at its REAL lat/lon against a stock (unmodified)
+  // tile layer. Two earlier designs were tried and rejected here:
+  //  1) Shift the whole world so HOME sits at the visual center — tile
+  //     imagery can only shift by whole tile widths while markers shifted by
+  //     the exact amount, so coastal stations rendered offshore.
+  //  2) Snap the marker shift to match the tile rounding at each zoom — this
+  //     fixed the coastal misalignment, but HOME's own dot then visibly
+  //     moved between zoom levels as the rounding snapped to a different
+  //     tile boundary, which is worse.
+  // Real coordinates have neither problem and need no rounding/snapping —
+  // the only job left is stopping the basemap from tiling multiple world
+  // copies once zoomed out past one world-width, handled by `noWrap` below.
   let _map          = null;
   let _tileLayer    = null;
   let _markerLayer  = null;
@@ -161,31 +173,48 @@
   }
 
   // ── Map init ────────────────────────────────────────────────────────────────
+  // At low zoom a single world copy (256*2^zoom px) is narrower than most
+  // browser windows, so pick the smallest zoom whose world width covers the
+  // container — `noWrap` then shows blank margin rather than a repeat for
+  // any leftover width. This is only ever used to raise the zoom, never to
+  // clamp it — the user can still freely zoom out (and accept some empty
+  // margin) with +/-/scroll.
+  function _fitZoomToWidth() {
+    if (!_map) return;
+    const el = document.getElementById('world-map-container');
+    const w  = el && el.clientWidth;
+    if (!w) return;
+    const z = Math.max(2, Math.ceil(Math.log2(w / 256)));
+    if (_map.getZoom() < z) _map.setZoom(z);
+  }
+
   function initMap() {
     if (_map) return;
     const el = document.getElementById('world-map-container');
     if (!el) return;
 
     _map = L.map('world-map-container', {
-      center: [-20, 150], zoom: 2,   // centered near Australia so VK arcs look natural
+      center: [HOME[0], HOME[1]],
+      zoom: 2,
       preferCanvas: true,
-      worldCopyJump: true,           // jump copies when panning across antimeridian
-      // NO maxBounds — allow free panning so antimeridian lines render fully
+      worldCopyJump: false,
     });
+    _fitZoomToWidth();
 
     const bm = BASEMAPS['Dark (CartoDB)'];
     _tileLayer = L.tileLayer(bm.url, {
       attribution: bm.attribution,
       subdomains: bm.subdomains || 'abc',
       maxZoom: 16,
+      noWrap: true,   // don't tile a second copy of the world past +/-180
     }).addTo(_map);
 
     _shortLayer  = L.layerGroup().addTo(_map);
     _longLayer   = L.layerGroup();
     _markerLayer = L.layerGroup().addTo(_map);
 
-    // Home marker
-    _homeMarker = L.circleMarker(HOME, {
+    // Home marker at its real position
+    _homeMarker = L.circleMarker([HOME[0], HOME[1]], {
       radius: 10, color: '#00d4aa', fillColor: '#00d4aa',
       fillOpacity: 1, weight: 3,
     }).addTo(_map).bindTooltip('Home Station', {permanent:false,direction:'top'});
@@ -205,6 +234,7 @@
       attribution: bm.attribution,
       subdomains:  bm.subdomains || 'abc',
       maxZoom:     bm.maxZoom    || 18,
+      noWrap: true,   // don't tile a second copy of the world past +/-180
     }).addTo(_map);
 
     // Label overlay for satellite+labels variant
@@ -212,6 +242,7 @@
     if (overlayUrl) {
       _labelLayer = L.tileLayer(overlayUrl, {
         opacity: 0.85, maxZoom: 20,
+        noWrap: true,
       }).addTo(_map);
     }
 
@@ -281,7 +312,8 @@
             color: col,
             opacity: 0.60,
             steps: 100,      // more steps = shorter segments = better antimeridian handling
-            wrap: false,     // false: don't split at antimeridian, draw continuous arc
+            wrap: true,      // split at the real antimeridian so each segment
+                              // renders in the same world-copy as its marker
           }
         );
         _shortLayer.addLayer(arc);
@@ -313,7 +345,8 @@
             opacity: 0.35,
             dashArray: '5 7',
             steps: 120,
-            wrap: false,     // continuous arc, no antimeridian splitting
+            wrap: true,      // split at the real antimeridian so each segment
+                              // renders in the same world-copy as its marker
           }
         );
         _longLayer.addLayer(arc);
@@ -388,15 +421,22 @@
     switchBasemap(e.target.value);
   });
 
+  // HOME changed: recenter on its real position and redraw everything.
+  function _setHome(lat, lon) {
+    HOME = [lat, lon];
+    if (!_map) return;   // map tab not opened yet — nothing to redraw
+    _map.panTo([HOME[0], HOME[1]], { animate: false });
+    if (_homeMarker) _homeMarker.setLatLng([HOME[0], HOME[1]]);
+    render();
+  }
+
   // Home coordinates manual entry
   function applyHomeInput() {
     const val = document.getElementById('map-home-input')?.value.trim();
     if (!val) return;
     const parts = val.split(',').map(Number);
     if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      HOME = [parts[0], parts[1]];
-      if (_homeMarker) _homeMarker.setLatLng(HOME);
-      render();
+      _setHome(parts[0], parts[1]);
       try { localStorage.setItem('vkca_map_home', val); } catch {}
     }
   }
@@ -420,9 +460,9 @@
   // Update home position from snapshot plugin data
   window.addEventListener('vka:snapshot', e => {
     const d = e.detail;
-    if (d?._home_lat != null && d?._home_lon != null) {
-      HOME = [d._home_lat, d._home_lon];
-      if (_homeMarker) _homeMarker.setLatLng(HOME);
+    if (d?._home_lat != null && d?._home_lon != null
+        && (d._home_lat !== HOME[0] || d._home_lon !== HOME[1])) {
+      _setHome(d._home_lat, d._home_lon);
     }
     if (_map && document.querySelector('.tab-btn[data-tab="map"]')?.classList.contains('active')) {
       load();
@@ -435,10 +475,14 @@
     if (!_map) {
       setTimeout(() => { initMap(); load(); }, 80);
     } else {
-      setTimeout(() => { _map.invalidateSize(true); render(); }, 100);
+      setTimeout(() => { _map.invalidateSize(true); _fitZoomToWidth(); render(); }, 100);
     }
   });
 
-  window.addEventListener('resize', () => { if (_map) _map.invalidateSize(true); });
+  window.addEventListener('resize', () => {
+    if (!_map) return;
+    _map.invalidateSize(true);
+    _fitZoomToWidth();
+  });
 
 })();

@@ -283,7 +283,6 @@ body.has-session-bar #content{top:calc(var(--titlebar-h) + var(--sessbar-h) + va
 .fatigue-stat-label{font-family:var(--font-mono);font-size:0.62em;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
 .fatigue-prog-wrap{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-bottom:4px;}
 .fatigue-prog-bar{height:100%;border-radius:2px;transition:width .6s ease-out;}
-.yoy-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--gap);}
 .pace-cards-row{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;}
 .pace-card{background:var(--bg2);border:1px solid var(--bg3);
   border-top:2px solid var(--accent2);border-radius:var(--radius);padding:10px 8px;text-align:center;}
@@ -481,24 +480,57 @@ body:has(#tab-map.active) #content {
   height: 100%; width: 0%; background: #00d4aa;
   border-radius: 4px; transition: width 0.05s linear;
 }
-#splash-msg { font-size: 10px; color: #8b949e; text-align: center; margin-bottom: 12px; }
+#splash-msg { font-size: 13px; color: #8b949e; text-align: center; margin-bottom: 12px; }
 #splash-disclaimer {
   background: #1a1f26; border: 1px solid #21262d; border-radius: 4px;
-  padding: 10px; font-size: 9px; color: #8b949e;
-  height: 170px; overflow-y: auto; line-height: 1.6; white-space: pre-wrap;
+  padding: 14px; font-size: 13px; color: #c5ccd6;
+  height: 190px; overflow-y: auto; line-height: 1.7; white-space: pre-wrap;
 }
-#splash-disclaimer br:first-child { color: #f0c040; font-weight: bold; }
+#splash-disclaimer br:first-child { color: #f0c040; font-weight: bold; font-size: 14px; }
 #splash-ack-wrap {
   display: flex; align-items: center; gap: 8px;
-  font-size: 9px; color: #8b949e; margin: 12px 0 8px; cursor: pointer;
+  font-size: 13px; color: #c5ccd6; margin: 12px 0 8px; cursor: pointer;
 }
 #splash-btn {
   display: block; width: 220px; margin: 0 auto;
   background: #21262d; color: #21262d;
-  border: none; border-radius: 4px; padding: 8px 0;
-  font-family: Consolas, monospace; font-size: 11px; font-weight: bold;
+  border: none; border-radius: 4px; padding: 10px 0;
+  font-family: Consolas, monospace; font-size: 13px; font-weight: bold;
   cursor: pointer; transition: background 0.2s, color 0.2s;
 }
 #splash-btn:not(:disabled) {
   background: #00d4aa; color: #0d1117; cursor: pointer;
 }
+
+/* ── Splash: supported-plugins screen ────────────────────────────────────── */
+#splash-plugins-title {
+  text-align: center; font-size: 15px; font-weight: bold;
+  color: #e6edf3; margin: 4px 0 2px;
+}
+#splash-plugins-sub {
+  text-align: center; font-size: 12px; color: #8b949e; margin-bottom: 12px;
+}
+#splash-plugins-list {
+  background: #1a1f26; border: 1px solid #21262d; border-radius: 4px;
+  max-height: 220px; overflow-y: auto;
+}
+.splash-plugin-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; font-size: 13px; border-bottom: 1px solid #21262d;
+}
+.splash-plugin-row:last-child { border-bottom: none; }
+.splash-plugin-row:nth-child(even) { background: #161b22; }
+.splash-plugin-bullet { color: #00d4aa; margin-right: 8px; }
+.splash-plugin-name { color: #e6edf3; font-weight: bold; flex: 1; }
+.splash-plugin-class { color: #8b949e; font-size: 11px; }
+#splash-plugins-count {
+  text-align: center; font-size: 12px; color: #8b949e; margin: 10px 0 8px;
+}
+#splash-launch-btn {
+  display: block; width: 220px; margin: 0 auto;
+  background: #00d4aa; color: #0d1117;
+  border: none; border-radius: 4px; padding: 10px 0;
+  font-family: Consolas, monospace; font-size: 13px; font-weight: bold;
+  cursor: pointer; transition: background 0.2s;
+}
+#splash-launch-btn:hover { background: #00f0c0; }

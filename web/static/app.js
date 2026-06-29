@@ -86,12 +86,43 @@ Users are responsible for verifying all information against N1MM before making d
   // ── Checkbox + button ─────────────────────────────────────────────────────
   const ack = document.getElementById('splash-ack');
   const btn = document.getElementById('splash-btn');
+  const box = document.getElementById('splash-box');
   ack.addEventListener('change', () => { btn.disabled = !ack.checked; });
   btn.addEventListener('click', () => {
     try { localStorage.setItem('vkca_splash_accepted', '1'); } catch {}
-    el.style.opacity = '0';
-    setTimeout(() => el.remove(), 400);
+    showSupportedPlugins();
   });
+
+  // ── Second screen: supported contest plugins ───────────────────────────────
+  async function showSupportedPlugins() {
+    let plugins = [];
+    try {
+      const res = await fetch('/api/plugins');
+      plugins = await res.json();
+    } catch (e) { console.warn('plugin list fetch failed:', e); }
+
+    const rows = plugins.length
+      ? plugins.map(p => `
+          <div class="splash-plugin-row">
+            <span><span class="splash-plugin-bullet">&#9670;</span><span class="splash-plugin-name">${p.display_name}</span></span>
+            <span class="splash-plugin-class">[${p.class_name}]</span>
+          </div>`).join('')
+      : `<div class="splash-plugin-row"><span class="splash-plugin-name">No plugins found.</span></div>`;
+
+    const plugWord = plugins.length === 1 ? 'plugin' : 'plugins';
+
+    box.innerHTML = `
+      <div id="splash-plugins-title" style="margin-top:24px">SUPPORTED CONTEST PLUGINS</div>
+      <div id="splash-plugins-sub">The following contests are recognised and scored automatically</div>
+      <div id="splash-plugins-list">${rows}</div>
+      <div id="splash-plugins-count">${plugins.length} contest ${plugWord} loaded</div>
+      <button id="splash-launch-btn">Launch App &rsaquo;</button>`;
+
+    document.getElementById('splash-launch-btn').addEventListener('click', () => {
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 400);
+    });
+  }
 })();
  
   // ── Tab routing ───────────────────────────────────────────────────────────
@@ -122,6 +153,24 @@ Users are responsible for verifying all information against N1MM before making d
 
   // ── WebSocket ─────────────────────────────────────────────────────────────
   let ws=null, wsRetry=0, _lastSnap=null;
+  let _currentContestName = '';   // display_name of the contest the user picked
+
+  // Builds the titlebar status text from a snapshot. Called for every
+  // snapshot regardless of source (WS broadcast OR a manual /api/snapshot
+  // refresh) so the status never gets stuck on "Loading contest data…" if a
+  // WS broadcast is missed or arrives out of order.
+  function statusFromSnapshot(d) {
+    d = d || {};
+    if (!Object.keys(d).length) return 'Connected — no data';
+    const valid  = d.valid || d.total || 0;
+    const score  = d.score || 0;
+    const label  = _currentContestName || d._plugin_name || '';
+    return `${label ? label+' · ' : ''}${valid.toLocaleString()} QSOs · ${score.toLocaleString()} pts`;
+  }
+
+  window.addEventListener('vka:snapshot', e => {
+    setStatus('connected', statusFromSnapshot(e.detail));
+  });
 
   function connectWS() {
     ws = new WebSocket(`ws://${location.host}/ws/live`);
@@ -134,17 +183,8 @@ Users are responsible for verifying all information against N1MM before making d
       if (msg.type==='ping') return;
       if (msg.type==='snapshot') {
         _lastSnap = msg.data;
-        emit('vka:snapshot', msg.data);
-        const d = msg.data||{};
-        if (Object.keys(d).length) {
-          const valid=d.valid||d.total||0, score=d.score||0;
-          const plugin=d._plugin_name||'';
-          setStatus('connected',
-            `${plugin?plugin+' · ':''}${valid.toLocaleString()} QSOs · ${score.toLocaleString()} pts`);
-        } else {
-          setStatus('connected','Connected — no data');
-        }
-        const hasSess=d?.session_status?.state;
+        emit('vka:snapshot', msg.data);   // statusFromSnapshot listener above handles status text
+        const hasSess = msg.data?.session_status?.state;
         document.body.classList.toggle('has-session-bar',!!hasSess);
       }
     };
@@ -156,9 +196,61 @@ Users are responsible for verifying all information against N1MM before making d
     };
     ws.onerror = () => ws.close();
   }
+  connectWS();
 
   window.VKA = window.VKA || {};
   window.VKA.lastSnap = () => _lastSnap;
+
+  // ── File browse (native dialog, with browser-upload fallback) ──────────────
+  // /api/browse triggers pywebview's native OS file dialog. That only works
+  // when running inside the embedded pywebview window — if pywebview failed
+  // to start (e.g. a pythonnet/.NET issue on this machine) the app falls back
+  // to opening in a plain browser tab, where there is no native dialog to
+  // call. In that case, fall back to a normal <input type=file> upload so
+  // loading a log still works; the file's bytes get POSTed to the server,
+  // which saves them to a temp path and hands back that path — from the
+  // caller's point of view the response shape is identical either way.
+  let _uploadInput = null;
+  function _getUploadInput() {
+    if (_uploadInput) return _uploadInput;
+    _uploadInput = document.createElement('input');
+    _uploadInput.type = 'file';
+    _uploadInput.style.display = 'none';
+    _uploadInput.accept = '.s3db,.adi,.adif,.log,.cbr,.txt';
+    document.body.appendChild(_uploadInput);
+    return _uploadInput;
+  }
+
+  async function browseFile() {
+    let data;
+    try {
+      const res = await fetch('/api/browse');
+      data = await res.json();
+      if (res.ok || res.status !== 503) return data;
+    } catch (e) {
+      return { error: `Browse failed: ${e.message}` };
+    }
+    // 503 PyWebView window not ready — no native dialog available, use upload.
+    return new Promise(resolve => {
+      const input = _getUploadInput();
+      input.value = '';
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) { resolve({ path: null }); return; }
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          const res  = await fetch('/api/upload_log', { method: 'POST', body: fd });
+          const data = await res.json();
+          resolve(data);
+        } catch (e) {
+          resolve({ error: `Upload failed: ${e.message}` });
+        }
+      };
+      input.click();
+    });
+  }
+  window.VKA.browseFile = browseFile;
 
   // ── Manual refresh ────────────────────────────────────────────────────────
   const btnRefresh = document.getElementById('btn-refresh');
@@ -287,7 +379,7 @@ Users are responsible for verifying all information against N1MM before making d
   btnBrowse?.addEventListener('click', async ()=>{
     btnBrowse.disabled=true; btnBrowse.textContent='…';
     try {
-      const res=await fetch('/api/browse'); const data=await res.json();
+      const data = await browseFile();
       if (data.error) { showError(data.error); return; }
       if (data.path)  { pathInput.value=data.path; errDiv.classList.add('hidden'); await doScan(); }
     } catch(e) { showError(`Browse failed: ${e.message}`); }
@@ -305,7 +397,7 @@ Users are responsible for verifying all information against N1MM before making d
       if (data.error) { showError(data.error); return; }
       const contests=data.contests||[];
       if (!contests.length) { showError('No contests with QSOs found in this database.'); return; }
-	  if (contests.length===1) { await doLoad(data.path,contests[0].contest_nr,contests[0].plugin); hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown(); return; }
+	  if (contests.length===1) { _currentContestName=contests[0].display_name||''; await doLoad(data.path,contests[0].contest_nr,contests[0].plugin); hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown(); return; }
       _scannedPath=data.path;
       pickerLabel.textContent=data.path.split(/[\\\/]/).pop();
       buildContestList(contests);
@@ -351,6 +443,7 @@ Users are responsible for verifying all information against N1MM before making d
     if (!_selectedContest) return;
     btnConfirm.disabled=true; btnConfirm.textContent='Loading…';
     try {
+      _currentContestName = _selectedContest.display_name || '';
       await doLoad(_scannedPath||pathInput.value.trim(), _selectedContest.contest_nr, _selectedContest.plugin);
       hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown();
     } catch {}

@@ -18,7 +18,10 @@ hidden += collect_submodules('uvicorn')
 hidden += collect_submodules('fastapi')
 hidden += collect_submodules('starlette')
 hidden += collect_submodules('anyio')
+hidden += collect_submodules('multipart')
 hidden += [
+    'multipart',   # python-multipart — starlette imports it lazily on first
+                    # form/file upload, so static analysis alone can miss it
     'uvicorn.logging',
     'uvicorn.loops.asyncio',
     'uvicorn.loops.auto',
@@ -28,15 +31,10 @@ hidden += [
     'uvicorn.protocols.websockets.websockets_impl',
     'uvicorn.lifespan.on',
     'multiprocessing',
-    'multiprocessing.freeze_support',
     'sqlite3',
     'csv',
     'io',
     'winreg',
-    'matplotlib',
-    'matplotlib.backends.backend_agg',
-    'matplotlib.figure',
-    'matplotlib.patches',
 ]
 
 # Add pywebview Windows backend if available
@@ -60,12 +58,6 @@ datas += [(str(ROOT / 'plugins'), 'plugins')]
 
 # contest_log.py must be beside the exe
 datas += [(str(ROOT / 'contest_log.py'), '.')]
-
-# matplotlib data files (fonts, style sheets etc.)
-try:
-    datas += collect_data_files('matplotlib')
-except Exception:
-    pass
 
 # pywebview assets
 try:
@@ -98,6 +90,15 @@ a = Analysis(
         'PyQt5', 'PyQt6', 'wx',
         'IPython', 'jupyter', 'notebook',
         'test', 'tests',
+        # Only ever used by the removed /api/snapshot_png endpoint, which
+        # nothing in the frontend calls — server.py has no other use of
+        # any of these. Together they're over half the installed size.
+        'matplotlib', 'numpy', 'PIL', 'contourpy', 'kiwisolver',
+        # uvicorn[standard] extras we don't exercise: no --reload (no
+        # watchfiles), h11 (already required) covers our HTTP parsing so
+        # we don't need the httptools alternative, and we configure
+        # logging ourselves (log_config=None) rather than via a YAML file.
+        'watchfiles', 'httptools', 'yaml',
     ],
     noarchive=False,
 )

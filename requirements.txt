@@ -4,8 +4,11 @@
 # This file covers BOTH the tkinter app and the web mode.
 # Web-only dependencies are also listed in web/requirements-web.txt
 
-# ── Core (shared by both modes) ───────────────────────────────────────────────
-matplotlib>=3.7.0          # charts in tkinter mode + server-side PNG snapshots
+# ── tkinter mode only ──────────────────────────────────────────────────────────
+# Not needed by web mode — vkca_web.spec explicitly excludes these from the
+# packaged web exe (they pulled in over half its installed size for an
+# endpoint, /api/snapshot_png, that the frontend never actually called).
+matplotlib>=3.7.0          # charts in tkinter mode
 numpy>=1.24.0              # used by matplotlib
 pillow>=10.0.0             # image handling
 
@@ -17,6 +20,7 @@ pydantic>=2.0.0
 anyio>=4.0.0
 websockets>=12.0
 h11>=0.14.0
+python-multipart>=0.0.9    # required by FastAPI/Starlette to parse file uploads
 
 # ── PyWebView (desktop window) ────────────────────────────────────────────────
 pywebview>=5.0.0

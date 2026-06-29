@@ -255,13 +255,19 @@
         <input id="cluster-callsign" class="tb-input" value="VK2YI" style="width:90px">
         <button id="cluster-connect-btn" class="btn btn--primary btn--sm">Connect</button>
         <button id="cluster-disconnect-btn" class="btn btn--ghost btn--sm" disabled>Disconnect</button>
+        <div class="tb-sep"></div>
+        <label class="tb-label">SH/DX</label>
+        <input id="cluster-shdx-input" class="tb-input" type="number" min="10" max="200" step="10" value="20" style="width:55px">
+        <button id="cluster-shdx-btn" class="btn btn--ghost btn--sm">Backfill</button>
       </div>
     </div>
+
+    <div id="cluster-advice" class="panel-box" style="display:none;padding:8px 14px;font-family:var(--font-mono);font-size:0.8em"></div>
 
     <div style="display:grid;grid-template-columns:1fr 300px;gap:10px;flex:1;min-height:0">
       <!-- Spot list -->
       <div class="panel-box" style="display:flex;flex-direction:column;min-height:0">
-        <div class="panel-header" style="flex-shrink:0">
+        <div class="panel-header" style="flex-shrink:0;flex-wrap:wrap;row-gap:6px">
           <span style="color:var(--accent)">●</span> DX SPOTS
           <span class="badge" id="cluster-spot-count">0</span>
           <div style="display:flex;gap:4px;margin-left:8px">
@@ -274,10 +280,29 @@
             <button class="cluster-band-btn" data-band="10M">10</button>
           </div>
           <input id="cluster-filter" class="filter-input" placeholder="Filter call…" style="width:140px;margin-left:auto">
+          <button id="cluster-clear-btn" class="btn btn--ghost btn--sm">Clear</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:4px 10px;font-family:var(--font-mono);font-size:0.72em;color:var(--muted);flex-shrink:0">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input id="cluster-show-newmult" type="checkbox" checked><span style="color:#2ed573">New Mult</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input id="cluster-show-newband" type="checkbox" checked><span style="color:#64b5f6">New Band</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input id="cluster-show-worked" type="checkbox"><span>Worked</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input id="cluster-show-notmult" type="checkbox"><span>Not a Mult</span>
+          </label>
+          <div class="tb-sep"></div>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input id="cluster-bands-only" type="checkbox"><span>Contest bands only</span>
+          </label>
         </div>
         <div class="table-wrap" style="flex:1;max-height:none">
           <table class="data-table">
-            <thead><tr><th>DX Call</th><th>Freq</th><th>Band</th><th>Spotter</th><th>Comment</th><th>Time</th></tr></thead>
+            <thead><tr><th>DX Call</th><th>Freq</th><th>Band</th><th>Mult</th><th>Region</th><th>Spotter</th><th>Comment</th><th>Time</th></tr></thead>
             <tbody id="cluster-spots-tbody"></tbody>
           </table>
         </div>
@@ -285,8 +310,9 @@
 
       <!-- Raw feed + command -->
       <div class="panel-box" style="display:flex;flex-direction:column;min-height:0">
-        <div class="panel-header" style="flex-shrink:0">
+        <div class="panel-header" style="flex-shrink:0;cursor:pointer" id="cluster-raw-toggle">
           <span style="color:var(--muted)">●</span> RAW TELNET FEED
+          <span id="cluster-raw-arrow" style="margin-left:auto;color:var(--muted)">▼</span>
         </div>
         <div id="cluster-raw-feed" class="cluster-raw-feed"></div>
         <input id="cluster-cmd-input" class="tb-input" placeholder="Type command, Enter to send…"
@@ -343,7 +369,58 @@
 
   <!-- ══ FATIGUE ══ -->
   <section id="tab-fatigue" class="tab-panel">
-    <div class="panel-header"><span style="color:var(--accent2)">●</span> OPERATOR FATIGUE &amp; RATE ANALYSIS</div>
+    <!-- ══ CROSS-YEAR FATIGUE PROFILE ══ -->
+    <div class="yoy-toolbar panel-box" style="flex-direction:row;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap">
+      <div class="panel-header" style="margin:0">
+        <span style="color:var(--accent2)">●</span> FATIGUE PROFILE — CROSS-YEAR
+      </div>
+      <button id="fatigue-add-log-btn" class="tb-btn tb-btn--primary">+ Add Log File</button>
+      <button id="fatigue-clear-logs-btn" class="tb-btn">✕ Clear Extra Logs</button>
+      <div class="tb-sep"></div>
+      <label class="tb-label">CONTEST</label>
+      <select id="fatigue-contest-select" class="tb-select" style="width:180px">
+        <option value="__all__">— all —</option>
+      </select>
+      <label class="tb-label">BAND</label>
+      <select id="fatigue-band-select" class="tb-select" style="width:100px">
+        <option value="__all__">All bands</option>
+      </select>
+      <label class="tb-label">NORMALIZE</label>
+      <select id="fatigue-norm-select" class="tb-select" style="width:150px">
+        <option value="raw">Raw QSOs/hr</option>
+        <option value="pct">% of contest avg</option>
+        <option value="z">Z-score</option>
+      </select>
+      <label class="tb-label">DEAD-ZONE &lt;</label>
+      <input id="fatigue-thresh-input" class="tb-input" type="number" min="10" max="70" value="35" style="width:50px">
+      <span class="tb-label">% avg</span>
+    </div>
+
+    <div id="fatigue-yoy-msg" style="display:none;color:var(--muted);padding:20px;font-family:var(--font-mono);font-size:0.85em"></div>
+
+    <div id="fatigue-yoy-content">
+      <div class="panel-box">
+        <div class="panel-header"><span style="color:var(--muted)">●</span> CONTESTS LOADED</div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Year</th><th>Contest</th><th>QSOs</th><th>Avg QSO/hr</th><th>Dead Hours</th></tr></thead>
+            <tbody id="fatigue-yoy-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel-box" style="min-height:260px">
+        <div class="panel-header"><span style="color:var(--accent)">●</span> MEAN QSO RATE BY UTC HOUR <span style="color:var(--muted);font-weight:normal;text-transform:none;margin-left:6px">(thin lines = per year, bold = cross-year mean)</span></div>
+        <div style="position:relative;height:220px"><canvas id="chart-fatigue-yoy"></canvas></div>
+      </div>
+      <div class="panel-box">
+        <div class="panel-header"><span style="color:var(--accent3)">●</span> NAP SCHEDULE ADVISORY</div>
+        <div id="fatigue-yoy-advice" style="font-family:var(--font-mono);font-size:0.85em;
+             color:var(--fg);padding:6px 0;line-height:1.6">Load a log to generate advice.</div>
+      </div>
+    </div>
+
+    <!-- ══ THIS SESSION (live single-log view) ══ -->
+    <div class="panel-header"><span style="color:var(--accent2)">●</span> OPERATOR FATIGUE &amp; RATE ANALYSIS (this session)</div>
     <div id="fatigue-cards" class="fatigue-cards-row"></div>
     <div class="panel-box" style="min-height:240px">
       <div class="panel-header">
@@ -363,32 +440,117 @@
 
   <!-- ══ YEAR ON YEAR ══ -->
   <section id="tab-yoy" class="tab-panel">
-    <div class="panel-header"><span style="color:var(--accent3)">●</span> YEAR ON YEAR</div>
+    <div class="yoy-toolbar panel-box" style="flex-direction:row;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap">
+      <div class="panel-header" style="margin:0">
+        <span style="color:var(--accent3)">●</span> YEAR ON YEAR
+      </div>
+      <button id="yoy-add-log-btn" class="tb-btn tb-btn--primary">+ Add Log File</button>
+      <button id="yoy-clear-logs-btn" class="tb-btn">✕ Clear Extra Logs</button>
+      <div class="tb-sep"></div>
+      <label class="tb-label">CONTEST</label>
+      <select id="yoy-contest-select" class="tb-select" style="width:180px">
+        <option value="__all__">— all —</option>
+      </select>
+      <div class="tb-sep"></div>
+      <label class="tb-label">METRIC</label>
+      <select id="yoy-metric-select" class="tb-select" style="width:130px">
+        <option value="score">Score</option>
+        <option value="qsos">QSOs</option>
+        <option value="mults">Multipliers</option>
+        <option value="rate">QSOs/hr rate</option>
+      </select>
+      <label class="tb-label">X-AXIS</label>
+      <select id="yoy-xmode-select" class="tb-select" style="width:130px">
+        <option value="elapsed">Hours elapsed</option>
+        <option value="utc">UTC clock</option>
+      </select>
+      <div class="tb-sep"></div>
+      <label style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:0.77em;color:var(--muted);cursor:pointer">
+        <input id="yoy-normalize" type="checkbox">
+        <span>Normalize to 100%</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:0.77em;color:var(--muted);cursor:pointer">
+        <input id="yoy-annotate" type="checkbox" checked>
+        <span>Show annotations</span>
+      </label>
+    </div>
+
     <div id="yoy-loading" style="display:none;padding:30px;color:var(--muted);font-family:var(--font-mono);font-size:0.85em">Loading historical data…</div>
     <div id="yoy-msg" style="display:none;color:var(--muted);padding:20px;font-family:var(--font-mono);font-size:0.85em"></div>
-    <div class="yoy-grid">
-      <div class="panel-box" style="min-height:260px">
-        <div class="panel-header"><span style="color:var(--accent3)">●</span> Score &amp; Mults</div>
-        <div style="position:relative;height:220px"><canvas id="chart-yoy-score"></canvas></div>
+
+    <div id="yoy-content" style="display:none">
+      <div class="panel-box" style="min-height:340px">
+        <div id="yoy-chart-empty" style="display:none;padding:40px;text-align:center;color:var(--muted);font-family:var(--font-mono);font-size:0.85em">
+          All years hidden — click a row in the table below to show it.
+        </div>
+        <div id="yoy-chart-wrap">
+          <div style="position:relative;height:260px"><canvas id="chart-yoy-trajectory"></canvas></div>
+          <div id="yoy-rate-wrap" style="position:relative;height:90px;margin-top:4px"><canvas id="chart-yoy-rate"></canvas></div>
+        </div>
       </div>
-      <div class="panel-box" style="min-height:260px">
-        <div class="panel-header"><span style="color:var(--green)">●</span> QSO Trend</div>
-        <div style="position:relative;height:220px"><canvas id="chart-yoy-qsos"></canvas></div>
+
+      <div class="panel-box" style="padding:10px 14px">
+        <span id="yoy-insight-text" style="font-family:var(--font-mono);font-size:0.8em;color:var(--muted)"></span>
       </div>
-    </div>
-    <div class="panel-box">
-      <div class="panel-header"><span style="color:var(--muted)">●</span> HISTORY TABLE</div>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead><tr><th>Year</th><th>QSOs</th><th>Mults</th><th>Band Mults</th><th>Score</th><th></th></tr></thead>
-          <tbody id="yoy-tbody"></tbody>
-        </table>
+
+      <div class="panel-box">
+        <div class="panel-header"><span style="color:var(--muted)">●</span> CONTEST YEARS — click a row to show/hide it on the chart</div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th></th><th>Year</th><th>Contest</th><th>Score</th><th>Δ Score</th>
+              <th>QSOs</th><th>Δ QSOs</th><th>Mults</th><th>Hrs</th>
+            </tr></thead>
+            <tbody id="yoy-tbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </section>
 
   <!-- ══ PACE ══ -->
   <section id="tab-pace" class="tab-panel">
+    <!-- ══ YEAR-OVER-YEAR PACE COMPARISON ══ -->
+    <div class="yoy-toolbar panel-box" style="flex-direction:row;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap">
+      <div class="panel-header" style="margin:0">
+        <span style="color:var(--accent)">●</span> PACE vs REFERENCE YEARS
+      </div>
+      <button id="pace-add-log-btn" class="tb-btn tb-btn--primary">+ Add Reference Log</button>
+      <button id="pace-clear-refs-btn" class="tb-btn">✕ Clear References</button>
+      <div class="tb-sep"></div>
+      <label class="tb-label">TARGET</label>
+      <select id="pace-target-select" class="tb-select" style="width:200px">
+        <option value="__best__">Best year</option>
+      </select>
+      <label class="tb-label">ALARM IF BEHIND BY ≥</label>
+      <input id="pace-thresh-input" class="tb-input" type="number" min="1" max="50" value="5" style="width:50px">
+      <span class="tb-label">QSOs</span>
+    </div>
+
+    <div id="pace-ref-alarm" class="pace-alarm"
+         style="background:var(--bg3);color:var(--muted)">📊 Load a reference log to start tracking pace.</div>
+
+    <div class="panel-box">
+      <div class="panel-header"><span style="color:var(--muted)">●</span> REFERENCE YEARS — click a row to show/hide it on the chart</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th></th><th>Year</th><th>Contest</th><th>Total QSOs</th><th>Avg QSO/hr</th><th>Source</th></tr></thead>
+          <tbody id="pace-ref-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel-box" style="min-height:300px">
+      <div class="panel-header"><span style="color:var(--accent)">●</span> CUMULATIVE QSOs vs ELAPSED TIME <span style="color:var(--muted);font-weight:normal;text-transform:none;margin-left:6px">(live = solid teal, references = dashed)</span></div>
+      <div style="position:relative;height:240px"><canvas id="chart-pace-traj"></canvas></div>
+      <div id="pace-rate-wrap" style="position:relative;height:90px;margin-top:4px"><canvas id="chart-pace-rate"></canvas></div>
+    </div>
+
+    <div class="panel-box" style="padding:10px 14px">
+      <span id="pace-ref-insight" style="font-family:var(--font-mono);font-size:0.8em;color:var(--muted)">Load a reference log to see pace insights.</span>
+    </div>
+
+    <!-- ══ SCORE PROJECTION (current rate) ══ -->
     <div class="panel-header"><span style="color:var(--green)">●</span> PACE TRACKER — Score Projection vs Current Rate</div>
     <div id="pace-alarm" class="pace-alarm" style="display:none"></div>
     <div class="pace-cards-row">
@@ -471,7 +633,9 @@
     <div class="panel-header">
       <span style="color:var(--accent3)">●</span> ALL WORKED QSOs
       <span class="badge" id="worked-count">0</span>
+      <span style="color:var(--muted);font-size:0.77em;margin-left:6px">— Next Block In = when this operating block ends</span>
       <input id="worked-filter" class="filter-input" placeholder="Filter call, band, mode…" type="text">
+      <button id="worked-delete-btn" class="btn btn--ghost btn--sm" style="margin-left:8px;color:var(--red);border-color:var(--red)" disabled>🗑 Delete Selected</button>
       <div style="margin-left:8px;display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:0.77em">
         <button id="worked-prev" class="btn btn--ghost btn--sm" disabled>‹ Prev</button>
         <span id="worked-page" style="color:var(--muted)">1 / 1</span>
@@ -480,7 +644,11 @@
     </div>
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr><th>Call</th><th>Band</th><th>Mode</th><th>Mult</th><th>Pts</th><th>Time (UTC)</th><th>Dupe</th></tr></thead>
+        <thead><tr>
+          <th><input id="worked-select-all" type="checkbox"></th>
+          <th>Call</th><th>Band</th><th>Mode</th><th>Mult</th><th>Pts</th><th>Time (UTC)</th>
+          <th>Block</th><th>Next Block In</th><th>Dupe</th>
+        </tr></thead>
         <tbody id="worked-tbody"></tbody>
       </table>
     </div>

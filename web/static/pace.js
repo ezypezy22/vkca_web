@@ -197,4 +197,357 @@
       if (snap) update(snap);
     }
   });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ── Year-over-year pace comparison (reference logs + alarm) ────────────
+  // Mirrors the old desktop app's Pace Tracker: cumulative-QSO trajectory
+  // for the live contest vs reference years, with a polling alarm banner.
+  // ═══════════════════════════════════════════════════════════════════════
+  const PALETTE = ['#00d4aa','#ff6b35','#f0c040','#2ed573','#64b5f6',
+                    '#e040fb','#ff5252','#69f0ae','#ea80fc','#80d8ff'];
+
+  let _refs        = [];
+  let _live         = null;
+  let _hidden       = new Set();
+  let _refsLoaded   = false;
+  let _flash        = true;
+  let refTrajChart  = null;
+  let refRateChart  = null;
+  let _pollHandle   = null;
+
+  function colourFor(key) {
+    const idx = _refs.findIndex(r => r.key === key);
+    return PALETTE[Math.max(idx, 0) % PALETTE.length];
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  }
+  function escapeAttr(s) { return escapeHtml(s); }
+
+  function refAtElapsed(ref, nowE) {
+    const e = ref.elapsed_hrs, c = ref.cum_qsos;
+    if (!e || !e.length) return 0;
+    if (nowE >= e[e.length-1]) return c[c.length-1];
+    for (let i = 0; i < e.length; i++) if (e[i] >= nowE) return c[i];
+    return c[c.length-1];
+  }
+
+  function visibleRefs() { return _refs.filter(r => !_hidden.has(r.key)); }
+
+  function threshVal() {
+    const v = parseInt(document.getElementById('pace-thresh-input')?.value || '5', 10);
+    return isNaN(v) ? 5 : Math.max(1, Math.min(50, v));
+  }
+
+  // ── Load ────────────────────────────────────────────────────────────────
+  async function loadRefs() {
+    try {
+      const res  = await fetch('/api/pace');
+      const data = await res.json();
+      _refs       = data.refs || [];
+      _live       = data.live || null;
+      _refsLoaded = true;
+      populateTargetSelect();
+      redrawRefs();
+    } catch (e) { console.warn('Pace refs load failed:', e); }
+  }
+
+  function populateTargetSelect() {
+    const sel = document.getElementById('pace-target-select');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="__best__">Best year</option>' +
+      _refs.map(r => `<option value="${escapeAttr(r.key)}">${escapeHtml(r.label)}</option>`).join('');
+    if ([...sel.options].some(o => o.value === current)) sel.value = current;
+    else sel.value = '__best__';
+  }
+
+  function redrawRefs() {
+    const vis = visibleRefs();
+    renderRefTable(_refs);
+    renderRefCharts(vis);
+    renderRefInsight(vis);
+    updateRefAlarm(vis);
+  }
+
+  // ── Roster table ────────────────────────────────────────────────────────
+  function renderRefTable(allRefs) {
+    const tbody = document.getElementById('pace-ref-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    [...allRefs].sort((a, b) => (a.year||0) - (b.year||0)).forEach(r => {
+      const col     = colourFor(r.key);
+      const visible = !_hidden.has(r.key);
+      const avgRate = r.total_hrs > 0 ? (r.final_qsos / r.total_hrs) : 0;
+      const tr = document.createElement('tr');
+      tr.style.cursor  = 'pointer';
+      tr.style.opacity = visible ? '1' : '0.4';
+      tr.innerHTML = `
+        <td><span style="color:${col}">${visible ? '●' : '○'}</span></td>
+        <td style="color:${col};font-weight:bold">${r.year || '?'}</td>
+        <td>${escapeHtml(r.display_name || r.contest_name)}</td>
+        <td>${(r.final_qsos||0).toLocaleString()}</td>
+        <td>${avgRate.toFixed(1)}</td>
+        <td style="color:${C.muted}">${r.source === 'auto' ? 'auto (same contest)' : 'manual'}</td>`;
+      tr.addEventListener('click', () => {
+        if (_hidden.has(r.key)) _hidden.delete(r.key); else _hidden.add(r.key);
+        redrawRefs();
+      });
+      frag.appendChild(tr);
+    });
+    tbody.appendChild(frag);
+  }
+
+  // ── Trajectory + rate charts ────────────────────────────────────────────
+  function renderRefCharts(refs) {
+    const canvas = document.getElementById('chart-pace-traj');
+    if (!canvas) return;
+    if (refTrajChart) { refTrajChart.destroy(); refTrajChart = null; }
+    if (refRateChart) { refRateChart.destroy(); refRateChart = null; }
+
+    const datasets = refs.map(r => ({
+      label: r.label, borderColor: colourFor(r.key), borderDash: [6, 4],
+      data: r.elapsed_hrs.map((x, i) => ({ x, y: r.cum_qsos[i] })),
+      borderWidth: 1.6, pointRadius: 0, tension: 0.1, fill: false,
+    }));
+    const haveLive = _live && _live.elapsed_hrs && _live.elapsed_hrs.length;
+    if (haveLive) {
+      datasets.push({
+        label: '▶ This contest (live)', borderColor: C.accent,
+        data: _live.elapsed_hrs.map((x, i) => ({ x, y: _live.cum_qsos[i] })),
+        borderWidth: 3, pointRadius: 0, tension: 0, fill: false,
+      });
+    }
+
+    if (!datasets.length) {
+      refTrajChart = new Chart(canvas.getContext('2d'), { type: 'line', data: { datasets: [] },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { x: { type: 'linear', ticks: { color: C.muted, font: { size: 8 } } },
+                    y: { ticks: { color: C.muted, font: { size: 8 } } } } } });
+      const rc = document.getElementById('chart-pace-rate');
+      if (rc) refRateChart = new Chart(rc.getContext('2d'), { type: 'line', data: { datasets: [] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+      return;
+    }
+
+    refTrajChart = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: { datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
+        interaction: { mode: 'nearest', intersect: false },
+        plugins: {
+          legend: { display: true, position: 'top',
+                    labels: { color: C.muted, font: { size: 9, family: 'Consolas' } } },
+          tooltip: { backgroundColor: C.bg3, bodyColor: C.fg, titleColor: C.accent },
+        },
+        scales: {
+          x: { type: 'linear', min: 0,
+               title: { display: true, text: 'Hours since contest start', color: C.muted, font: { size: 9 } },
+               ticks: { color: C.muted, font: { size: 8 } }, grid: { color: C.bg3 + '80' } },
+          y: { title: { display: true, text: 'Cumulative QSOs', color: C.muted, font: { size: 9 } },
+               ticks: { color: C.muted, font: { size: 8 } }, grid: { color: C.bg3 + '80' } },
+        },
+      },
+    });
+
+    // Deficit connector between live point and the chosen target reference.
+    if (haveLive && refs.length) {
+      const targetSel = document.getElementById('pace-target-select');
+      const targetKey = targetSel ? targetSel.value : '__best__';
+      const nowE       = _live.elapsed_hrs[_live.elapsed_hrs.length - 1];
+      const liveTotal  = _live.cum_qsos[_live.cum_qsos.length - 1];
+      let targetRef = null;
+      if (targetKey === '__best__') {
+        targetRef = refs.reduce((best, r) =>
+          refAtElapsed(r, nowE) > refAtElapsed(best, nowE) ? r : best, refs[0]);
+      } else {
+        targetRef = refs.find(r => r.key === targetKey) || null;
+      }
+      if (targetRef) {
+        const refAtNow = refAtElapsed(targetRef, nowE);
+        const deficit  = refAtNow - liveTotal;
+        if (Math.abs(deficit) >= threshVal()) {
+          const origDraw = refTrajChart.draw.bind(refTrajChart);
+          refTrajChart.draw = function () {
+            origDraw();
+            const area = refTrajChart.chartArea;
+            if (!area) return;
+            const ctx = canvas.getContext('2d');
+            const px  = refTrajChart.scales.x.getPixelForValue(nowE);
+            if (px < area.left || px > area.right) return;
+            const py1 = refTrajChart.scales.y.getPixelForValue(liveTotal);
+            const py2 = refTrajChart.scales.y.getPixelForValue(refAtNow);
+            ctx.save();
+            ctx.strokeStyle = deficit > 0 ? C.red : C.green;
+            ctx.lineWidth = 1.8;
+            ctx.beginPath(); ctx.moveTo(px, py1); ctx.lineTo(px, py2); ctx.stroke();
+            ctx.fillStyle = deficit > 0 ? C.red : C.green;
+            ctx.font = 'bold 10px Consolas, monospace';
+            ctx.fillText(`${Math.abs(deficit)} ${deficit > 0 ? 'behind' : 'ahead'}`,
+                         px + 5, (py1 + py2) / 2);
+            ctx.restore();
+          };
+          refTrajChart.update();
+        }
+      }
+    }
+
+    const rateCanvas = document.getElementById('chart-pace-rate');
+    if (!rateCanvas) return;
+    const rateDatasets = refs.map(r => ({
+      label: r.label, borderColor: colourFor(r.key),
+      data: r.rate_hrs.map((x, i) => ({ x, y: r.rate_counts[i] })),
+      borderWidth: 1, pointRadius: 0, stepped: 'middle', fill: false,
+    }));
+    if (haveLive) {
+      rateDatasets.push({
+        label: 'live', borderColor: C.accent,
+        data: _live.rate_hrs.map((x, i) => ({ x, y: _live.rate_counts[i] })),
+        borderWidth: 1.6, pointRadius: 0, stepped: 'middle', fill: false,
+      });
+    }
+    refRateChart = new Chart(rateCanvas.getContext('2d'), {
+      type: 'line', data: { datasets: rateDatasets },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: true } },
+        scales: {
+          x: { type: 'linear', min: 0, ticks: { color: C.muted, font: { size: 7 } }, grid: { display: false } },
+          y: { ticks: { color: C.muted, font: { size: 7 } }, grid: { color: C.bg3 + '80' },
+               title: { display: true, text: 'QSOs/hr', color: C.muted, font: { size: 8 } } },
+        },
+      },
+    });
+  }
+
+  // ── Insight bar ─────────────────────────────────────────────────────────
+  function renderRefInsight(refs) {
+    const el = document.getElementById('pace-ref-insight');
+    if (!el) return;
+    const haveLive = _live && _live.elapsed_hrs && _live.elapsed_hrs.length;
+    if (!refs.length && !haveLive) {
+      el.textContent = 'Load a reference log to see pace insights.'; return;
+    }
+    if (!refs.length) {
+      const lastE = haveLive ? _live.elapsed_hrs[_live.elapsed_hrs.length-1] : 0;
+      const lastC = haveLive ? _live.cum_qsos[_live.cum_qsos.length-1] : 0;
+      el.textContent = `Live: ${lastC} QSOs at ${lastE.toFixed(1)}h — no reference loaded yet.`;
+      return;
+    }
+    if (!haveLive) {
+      el.textContent = `${refs.length} reference year(s) loaded — waiting for live log data.`;
+      return;
+    }
+    const nowE      = _live.elapsed_hrs[_live.elapsed_hrs.length-1];
+    const liveTotal = _live.cum_qsos[_live.cum_qsos.length-1];
+    const tv = threshVal();
+    const parts = refs.map(r => {
+      const deficit = refAtElapsed(r, nowE) - liveTotal;
+      if (deficit > tv)  return `⚠ ${Math.abs(deficit)} behind ${r.year}`;
+      if (deficit < -tv) return `🚀 ${Math.abs(deficit)} ahead of ${r.year}`;
+      return `✅ within ±${tv} of ${r.year}`;
+    });
+    el.textContent = parts.join('  |  ');
+  }
+
+  // ── Alarm banner + self-rescheduling poll ──────────────────────────────
+  function updateRefAlarm(refs) {
+    const box = document.getElementById('pace-ref-alarm');
+    let interval = 30000;
+    if (box) {
+      const haveLive = _live && _live.elapsed_hrs && _live.elapsed_hrs.length;
+      if (!haveLive) {
+        box.style.background = C.bg3; box.style.color = C.muted; box.style.borderColor = C.bg3;
+        box.textContent = '📊 Load a log file to start tracking.';
+      } else if (!refs.length) {
+        box.style.background = C.bg3; box.style.color = C.muted; box.style.borderColor = C.bg3;
+        box.textContent = "📊 Load a reference log to compare pace. Use '+ Add Reference Log' above.";
+      } else {
+        const nowE      = _live.elapsed_hrs[_live.elapsed_hrs.length-1];
+        const liveTotal = _live.cum_qsos[_live.cum_qsos.length-1];
+        const tv = threshVal();
+        const deficits = refs.map(r => ({
+          year: r.year, refAtT: refAtElapsed(r, nowE),
+          deficit: refAtElapsed(r, nowE) - liveTotal,
+        }));
+        const worst = deficits.reduce((a, b) => b.deficit > a.deficit ? b : a);
+        const best  = deficits.reduce((a, b) => b.deficit < a.deficit ? b : a);
+        if (worst.deficit >= tv) {
+          _flash = !_flash;
+          box.style.background  = _flash ? C.red : C.bg3;
+          box.style.color       = _flash ? C.fg  : C.red;
+          box.style.borderColor = C.red;
+          box.textContent = `⚠ PACE ALARM — You are ${worst.deficit} QSOs behind your ${worst.year} pace right now! ` +
+                             `(${worst.refAtT} QSOs at this point in ${worst.year})`;
+          interval = 5000;
+        } else if (best.deficit <= -tv) {
+          _flash = true;
+          box.style.background = C.bg3; box.style.color = C.green; box.style.borderColor = C.green;
+          box.textContent = `🚀 ON PACE — You are ${Math.abs(best.deficit)} QSOs AHEAD of your ${best.year} pace! Keep it up!`;
+        } else {
+          _flash = true;
+          box.style.background = C.bg3; box.style.color = C.accent3; box.style.borderColor = C.accent3;
+          box.textContent = `✅ WITHIN TARGET — Tracking within ±${tv} QSOs of reference pace ` +
+                             `(${worst.deficit <= 0 ? 'ahead' : 'behind'} by ${Math.abs(worst.deficit)} QSOs vs ${worst.year})`;
+        }
+      }
+    }
+    if (_pollHandle) clearTimeout(_pollHandle);
+    _pollHandle = setTimeout(pollLive, interval);
+  }
+
+  async function pollLive() {
+    try {
+      const r = await fetch('/api/pace/live');
+      _live = await r.json();
+    } catch (e) { /* keep stale _live, try again next tick */ }
+    const vis = visibleRefs();
+    renderRefCharts(vis);
+    renderRefInsight(vis);
+    updateRefAlarm(vis);
+  }
+
+  // ── Add / clear reference logs ─────────────────────────────────────────
+  async function addRefLog() {
+    const btn = document.getElementById('pace-add-log-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      const data = await window.VKA.browseFile();
+      if (data.error || !data.path) return;
+      const res2  = await fetch('/api/pace/add_log', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: data.path }),
+      });
+      const data2 = await res2.json();
+      if (data2.error) { console.warn('Add reference log:', data2.error); return; }
+      _refs       = data2.refs || [];
+      _live       = data2.live || _live;
+      _refsLoaded = true;
+      populateTargetSelect();
+      redrawRefs();
+    } catch (e) { console.warn('Add reference log failed:', e); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = '+ Add Reference Log'; } }
+  }
+
+  async function clearRefs() {
+    try {
+      const res  = await fetch('/api/pace/clear_refs', { method: 'POST' });
+      const data = await res.json();
+      _refs = data.refs || [];
+      _hidden.clear();
+      populateTargetSelect();
+      redrawRefs();
+    } catch (e) { console.warn('Clear references failed:', e); }
+  }
+
+  document.getElementById('pace-add-log-btn')?.addEventListener('click', addRefLog);
+  document.getElementById('pace-clear-refs-btn')?.addEventListener('click', clearRefs);
+  document.getElementById('pace-target-select')?.addEventListener('change', redrawRefs);
+  document.getElementById('pace-thresh-input')?.addEventListener('change', redrawRefs);
+
+  window.addEventListener('vka:loaded', () => { _refsLoaded = false; _hidden.clear(); loadRefs(); });
+  window.addEventListener('vka:tabchange', e => { if (e.detail.tab === 'pace' && !_refsLoaded) loadRefs(); });
 })();

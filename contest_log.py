@@ -821,6 +821,8 @@ class ContestLog:
                 "next_session_nr": 1,
                 "start_dt":        cs,
                 "mins_to_start":   mins_to_start,
+                "duration_mins":   cfg.duration_mins,
+                "label_prefix":    cfg.label_prefix,
             }
 
         if elapsed_total >= total_mins:
@@ -835,6 +837,8 @@ class ContestLog:
                 "next_session_nr": None,
                 "start_dt":        cs,
                 "end_dt":          cs + timedelta(minutes=total_mins),
+                "duration_mins":   cfg.duration_mins,
+                "label_prefix":    cfg.label_prefix,
             }
 
         sn           = int(elapsed_total // cfg.duration_mins)
@@ -856,6 +860,8 @@ class ContestLog:
             "total_remaining_mins": max(0, total_mins - elapsed_total),
             "total_pct_elapsed":    elapsed_total / total_mins * 100 if total_mins else 0,
             "end_dt":               cs + timedelta(minutes=total_mins),
+            "duration_mins":        cfg.duration_mins,
+            "label_prefix":         cfg.label_prefix,
         }
 
     def operator_time_summary(self, gap_threshold_mins=30):
