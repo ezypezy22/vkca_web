@@ -876,8 +876,8 @@
       if (!data.start||!data.end) return;
       _scrubStartMs=new Date(data.start+'Z').getTime();
       _scrubEndMs  =new Date(data.end+'Z').getTime();
-      replaySlider.value=1000;
-      replayTimeEl.textContent=fmtScrubTime(_scrubEndMs);
+      replaySlider.value=0;
+      replayTimeEl.textContent=fmtScrubTime(_scrubStartMs);
       replayBar.style.display='flex';
     } catch(e){ console.warn('scrub_range failed:',e); }
   }
@@ -920,6 +920,11 @@
 
   function startPlayback(){
     if (_scrubStartMs==null || _playing) return;
+    // Replay opens parked at the live/end position — pressing Play from there
+    // would immediately satisfy the "reached the end" check on the very first
+    // tick and stop again with no visible motion. Restart from the beginning
+    // instead, so Play always does something.
+    if (Number(replaySlider?.value||0)>=999) scrubToFrac(0);
     _playing=true;
     if (replayPlayBtn) replayPlayBtn.textContent='⏸';
     _playTimer=setInterval(async ()=>{
