@@ -336,7 +336,8 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
 /* ── Specific tab layouts ─────────────────────────────────────────────────── */
 .bands-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--gap);align-items:start;}
 .bands-chart-wrap{background:var(--bg2);border:1px solid var(--bg3);
-  border-top:2px solid var(--green);border-radius:var(--radius);padding:10px 14px;}
+  border-top:2px solid var(--green);border-radius:var(--radius);padding:10px 14px;
+  position:relative;height:200px;}
 .bands-chart-wrap canvas{width:100%!important;}
 .fatigue-cards-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:var(--gap);}
 .fatigue-card{background:var(--bg2);border:1px solid var(--bg3);

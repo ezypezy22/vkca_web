@@ -230,6 +230,37 @@ Users are responsible for verifying all information against N1MM before making d
   window.VKA = window.VKA || {};
   window.VKA.lastSnap = () => _lastSnap;
 
+  // Canonical band->colour map, shared by every tab that draws a band-colored
+  // chart/table (bands, cluster, dupes, overview, worldmap, worked, report).
+  // Includes both key casings since different tabs historically looked keys
+  // up in different cases — safe superset, no consumer's lookup needs to change.
+  window.VKA.BAND_COLS = {
+    '160m':'#e040fb','160M':'#e040fb', '80m':'#ff6b35','80M':'#ff6b35',
+    '60m':'#f0c040','60M':'#f0c040',   '40m':'#2ed573','40M':'#2ed573',
+    '30m':'#00bcd4','30M':'#00bcd4',   '20m':'#00d4aa','20M':'#00d4aa',
+    '17m':'#64b5f6','17M':'#64b5f6',   '15m':'#ff5252','15M':'#ff5252',
+    '12m':'#ffab40','12M':'#ffab40',   '10m':'#69f0ae','10M':'#69f0ae',
+    '6m':'#ea80fc','6M':'#ea80fc',     '2m':'#80d8ff','2M':'#80d8ff',
+    '70cm':'#ccff90', '?':'#8b949e',
+  };
+
+  // Shared HTML-escaping helper for any tab that interpolates server/log data
+  // (call signs, region/contest names) into innerHTML.
+  window.VKA.escapeHtml = function (s) {
+    return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  };
+
+  // Shared pace-comparison lookup: cumulative QSOs a reference trajectory had
+  // reached at a given elapsed-hours point. Used by both the Pace tab and the
+  // Report tab's "ahead/behind pace" KPI so they always agree on the number.
+  window.VKA.refAtElapsed = function (ref, nowE) {
+    const e = ref.elapsed_hrs, c = ref.cum_qsos;
+    if (!e || !e.length) return 0;
+    if (nowE >= e[e.length - 1]) return c[c.length - 1];
+    for (let i = 0; i < e.length; i++) if (e[i] >= nowE) return c[i];
+    return c[c.length - 1];
+  };
+
   // ── File browse (native dialog, with browser-upload fallback) ──────────────
   // /api/browse triggers pywebview's native OS file dialog. That only works
   // when running inside the embedded pywebview window — if pywebview failed
@@ -579,13 +610,7 @@ Users are responsible for verifying all information against N1MM before making d
               throw new Error(errData.error||res.statusText);
             }
             const blob=await res.blob();
-            const url=URL.createObjectURL(blob);
-            const a=document.createElement('a');
-            a.href=url; a.download=csvFname;
-            document.body.appendChild(a); a.click();
-            document.body.removeChild(a); URL.revokeObjectURL(url);
-            const loc=await fetch('/api/save_location').then(r=>r.json()).catch(()=>({}));
-            showToast('✓ CSV Saved',(loc.folder||'Downloads')+'\\'+csvFname,'📄');
+            await downloadBlob(blob, csvFname, '✓ CSV Saved', '📄');
             btn.textContent='✓'; setTimeout(()=>{btn.textContent='⬇ CSV';btn.disabled=false;},2000);
           } catch(err) {
             showToast('CSV Export Failed',err.message,'✗',true);
@@ -610,7 +635,15 @@ Users are responsible for verifying all information against N1MM before making d
         showToast('Snapshot Failed', 'Nothing to capture.', '✗', true);
         return;
       }
+      const tabName = (document.querySelector('.tab-btn.active .tab-label')?.textContent || 'tab')
+        .trim().toLowerCase().replace(/\s+/g, '_');
       btn.textContent = '📷 …'; btn.disabled = true;
+      // html2canvas is async — lock tab switching for the duration so a
+      // mid-capture click can't flip `active` to display:none (the
+      // .tab-panel.active CSS rule) out from under the in-progress capture,
+      // which would produce a blank/broken image.
+      const tabBtns = Array.from(document.querySelectorAll('.tab-btn'));
+      tabBtns.forEach(b => b.disabled = true);
       try {
         const bg = getComputedStyle(document.body).backgroundColor || '#0d1117';
         const out = await html2canvas(active, {
@@ -618,26 +651,15 @@ Users are responsible for verifying all information against N1MM before making d
           scale: window.devicePixelRatio || 1,
           useCORS: true,
         });
-
-        // toDataURL()+<a href> gets silently cancelled by the download
-        // manager in some WebView2/Chromium builds — toBlob()+createObjectURL
-        // is the reliable path (same pattern CSV/report export already use).
         const blob = await new Promise(resolve => out.toBlob(resolve, 'image/png'));
-        const tabName = (document.querySelector('.tab-btn.active .tab-label')?.textContent || 'tab')
-          .trim().toLowerCase().replace(/\s+/g, '_');
         const fname = `vkcontest_${tabName}_${new Date().toISOString().slice(0,10)}.png`;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = fname;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a); URL.revokeObjectURL(url);
-
-        const loc = await fetch('/api/save_location').then(r => r.json()).catch(() => ({}));
-        showToast('✓ Snapshot Saved', (loc.folder || 'Downloads') + '\\' + fname, '📷');
+        await downloadBlob(blob, fname, '✓ Snapshot Saved', '📷');
         btn.textContent = '✓'; setTimeout(() => { btn.textContent = '📷 Snapshot'; btn.disabled = false; }, 2000);
       } catch (err) {
         showToast('Snapshot Failed', err.message, '✗', true);
         btn.textContent = '📷 Snapshot'; btn.disabled = false;
+      } finally {
+        tabBtns.forEach(b => b.disabled = false);
       }
     }
 
@@ -664,5 +686,20 @@ Users are responsible for verifying all information against N1MM before making d
     _toastTimer = setTimeout(() => _toast.classList.remove('show'), isError ? 8000 : 5000);
   }
   window.VKA.showToast = showToast;
+
+  // ── Shared "save a Blob as a downloaded file" helper ─────────────────────
+  // toDataURL()+<a href> gets silently cancelled by the download manager in
+  // some WebView2/Chromium builds — toBlob()/Blob()+createObjectURL is the
+  // reliable path. Used by CSV export, Snapshot, and the Report HTML export.
+  async function downloadBlob(blob, filename, toastTitle, toastIcon) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    const loc = await fetch('/api/save_location').then(r => r.json()).catch(() => ({}));
+    showToast(toastTitle, (loc.folder || 'Downloads') + '\\' + filename, toastIcon);
+  }
+  window.VKA.downloadBlob = downloadBlob;
 
 })();

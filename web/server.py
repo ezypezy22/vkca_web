@@ -687,8 +687,16 @@ def _yoy_build_trajectory(cl: "ContestLog") -> Optional[dict]:
     }
 
 
-def _yoy_collect_series(db_path: str, existing_keys: set) -> list:
-    """Load every real contest (with QSOs) from db_path into YOY series dicts."""
+def _yoy_collect_series(db_path: str, existing_keys: set, current_plugin_type=None) -> list:
+    """Load every real contest (with QSOs) from db_path into YOY series dicts.
+
+    current_plugin_type, when given, restricts results to contests handled by
+    the SAME plugin class as the currently-loaded log (e.g. CQWWPlugin covers
+    both the CW and SSB weekends) — mirrors _pace_collect_same_contest's
+    "auto" reference matching, used by the Report tab so its YoY comparison
+    only ever shows other years of the contest actually loaded, not every
+    contest type ever logged in the database.
+    """
     out = []
     try:
         contests = ContestLog.available_contests(db_path)
@@ -706,7 +714,9 @@ def _yoy_collect_series(db_path: str, existing_keys: set) -> list:
         if key in existing_keys:
             continue
         try:
-            p  = plugin_for(contest_name)
+            p = plugin_for(contest_name)
+            if current_plugin_type is not None and type(p) is not current_plugin_type:
+                continue
             cl = ContestLog(db_path, contest_nr=ci["ContestNR"], plugin=p)
             if not cl.qsos:
                 continue
@@ -733,24 +743,29 @@ def _yoy_collect_series(db_path: str, existing_keys: set) -> list:
     return out
 
 
-def _yoy_full_state() -> dict:
+def _yoy_full_state(same_contest: bool = False) -> dict:
     existing_keys: set = set()
     series = []
     with STATE._lock:
         primary = STATE.db_path
+        cl      = STATE.contest_log
         extra_paths = list(STATE.yoy_extra_paths)
+    current_plugin_type = type(cl.plugin) if (same_contest and cl) else None
     if primary:
-        series.extend(_yoy_collect_series(primary, existing_keys))
+        series.extend(_yoy_collect_series(primary, existing_keys, current_plugin_type))
     for p in extra_paths:
-        series.extend(_yoy_collect_series(p, existing_keys))
+        series.extend(_yoy_collect_series(p, existing_keys, current_plugin_type))
     return {"series": _json_safe(series), "extra_paths": extra_paths}
 
 
 @app.get("/api/yoy")
-async def api_yoy():
+async def api_yoy(same_contest: bool = False):
     """Year-on-Year comparison: trajectories for every contest-year found in
-    the current .s3db plus any extra logs added via /api/yoy/add_log."""
-    return await asyncio.get_event_loop().run_in_executor(None, _yoy_full_state)
+    the current .s3db plus any extra logs added via /api/yoy/add_log.
+
+    ?same_contest=true restricts to contest-years handled by the same plugin
+    as the currently-loaded log (used by the Report tab — see _yoy_collect_series)."""
+    return await asyncio.get_event_loop().run_in_executor(None, _yoy_full_state, same_contest)
 
 
 @app.post("/api/yoy/add_log")

@@ -25,9 +25,7 @@
     return PALETTE[Math.max(idx, 0) % PALETTE.length];
   }
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  }
+  const escapeHtml = window.VKA.escapeHtml;
 
   function showMsg(text) {
     const el = document.getElementById('yoy-msg');

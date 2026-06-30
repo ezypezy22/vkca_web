@@ -219,18 +219,10 @@
     const idx = _refs.findIndex(r => r.key === key);
     return PALETTE[Math.max(idx, 0) % PALETTE.length];
   }
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  }
+  const escapeHtml = window.VKA.escapeHtml;
   function escapeAttr(s) { return escapeHtml(s); }
 
-  function refAtElapsed(ref, nowE) {
-    const e = ref.elapsed_hrs, c = ref.cum_qsos;
-    if (!e || !e.length) return 0;
-    if (nowE >= e[e.length-1]) return c[c.length-1];
-    for (let i = 0; i < e.length; i++) if (e[i] >= nowE) return c[i];
-    return c[c.length-1];
-  }
+  const refAtElapsed = window.VKA.refAtElapsed;
 
   function visibleRefs() { return _refs.filter(r => !_hidden.has(r.key)); }
 

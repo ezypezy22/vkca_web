@@ -260,9 +260,7 @@
   let _fLoaded         = false;
   let yoyFatigueChart  = null;
 
-  function escapeHtmlF(s) {
-    return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  }
+  const escapeHtmlF = window.VKA.escapeHtml;
 
   async function loadFatigueYoy() {
     const msg     = document.getElementById('fatigue-yoy-msg');

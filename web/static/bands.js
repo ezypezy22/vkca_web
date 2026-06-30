@@ -6,12 +6,7 @@
 ;(function () {
   'use strict';
 
-  const BAND_COLS = {
-    '160m':'#e040fb','80m':'#ff6b35','60m':'#f0c040','40m':'#2ed573',
-    '30m':'#00bcd4', '20m':'#00d4aa','17m':'#64b5f6','15m':'#ff5252',
-    '12m':'#ffab40', '10m':'#69f0ae','6m': '#ea80fc','2m': '#80d8ff',
-    '70cm':'#ccff90',
-  };
+  const BAND_COLS = window.VKA.BAND_COLS;
 
   const C = {
     bg3: '#21262d', muted: '#8b949e', fg: '#e6edf3', green: '#2ed573',

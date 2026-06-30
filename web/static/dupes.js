@@ -6,11 +6,7 @@
   'use strict';
   const C = { accent:'#00d4aa', accent2:'#ff6b35', muted:'#8b949e',
                bg3:'#21262d', fg:'#e6edf3', accent3:'#f0c040', green:'#2ed573' };
-  const BAND_COLS = {
-    '160M':'#e040fb','80M':'#ff6b35','60M':'#f0c040','40M':'#2ed573',
-    '30M':'#00bcd4','20M':'#00d4aa','17M':'#64b5f6','15M':'#ff5252',
-    '12M':'#ffab40','10M':'#69f0ae','6M':'#ea80fc','2M':'#80d8ff',
-  };
+  const BAND_COLS = window.VKA.BAND_COLS;
 
   let bandChart = null;
 

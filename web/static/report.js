@@ -13,19 +13,21 @@
   'use strict';
   const C = { accent:'#00d4aa', accent2:'#ff6b35', accent3:'#f0c040',
               muted:'#8b949e', bg3:'#21262d', fg:'#e6edf3', green:'#2ed573' };
-  const BAND_COLS = {
-    '160m':'#e040fb','80m':'#ff6b35','60m':'#f0c040','40m':'#2ed573',
-    '30m':'#00bcd4', '20m':'#00d4aa','17m':'#64b5f6','15m':'#ff5252',
-    '12m':'#ffab40', '10m':'#69f0ae','6m': '#ea80fc','2m': '#80d8ff',
-    '70cm':'#ccff90',
-  };
+  const BAND_COLS  = window.VKA.BAND_COLS;
+  const escapeHtml = window.VKA.escapeHtml;
+  const refAtElapsed = window.VKA.refAtElapsed;
 
   let rateChart = null, scoreChart = null, bandChart = null, dupeChart = null;
-  let _refLoaded = false;
+  let _refLoaded  = false;
+  let _liveReady  = false;   // true once the first dupes fetch has resolved
+  // Retained source data so exportReport() builds from data, not from
+  // already-rendered DOM (which would couple the export to live markup).
+  let _lastDupes = null, _lastYoy = null, _lastPace = null;
+  // Bumped on every new log load — lets updateLive()/loadReference() detect
+  // and discard a fetch that was still in flight for the PREVIOUS log when a
+  // new one loaded, instead of overwriting fresh state with stale data.
+  let _loadGeneration = 0;
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  }
   function set(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
 
   // ── Top-level state (loading / empty / error / content) ─────────────────
@@ -41,6 +43,13 @@
       if (state === 'error') error.textContent = '⚠ ' + (msg || 'Failed to load report.');
     }
     if (content) content.style.display = state === 'content' ? '' : 'none';
+    if (state !== 'content') setExportEnabled(false);
+  }
+
+  function setExportEnabled(enabled) {
+    _liveReady = enabled;
+    const btn = document.getElementById('report-export-btn');
+    if (btn) btn.disabled = !enabled;
   }
 
   function isTabActive() {
@@ -53,7 +62,13 @@
 
   // ── Cheap per-snapshot-tick update (no fetch except /api/dupes) ─────────
   async function updateLive(snap) {
+    // A server-side compute_snapshot() exception comes back as {"error":...}
+    // (see STATE._safe_snapshot in server.py) — that shape also lacks
+    // `sparklines`, so without this check it would be indistinguishable from
+    // "no log loaded" and silently show the wrong empty state.
+    if (snap && snap.error) { showState('error', snap.error); return; }
     if (!hasLog(snap)) { showState('empty'); return; }
+    const gen = _loadGeneration;
     try {
       showState('content');
       set('report-generated', 'Generated ' + new Date().toLocaleString());
@@ -63,24 +78,39 @@
       renderBandSection(snap.band_efficiency || [], snap.missing || 0);
       renderRegionTable(snap.region_heat || []);
       const dupes = await fetch('/api/dupes').then(r => r.json());
+      // A new log may have loaded while the fetch above was in flight —
+      // applying this response now would overwrite the new log's state with
+      // data scraped from the log that's no longer open.
+      if (gen !== _loadGeneration) return;
+      _lastDupes = dupes;
       renderDupeSection(dupes);
+      setExportEnabled(true);
     } catch (err) {
       console.warn('Report live update failed:', err);
-      showState('error', err.message);
+      if (gen === _loadGeneration) showState('error', err.message);
     }
   }
 
   // ── One-shot reference data (YoY history + Pace reference logs) ─────────
   async function loadReference() {
+    const gen = _loadGeneration;
     try {
-      const [yoy, pace] = await Promise.all([
-        fetch('/api/yoy').then(r => r.json()),
+      // ?same_contest=true (yoy) / source==='auto' (pace) both restrict to
+      // other years of the SAME contest as the one currently loaded — this
+      // tab is an end-of-contest summary, not a cross-contest browser, so it
+      // should never mix in e.g. a CQWW year while a VK Shires log is open.
+      const [yoy, paceRaw] = await Promise.all([
+        fetch('/api/yoy?same_contest=true').then(r => r.json()),
         fetch('/api/pace').then(r => r.json()),
       ]);
+      if (gen !== _loadGeneration) return;   // stale — a new log loaded meanwhile
+      const pace = { ...paceRaw, refs: (paceRaw.refs || []).filter(r => r.source === 'auto') };
+      _lastYoy = yoy; _lastPace = pace;
       renderComparison(yoy, pace, window.VKA.lastSnap());
       _refLoaded = true;
     } catch (err) {
       console.warn('Report reference data load failed:', err);
+      if (gen !== _loadGeneration) return;
       const msg = document.getElementById('report-comparison-msg');
       if (msg) { msg.style.display = 'block'; msg.textContent = 'Failed to load comparison data: ' + err.message; }
     }
@@ -88,35 +118,61 @@
 
   async function refresh() {
     const snap = window.VKA.lastSnap();
+    if (snap && snap.error) { showState('error', snap.error); return; }
     if (!hasLog(snap)) { showState('empty'); return; }
-    if (!_refLoaded) showState('loading');
-    await updateLive(snap);
-    if (!_refLoaded) await loadReference();
+    if (!_refLoaded) {
+      showState('loading');
+      // Independent network calls (different endpoints, no shared state) —
+      // run concurrently instead of paying three serial round-trips.
+      await Promise.all([updateLive(snap), loadReference()]);
+    } else {
+      await updateLive(snap);
+    }
   }
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
-  function renderKPIs(snap) {
+  // session_status.total_elapsed_mins (live) / elapsed_mins (pre=0, over=full
+  // length) gives actual elapsed time — NOT sparklines.qsos.length, which is
+  // sized to the contest's full *scheduled* duration regardless of how much
+  // has actually elapsed, and would show e.g. "48h" two hours into a 48h contest.
+  function elapsedHours(snap) {
+    const ss = snap.session_status || {};
+    const mins = ss.total_elapsed_mins ?? ss.elapsed_mins ?? 0;
+    return mins / 60;
+  }
+
+  function computeKPIs(snap) {
     const total   = snap.total || 0;
     const valid   = snap.valid || 0;
     const dupePct = total > 0 ? Math.max(0, total - valid) / total * 100 : 0;
     const pb      = snap.personal_bests || {};
-    const hours   = (snap.sparklines?.qsos || []).length;
+    return {
+      score:    (snap.score  || 0).toLocaleString(),
+      qsos:     valid.toLocaleString(),
+      mults:    (snap.worked || 0).toLocaleString(),
+      dupes:    dupePct.toFixed(1) + '%',
+      besthr:   String(pb.best_hour_rate || 0),
+      duration: elapsedHours(snap).toFixed(1) + 'h',
+    };
+  }
 
-    set('report-kpi-score',    (snap.score  || 0).toLocaleString());
-    set('report-kpi-qsos',     valid.toLocaleString());
-    set('report-kpi-mults',    (snap.worked || 0).toLocaleString());
-    set('report-kpi-dupes',    dupePct.toFixed(1) + '%');
-    set('report-kpi-besthr',   pb.best_hour_rate || 0);
-    set('report-kpi-duration', hours + 'h');
+  const KPI_META = [
+    ['score', 'Final Score'], ['qsos', 'Total QSOs'], ['mults', 'Total Mults'],
+    ['dupes', 'Dupe Rate'], ['besthr', 'Best Hour Rate'], ['duration', 'Duration'],
+  ];
+
+  function renderKPIs(snap) {
+    const k = computeKPIs(snap);
+    KPI_META.forEach(([key]) => set('report-kpi-' + key, k[key]));
   }
 
   // ── QSO rate chart (from snapshot sparklines — no fetch) ────────────────
   function renderRateChart(snap) {
     const canvas = document.getElementById('chart-report-rate');
     const values = snap.sparklines?.qsos || [];
+    if (rateChart) { rateChart.destroy(); rateChart = null; }
     if (!canvas || !values.length) return;
     const labels = values.map((_, i) => `h${i}`);
-    if (rateChart) { rateChart.destroy(); rateChart = null; }
     rateChart = new Chart(canvas.getContext('2d'), {
       type: 'bar',
       data: { labels, datasets: [{ label: 'QSOs', data: values,
@@ -138,9 +194,9 @@
   function renderScoreChart(snap) {
     const canvas = document.getElementById('chart-report-score');
     const hist   = snap.sparklines?.running_score || [];
+    if (scoreChart) { scoreChart.destroy(); scoreChart = null; }
     if (!canvas || !hist.length) return;
     const labels = hist.map((_, i) => `h${i}`);
-    if (scoreChart) { scoreChart.destroy(); scoreChart = null; }
     scoreChart = new Chart(canvas.getContext('2d'), {
       type: 'line',
       data: { labels, datasets: [{ label: 'Score', data: hist,
@@ -159,33 +215,53 @@
     });
   }
 
+  // ── Shared row-builders: single source of truth for table content,
+  // consumed by both the live DOM tables AND the HTML export, so a future
+  // formatting/sort change only needs to happen in one place and the export
+  // never drifts from what's on screen. A cell is either a plain value or
+  // {text, color, bold} when it needs styling (e.g. per-band coloring).
+  function cellHtml(c) {
+    if (c && typeof c === 'object' && 'text' in c) {
+      const style = [c.color ? `color:${c.color}` : '', c.bold ? 'font-weight:bold' : ''].filter(Boolean).join(';');
+      return `<td${style ? ` style="${style}"` : ''}>${c.text}</td>`;
+    }
+    return `<td>${c}</td>`;
+  }
+  function renderRowsToTbody(tbody, rows, emptyHtml) {
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!rows.length) { tbody.innerHTML = emptyHtml; return; }
+    const frag = document.createDocumentFragment();
+    rows.forEach(cells => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = cells.map(cellHtml).join('');
+      frag.appendChild(tr);
+    });
+    tbody.appendChild(frag);
+  }
+
+  function bandRows(bands) {
+    return (bands || []).map(r => {
+      const col = BAND_COLS[(r.band||'').toLowerCase()] || C.muted;
+      return [
+        { text: (r.band||'').toLowerCase(), color: col, bold: true },
+        r.qsos || 0, r.new_shires || 0, (r.efficiency || 0).toFixed(3),
+      ];
+    });
+  }
+
   // ── Band & multiplier breakdown (from snapshot — no fetch) ──────────────
   function renderBandSection(bands, missingCount) {
     const canvas = document.getElementById('chart-report-bands');
     const tbody  = document.getElementById('report-bands-tbody');
     bands = bands || [];
+    renderRowsToTbody(tbody, bandRows(bands), '');
 
-    if (tbody) {
-      tbody.innerHTML = '';
-      const frag = document.createDocumentFragment();
-      bands.forEach(r => {
-        const col = BAND_COLS[(r.band||'').toLowerCase()] || C.muted;
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td style="color:${col};font-weight:bold">${(r.band||'').toLowerCase()}</td>
-          <td>${r.qsos || 0}</td>
-          <td>${r.new_shires || 0}</td>
-          <td>${(r.efficiency || 0).toFixed(3)}</td>`;
-        frag.appendChild(tr);
-      });
-      tbody.appendChild(frag);
-    }
-
+    if (bandChart) { bandChart.destroy(); bandChart = null; }
     if (canvas && bands.length) {
       const labels  = bands.map(r => (r.band||'').toLowerCase());
       const effic   = bands.map(r => r.efficiency || 0);
       const colours = labels.map(b => BAND_COLS[b] || C.muted);
-      if (bandChart) { bandChart.destroy(); bandChart = null; }
       bandChart = new Chart(canvas.getContext('2d'), {
         type: 'bar',
         data: { labels, datasets: [{ label: 'Efficiency', data: effic,
@@ -203,39 +279,36 @@
     }
 
     const summary = document.getElementById('report-missing-summary');
-    if (summary) {
-      const n = missingCount || 0;
-      summary.textContent = n
-        ? `${n} multiplier${n!==1?'s':''} still missing — see the Missing Mults tab for the full list.`
-        : 'All multipliers worked — clean sweep!';
-    }
+    if (summary) summary.textContent = computeMissingSummary(missingCount);
+  }
+
+  function computeMissingSummary(missingCount) {
+    const n = missingCount || 0;
+    return n
+      ? `${n} multiplier${n!==1?'s':''} still missing — see the Missing Mults tab for the full list.`
+      : 'All multipliers worked — clean sweep!';
+  }
+
+  function dupeRows(dupes) {
+    const entries = Object.entries(dupes?.by_call || {}).sort((a, b) => b[1] - a[1]);
+    return entries.map(([call, n]) => [
+      { text: escapeHtml(call), color: 'var(--accent2)', bold: true }, n,
+    ]);
   }
 
   // ── Dupes & data quality ─────────────────────────────────────────────────
   function renderDupeSection(dupes) {
     const byBand = dupes?.by_band || {};
-    const byCall = dupes?.by_call || {};
     const canvas = document.getElementById('chart-report-dupes');
     const tbody  = document.getElementById('report-dupes-tbody');
+    renderRowsToTbody(tbody, dupeRows(dupes),
+      '<tr><td colspan="2" style="color:var(--green);padding:10px">No duplicate QSOs — clean log!</td></tr>');
 
-    if (tbody) {
-      const entries = Object.entries(byCall).sort((a, b) => b[1] - a[1]);
-      tbody.innerHTML = entries.length ? '' :
-        '<tr><td colspan="2" style="color:var(--green);padding:10px">No duplicate QSOs — clean log!</td></tr>';
-      const frag = document.createDocumentFragment();
-      entries.forEach(([call, n]) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td style="color:var(--accent2);font-weight:bold">${escapeHtml(call)}</td><td>${n}</td>`;
-        frag.appendChild(tr);
-      });
-      tbody.appendChild(frag);
-    }
-
+    if (dupeChart) { dupeChart.destroy(); dupeChart = null; }
     if (canvas) {
       const bands  = Object.keys(byBand);
       const values = bands.map(b => byBand[b]);
       const cols   = bands.map(b => BAND_COLS[(b||'').toLowerCase()] || C.muted);
-      if (dupeChart) { dupeChart.destroy(); dupeChart = null; }
       canvas.style.display = bands.length ? '' : 'none';
       if (bands.length) {
         dupeChart = new Chart(canvas.getContext('2d'), {
@@ -256,35 +329,50 @@
     }
   }
 
+  function regionRows(regions) {
+    return (regions || []).slice(0, 15).map(r => [
+      escapeHtml(r.state || '—'), r.qsos || 0, `${r.worked || 0} / ${r.total || 0}`, `${(r.pct || 0).toFixed(0)}%`,
+    ]);
+  }
+
   // ── Top worked regions (propagation/activity proxy) ─────────────────────
   function renderRegionTable(regions) {
     const tbody = document.getElementById('report-regions-tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    if (!regions.length) {
-      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted);padding:10px">No regional data for this contest.</td></tr>';
-      return;
-    }
-    const frag = document.createDocumentFragment();
-    regions.slice(0, 15).forEach(r => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${escapeHtml(r.state || '—')}</td>
-        <td>${r.qsos || 0}</td>
-        <td>${r.worked || 0} / ${r.total || 0}</td>
-        <td>${(r.pct || 0).toFixed(0)}%</td>`;
-      frag.appendChild(tr);
-    });
-    tbody.appendChild(frag);
+    renderRowsToTbody(tbody, regionRows(regions),
+      '<tr><td colspan="4" style="color:var(--muted);padding:10px">No regional data for this contest.</td></tr>');
   }
 
   // ── Pace vs goal & year-on-year comparison ───────────────────────────────
-  function refAtElapsed(ref, nowE) {
-    const e = ref.elapsed_hrs, c = ref.cum_qsos;
-    if (!e || !e.length) return 0;
-    if (nowE >= e[e.length - 1]) return c[c.length - 1];
-    for (let i = 0; i < e.length; i++) if (e[i] >= nowE) return c[i];
-    return c[c.length - 1];
+  function buildInsightParts(yoy, pace, snap) {
+    const series = yoy?.series || [];
+    const refs   = pace?.refs  || [];
+    const parts  = [];
+    if (series.length) {
+      const best = series.reduce((a, b) => (b.final_score||0) > (a.final_score||0) ? b : a, series[0]);
+      const cur  = snap?.score || 0;
+      const diff = cur - (best.final_score || 0);
+      parts.push(diff >= 0
+        ? `🚀 ${diff.toLocaleString()} pts ahead of your best year (${best.year}).`
+        : `${Math.abs(diff).toLocaleString()} pts behind your best year (${best.year}, ${(best.final_score||0).toLocaleString()} pts).`);
+    }
+    const live = pace?.live;
+    if (refs.length && live?.elapsed_hrs?.length) {
+      const nowE      = live.elapsed_hrs[live.elapsed_hrs.length - 1];
+      const liveTotal = live.cum_qsos[live.cum_qsos.length - 1];
+      const best      = refs.reduce((a, b) => refAtElapsed(b, nowE) > refAtElapsed(a, nowE) ? b : a, refs[0]);
+      const deficit   = refAtElapsed(best, nowE) - liveTotal;
+      parts.push(deficit > 0
+        ? `⚠ ${deficit} QSOs behind ${best.year} pace at this point in the contest.`
+        : `✅ ${Math.abs(deficit)} QSOs ahead of ${best.year} pace at this point in the contest.`);
+    }
+    return parts;
+  }
+
+  function yoyRows(series) {
+    return [...(series || [])].sort((a, b) => (b.final_score||0) - (a.final_score||0)).map(s => [
+      s.year || '?', escapeHtml(s.display_name || s.contest_name || ''),
+      (s.final_score || 0).toLocaleString(), (s.final_qsos || 0).toLocaleString(), (s.final_mults || 0).toLocaleString(),
+    ]);
   }
 
   function renderComparison(yoy, pace, snap) {
@@ -306,136 +394,129 @@
     if (msg) msg.style.display = 'none';
     if (content) content.style.display = '';
 
-    if (tbody) {
-      tbody.innerHTML = '';
-      const frag = document.createDocumentFragment();
-      [...series].sort((a, b) => (b.final_score||0) - (a.final_score||0)).forEach(s => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${s.year || '?'}</td>
-          <td>${escapeHtml(s.display_name || s.contest_name || '')}</td>
-          <td>${(s.final_score || 0).toLocaleString()}</td>
-          <td>${(s.final_qsos  || 0).toLocaleString()}</td>
-          <td>${(s.final_mults || 0).toLocaleString()}</td>`;
-        frag.appendChild(tr);
-      });
-      tbody.appendChild(frag);
-    }
+    renderRowsToTbody(tbody, yoyRows(series), '');
 
-    const parts = [];
-    if (series.length) {
-      const best = series.reduce((a, b) => (b.final_score||0) > (a.final_score||0) ? b : a, series[0]);
-      const cur  = snap?.score || 0;
-      const diff = cur - (best.final_score || 0);
-      parts.push(diff >= 0
-        ? `🚀 ${diff.toLocaleString()} pts ahead of your best year (${best.year}).`
-        : `${Math.abs(diff).toLocaleString()} pts behind your best year (${best.year}, ${(best.final_score||0).toLocaleString()} pts).`);
-    }
-    const live = pace?.live;
-    if (refs.length && live?.elapsed_hrs?.length) {
-      const nowE      = live.elapsed_hrs[live.elapsed_hrs.length - 1];
-      const liveTotal = live.cum_qsos[live.cum_qsos.length - 1];
-      const best      = refs.reduce((a, b) => refAtElapsed(b, nowE) > refAtElapsed(a, nowE) ? b : a, refs[0]);
-      const deficit   = refAtElapsed(best, nowE) - liveTotal;
-      parts.push(deficit > 0
-        ? `⚠ ${deficit} QSOs behind ${best.year} pace at this point in the contest.`
-        : `✅ ${Math.abs(deficit)} QSOs ahead of ${best.year} pace at this point in the contest.`);
-    }
-    if (insight) insight.textContent = parts.join('   ') || 'No comparison data available yet.';
+    if (insight) insight.textContent = buildInsightParts(yoy, pace, snap).join('   ') || 'No comparison data available yet.';
   }
 
-  // ── Standalone HTML export ───────────────────────────────────────────────
+  // ── Standalone HTML export — built from the SAME row-builders the live
+  // tables use (bandRows/dupeRows/regionRows/yoyRows above), via the same
+  // cellHtml() styling so per-band colors / bold callsigns survive into the
+  // exported document instead of degrading to one flat accent color.
+  function buildTable(headers, rows) {
+    const thead = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>`;
+    const tbody = `<tbody>${rows.map(r => `<tr>${r.map(cellHtml).join('')}</tr>`).join('')}</tbody>`;
+    return `<table>${thead}${tbody}</table>`;
+  }
+
+  function exportBandsTable(snap) {
+    const rows = bandRows(snap.band_efficiency);
+    if (!rows.length) return '<p class="meta">No band data.</p>';
+    return buildTable(['Band','QSOs','New Mults','Efficiency'], rows);
+  }
+
+  function exportDupesTable(dupes) {
+    const rows = dupeRows(dupes);
+    if (!rows.length) return '<p class="meta" style="color:#2ed573">No duplicate QSOs — clean log!</p>';
+    return buildTable(['Callsign','Dupes'], rows);
+  }
+
+  function exportRegionTable(snap) {
+    const rows = regionRows(snap.region_heat);
+    if (!rows.length) return '<p class="meta">No regional data for this contest.</p>';
+    return buildTable(['Region','QSOs','Mults Worked','% Complete'], rows);
+  }
+
+  function exportYoyTable(yoy) {
+    const rows = yoyRows(yoy?.series);
+    if (!rows.length) return '';
+    return buildTable(['Year','Contest','Score','QSOs','Mults'], rows);
+  }
+
   async function exportReport() {
     const btn = document.getElementById('report-export-btn');
     if (btn) { btn.disabled = true; btn.textContent = '⬇ …'; }
     try {
+      const snap = window.VKA.lastSnap();
+      if (!hasLog(snap)) throw new Error('No report data loaded yet.');
+
+      // Only embed charts that actually have a live Chart.js instance — an
+      // empty/never-rendered canvas still measures the browser's default
+      // 300x150 backing store, so checking canvas.width alone can't tell
+      // "never drawn into" from "really has content".
       const charts = [
-        ['QSO Rate by Hour', document.getElementById('chart-report-rate')],
-        ['Running Score',    document.getElementById('chart-report-score')],
-        ['Band Efficiency',  document.getElementById('chart-report-bands')],
-        ['Dupes by Band',    document.getElementById('chart-report-dupes')],
+        ['QSO Rate by Hour', rateChart],
+        ['Running Score',    scoreChart],
+        ['Band Efficiency',  bandChart],
+        ['Dupes by Band',    dupeChart],
       ];
       const chartHtml = charts
-        .filter(([, c]) => c && c.style.display !== 'none' && c.width > 0)
-        .map(([title, c]) => `
+        .filter(([, chart]) => chart)
+        .map(([title, chart]) => `
           <div style="margin-bottom:24px">
-            <h3 style="font-family:Consolas,monospace;color:#8b949e;font-size:13px;
+            <h3 style="font-family:Consolas,monospace;color:${C.muted};font-size:13px;
                 text-transform:uppercase;letter-spacing:.08em">${title}</h3>
-            <img src="${c.toDataURL('image/png')}" style="max-width:100%;background:#161b22;border-radius:6px">
+            <img src="${chart.canvas.toDataURL('image/png')}" style="max-width:100%;background:#161b22;border-radius:6px">
           </div>`).join('');
 
-      const kpiHtml = ['score','qsos','mults','dupes','besthr','duration'].map(k => {
-        const el  = document.getElementById('report-kpi-' + k);
-        const lbl = el?.parentElement?.querySelector('.pace-label')?.textContent || k;
-        return `<div style="background:#161b22;border:1px solid #21262d;border-radius:6px;
+      const k = computeKPIs(snap);
+      const kpiHtml = KPI_META.map(([key, label]) => `<div style="background:#161b22;border:1px solid ${C.bg3};border-radius:6px;
             padding:10px;text-align:center;min-width:110px">
-          <div style="font-family:Consolas,monospace;font-size:20px;font-weight:bold;color:#00d4aa">${el?.textContent || '—'}</div>
-          <div style="font-family:Consolas,monospace;font-size:10px;color:#8b949e;
-              text-transform:uppercase;letter-spacing:.06em">${lbl}</div>
-        </div>`;
-      }).join('');
+          <div style="font-family:Consolas,monospace;font-size:20px;font-weight:bold;color:${C.accent}">${k[key]}</div>
+          <div style="font-family:Consolas,monospace;font-size:10px;color:${C.muted};
+              text-transform:uppercase;letter-spacing:.06em">${label}</div>
+        </div>`).join('');
 
-      const bandsTable  = document.getElementById('report-bands-tbody')?.closest('.table-wrap')?.outerHTML || '';
-      const dupesTable  = document.getElementById('report-dupes-tbody')?.closest('.table-wrap')?.outerHTML || '';
-      const regionTable = document.getElementById('report-regions-tbody')?.closest('.table-wrap')?.outerHTML || '';
-      const yoyTable    = document.getElementById('report-yoy-tbody')?.closest('.table-wrap')?.outerHTML || '';
-      const insightText = document.getElementById('report-pace-insight')?.textContent || '';
-      const missingText = document.getElementById('report-missing-summary')?.textContent || '';
-      const generated   = document.getElementById('report-generated')?.textContent || '';
+      const missingText = computeMissingSummary(snap.missing || 0);
+      const insightText = buildInsightParts(_lastYoy, _lastPace, snap).join('   ') || 'No comparison data available yet.';
+      const generated    = document.getElementById('report-generated')?.textContent || '';
 
       const html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <title>VK Contest Analyzer — Report</title>
 <style>
-  body{background:#0d1117;color:#e6edf3;font-family:Consolas,monospace;padding:28px;max-width:900px;margin:0 auto}
-  h1{font-size:20px;color:#e6edf3}
-  h2{font-size:14px;color:#8b949e;text-transform:uppercase;letter-spacing:.08em;
-     border-top:2px solid #00d4aa;padding-top:10px;margin-top:30px}
-  .meta{color:#8b949e;font-size:12px;margin-bottom:20px}
+  body{background:#0d1117;color:${C.fg};font-family:Consolas,monospace;padding:28px;max-width:900px;margin:0 auto}
+  h1{font-size:20px;color:${C.fg}}
+  h2{font-size:14px;color:${C.muted};text-transform:uppercase;letter-spacing:.08em;
+     border-top:2px solid ${C.accent};padding-top:10px;margin-top:30px}
+  .meta{color:${C.muted};font-size:12px;margin-bottom:20px}
   .kpi-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
   table{width:100%;border-collapse:collapse;font-family:Consolas,monospace;font-size:13px;margin-bottom:10px}
-  thead th{background:#21262d;color:#00d4aa;text-align:left;padding:6px 10px;
+  thead th{background:${C.bg3};color:${C.accent};text-align:left;padding:6px 10px;
     font-size:11px;letter-spacing:.08em;text-transform:uppercase}
-  tbody tr{border-bottom:1px solid #21262d}
+  tbody tr{border-bottom:1px solid ${C.bg3}}
   tbody tr:nth-child(even){background:#1a1f26}
-  tbody td{padding:5px 10px;color:#e6edf3}
-  tbody td:first-child{color:#00d4aa;font-weight:bold}
+  tbody td{padding:5px 10px;color:${C.fg}}
+  tbody td:first-child{color:${C.accent};font-weight:bold}
 </style></head>
 <body>
   <h1>⬡ VK CONTEST ANALYZER — End-of-Contest Report</h1>
   <div class="meta">${escapeHtml(generated)}</div>
   <div class="kpi-row">${kpiHtml}</div>
   <h2>QSO Rate &amp; Score</h2>
-  ${chartHtml}
+  ${chartHtml || '<p class="meta">No chart data yet.</p>'}
   <h2>Band &amp; Multiplier Breakdown</h2>
-  ${bandsTable}
+  ${exportBandsTable(snap)}
   <div class="meta">${escapeHtml(missingText)}</div>
   <h2>Dupes &amp; Data Quality</h2>
-  ${dupesTable}
+  ${exportDupesTable(_lastDupes)}
   <h2>Top Worked Regions</h2>
-  ${regionTable}
+  ${exportRegionTable(snap)}
   <h2>Pace vs Goal &amp; Year-on-Year</h2>
-  ${yoyTable}
+  ${exportYoyTable(_lastYoy) || '<p class="meta">Load reference logs in the Pace or Year-on-Year tab to enable goal/history comparison.</p>'}
   <div class="meta">${escapeHtml(insightText)}</div>
 </body></html>`;
 
       const blob  = new Blob([html], { type: 'text/html' });
-      const url   = URL.createObjectURL(blob);
       const fname = `vkcontest_report_${new Date().toISOString().slice(0,10)}.html`;
-      const a = document.createElement('a');
-      a.href = url; a.download = fname;
-      document.body.appendChild(a); a.click();
-      document.body.removeChild(a); URL.revokeObjectURL(url);
-
-      const loc = await fetch('/api/save_location').then(r => r.json()).catch(() => ({}));
-      window.VKA?.showToast?.('✓ Report Saved', (loc.folder || 'Downloads') + '\\' + fname, '📑');
+      await window.VKA.downloadBlob(blob, fname, '✓ Report Saved', '📑');
       if (btn) {
         btn.textContent = '✓';
-        setTimeout(() => { btn.textContent = '⬇ Export Report (HTML)'; btn.disabled = false; }, 2000);
+        setTimeout(() => { btn.textContent = '⬇ Export Report (HTML)'; btn.disabled = !_liveReady; }, 2000);
       }
     } catch (err) {
       window.VKA?.showToast?.('Report Export Failed', err.message, '✗', true);
-      if (btn) { btn.textContent = '⬇ Export Report (HTML)'; btn.disabled = false; }
+      if (btn) { btn.textContent = '⬇ Export Report (HTML)'; btn.disabled = !_liveReady; }
     }
   }
 
@@ -445,6 +526,11 @@
   window.addEventListener('vka:snapshot', e => { if (isTabActive()) updateLive(e.detail); });
   // Full refresh (live + reference data, if not already loaded) on tab open.
   window.addEventListener('vka:tabchange', e => { if (e.detail.tab === 'report') refresh(); });
-  // New log opened — reference data (YoY/Pace) needs to be refetched for it.
-  window.addEventListener('vka:loaded', () => { _refLoaded = false; });
+  // New log opened — reference data (YoY/Pace) needs to be refetched for it,
+  // and any fetch still in flight for the PREVIOUS log must be invalidated.
+  window.addEventListener('vka:loaded', () => {
+    _loadGeneration++;
+    _refLoaded = false; _lastDupes = null; _lastYoy = null; _lastPace = null;
+    setExportEnabled(false);
+  });
 })();

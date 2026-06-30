@@ -21,11 +21,10 @@
     green:'#2ed573',  red:'#ff4757',     muted:'#8b949e',
     bg:'#0d1117',     bg2:'#161b22',     bg3:'#21262d',    fg:'#e6edf3',
   };
-  let BAND_COLS = {
-    '160M':'#e040fb','80M':'#ff6b35','60M':'#f0c040','40M':'#2ed573',
-    '30M':'#00bcd4','20M':'#00d4aa','17M':'#64b5f6','15M':'#ff5252',
-    '12M':'#ffab40','10M':'#69f0ae','6M':'#ea80fc','2M':'#80d8ff',
-  };
+  // Independent copy (not a shared reference) — onTheme() below mutates this
+  // per-tab for colorblind-safe palettes, and that mutation must not leak
+  // into every other tab's band colors via the shared window.VKA.BAND_COLS object.
+  let BAND_COLS = { ...window.VKA.BAND_COLS };
   let STATE_COLS = {
     NSW:'#00d4aa',QLD:'#f0c040',VIC:'#64b5f6',SA:'#ff6b35',
     WA:'#e040fb', TAS:'#2ed573',NT:'#ff5252',ACT:'#ffab40',
