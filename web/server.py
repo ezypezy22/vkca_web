@@ -1991,7 +1991,6 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
     port = port or _find_free_port()
     url  = f"http://127.0.0.1:{port}"
     STATE._base_url = url
-    log.info("Web UI: %s  (open this in a normal browser to debug /hud or /popout/<key> rendering)", url)
 
     # Pre-load if a valid file was passed on the command line
     if db_path and os.path.isfile(db_path):

@@ -118,10 +118,16 @@
   let _longLayer    = null;
   let _homeMarker   = null;
   let _allData      = [];
+  let _lastLoadAt   = 0;
+  const LOAD_THROTTLE_MS = 8000;   // map data/geometry don't need to rebuild every snapshot tick
   let _filterBand   = 'ALL';
   let _showShort    = true;
   let _showLong     = false;
   let _currentBasemap = 'Dark (CartoDB)';
+  let _renderer     = null;
+  let _isDragging   = false;
+  let _pendingRender = false;
+  let _layerCache   = null;
 
   let HOME = [-33.9, 151.2];   // default VK2 Sydney
 
@@ -173,15 +179,18 @@
   // ── Map init ────────────────────────────────────────────────────────────────
   // At low zoom a single world copy (256*2^zoom px) is narrower than most
   // browser windows, so pick the smallest zoom whose world width covers the
-  // container. This is only ever used to raise the zoom, never to clamp it —
-  // the user can still freely zoom out with +/-/scroll.
+  // container, and raise the current zoom to at least that on load/resize.
+  // Also cap how far out the user can zoom manually (+/-/scroll) to at most
+  // ~2 world copies visible — without this, worldCopyJump lets you zoom out
+  // indefinitely and see the whole wrapped map repeated many times over.
   function _fitZoomToWidth() {
     if (!_map) return;
     const el = document.getElementById('world-map-container');
     const w  = el && el.clientWidth;
     if (!w) return;
-    const z = Math.max(2, Math.ceil(Math.log2(w / 256)));
-    if (_map.getZoom() < z) _map.setZoom(z);
+    const zFit = Math.max(2, Math.ceil(Math.log2(w / 256)));
+    _map.setMinZoom(Math.max(1, zFit - 1));
+    if (_map.getZoom() < zFit) _map.setZoom(zFit);
   }
 
   function initMap() {
@@ -189,10 +198,16 @@
     const el = document.getElementById('world-map-container');
     if (!el) return;
 
+    // padding:0.5 extends the canvas 50% beyond the viewport in every direction
+    // (total canvas = 2× viewport). Without a larger padding, Leaflet clips the
+    // canvas to viewport+10% and great-circle arcs starting from home (off-screen
+    // after panning) get hard-clipped mid-arc.
+    _renderer = L.canvas({ padding: 0.5 });
+
     _map = L.map('world-map-container', {
       center: [HOME[0], HOME[1]],
       zoom: 2,
-      preferCanvas: true,
+      renderer: _renderer,
       // A VK (Australia) station's DX contacts routinely span the
       // antimeridian (e.g. into North America). noWrap previously cut that
       // content off hard at +/-180; wrapping lets the map continue
@@ -201,6 +216,19 @@
       worldCopyJump: true,
     });
     _fitZoomToWidth();
+
+    // Hide the vector overlay during drag so only tiles move (CSS transform,
+    // GPU-composited, 60 fps). Any render() triggered mid-drag (from snapshot
+    // events or async load() completion) is queued and fires on dragend instead.
+    _map.on('dragstart', () => {
+      _isDragging = true;
+      if (_renderer._container) _renderer._container.style.display = 'none';
+    });
+    _map.on('dragend', () => {
+      _isDragging = false;
+      if (_renderer._container) _renderer._container.style.display = '';
+      if (_pendingRender) { _pendingRender = false; render(); }
+    });
 
     const bm = BASEMAPS['Dark (CartoDB)'];
     _tileLayer = L.tileLayer(bm.url, {
@@ -263,6 +291,7 @@
   // ── Load data ───────────────────────────────────────────────────────────────
   async function load() {
     if (!_map) return;
+    _lastLoadAt = Date.now();
     try {
       const res  = await fetch('/api/map_data');
       _allData   = await res.json();
@@ -270,132 +299,167 @@
     } catch(e) { console.warn('Map load error:', e); }
   }
 
+  // ── Layer cache ─────────────────────────────────────────────────────────────
+  // L.geodesic / L.polyline / L.circleMarker creation for 800+ stations is the
+  // dominant cost in render(). Cache the built objects keyed on (data reference,
+  // HOME, showShort, showLong) so that band-filter changes, tab switches, and
+  // post-drag redraws only call addLayer() on pre-built objects — no recomputation.
+  const LON_SHIFTS = [-360, 360];
+
+  function crossesAntimeridian(lon1, lon2, marginDeg) {
+    const d = ((lon2 - lon1 + 540) % 360) - 180;
+    const unwrapped = lon1 + d;
+    return unwrapped > 180 - marginDeg || unwrapped < -180 + marginDeg;
+  }
+
+  function shiftLngTree(node, dLon) {
+    if (Array.isArray(node)) return node.map(n => shiftLngTree(n, dLon));
+    return L.latLng(node.lat, node.lng + dLon);
+  }
+
+  function _cacheValid() {
+    return _layerCache
+      && _layerCache.dataRef  === _allData
+      && _layerCache.home[0]  === HOME[0]
+      && _layerCache.home[1]  === HOME[1]
+      && _layerCache.showShort === _showShort
+      && _layerCache.showLong  === _showLong;
+  }
+
+  // Leaflet's canvas renderer does one beginPath()/stroke() PER PATH OBJECT on
+  // every redraw — the per-object overhead (not the point count) dominates for
+  // many short arcs. L.Geodesic and L.Polyline both accept an array of *lines*
+  // (LatLngExpression[][]), so all of one band's arcs are merged into a single
+  // multi-line Path object: one stroke() call per band (~13) instead of one per
+  // station (~800+). With wrap:true the library may split an individual line at
+  // the antimeridian into extra sub-arrays — getLatLngs() reflects that, and we
+  // shift *all* returned sub-arrays without needing to map them back to a
+  // specific station, since every station in the "wrap" group already gets a
+  // shifted duplicate regardless of which sub-array its points ended up in.
+  function _buildCache() {
+    const maxCount = Math.max(..._allData.map(d => d.count), 1);
+    const valid = _allData.filter(d => d.lat != null && d.lon != null);
+
+    const byBand = new Map();
+    valid.forEach(d => {
+      const band = (d.band || '?').trim().toUpperCase();
+      d._band = band;
+      if (!byBand.has(band)) byBand.set(band, []);
+      byBand.get(band).push(d);
+    });
+
+    const bandData = {};
+
+    byBand.forEach((stations, band) => {
+      const col = BAND_COLS[band] || '#8b949e';
+      const wrapStations  = stations.filter(d => crossesAntimeridian(HOME[1], d.lon, 8));
+      const plainStations = stations.filter(d => !crossesAntimeridian(HOME[1], d.lon, 8));
+
+      // ── Short-path arcs: merged into up to 3 Path objects per band ──────────
+      const shortLayers = [];
+      if (_showShort && typeof L.geodesic !== 'undefined') {
+        const sStyle = { weight: 1.3, color: col, opacity: 0.60 };
+        if (plainStations.length) {
+          const lines = plainStations.map(d => [L.latLng(HOME[0], HOME[1]), L.latLng(d.lat, d.lon)]);
+          shortLayers.push(L.geodesic(lines, { ...sStyle, steps: 36, wrap: true }));
+        }
+        if (wrapStations.length) {
+          const lines = wrapStations.map(d => [L.latLng(HOME[0], HOME[1]), L.latLng(d.lat, d.lon)]);
+          const wrapArc = L.geodesic(lines, { ...sStyle, steps: 36, wrap: true });
+          shortLayers.push(wrapArc);
+          const subLines = wrapArc.getLatLngs() || [];
+          const shifted = [];
+          subLines.forEach(line => { shifted.push(shiftLngTree(line, -360)); shifted.push(shiftLngTree(line, 360)); });
+          if (shifted.length) shortLayers.push(L.polyline(shifted, sStyle));
+        }
+      } else if (_showShort) {
+        const allSegs = [];
+        stations.forEach(d => {
+          const pts = gcPoints(HOME[0], HOME[1], d.lat, d.lon, 40);
+          splitAtAntimeridian(pts).forEach(seg => allSegs.push(seg));
+        });
+        if (allSegs.length) shortLayers.push(L.polyline(allSegs, { color: col, weight: 1.2, opacity: 0.55 }));
+      }
+
+      // ── Long-path arcs: merged into up to 2 Path objects per band ───────────
+      const longLayers = [];
+      if (_showLong && typeof L.geodesic !== 'undefined') {
+        const lStyle = { weight: 1.2, color: col, opacity: 0.35, dashArray: '5 7' };
+        const lines = stations.map(d => {
+          const antiLat = -d.lat;
+          const antiLon = d.lon > 0 ? d.lon - 180 : d.lon + 180;
+          return [L.latLng(HOME[0], HOME[1]), L.latLng(antiLat, antiLon), L.latLng(d.lat, d.lon)];
+        });
+        const longArc = L.geodesic(lines, { ...lStyle, steps: 46, wrap: true });
+        longLayers.push(longArc);
+        const subLines = longArc.getLatLngs() || [];
+        const shifted = [];
+        subLines.forEach(line => { shifted.push(shiftLngTree(line, -360)); shifted.push(shiftLngTree(line, 360)); });
+        if (shifted.length) longLayers.push(L.polyline(shifted, lStyle));
+      }
+
+      // ── Markers stay one-per-station (each needs its own hover tooltip) ────
+      // Tooltip content is a function so the HTML string is only built lazily
+      // on first hover, not for all 800+ stations up front.
+      const markers = [];
+      stations.forEach(d => {
+        const r      = Math.max(4, Math.min(12, 4 + (d.count / maxCount) * 8));
+        const dist   = distKm(HOME[0], HOME[1], d.lat, d.lon);
+        const distLP = Math.round(40075 - dist);
+        const shifts = crossesAntimeridian(HOME[1], d.lon, 8) ? [0, -360, 360] : [0];
+        shifts.forEach(shift => {
+          markers.push(L.circleMarker([d.lat, d.lon + shift], {
+            radius: r, color: col, fillColor: col, fillOpacity: 0.85, weight: 1.5,
+          }).bindTooltip(() => `
+            <div style="font-family:Consolas,monospace;font-size:11px;line-height:1.7">
+              <b style="color:${col}">${d.call}</b><br>
+              ${band.toLowerCase()} · ${d.count} QSO${d.count > 1 ? 's' : ''}
+              ${d.mult ? `<br><span style="color:#f0c040">✦ Mult: ${d.mult}</span>` : ''}
+              <br><span style="color:#8b949e">SP: ${dist.toLocaleString()} km</span>
+              <span style="color:#8b949e"> · LP: ${distLP.toLocaleString()} km</span>
+            </div>`, { direction: 'top', offset: [0, -r], opacity: 0.97 }));
+        });
+      });
+
+      bandData[band] = {
+        shortLayers, longLayers, markers,
+        stationCount: stations.length,
+        qsoCount: stations.reduce((a, d) => a + d.count, 0),
+      };
+    });
+
+    _layerCache = {
+      dataRef: _allData, home: [...HOME],
+      showShort: _showShort, showLong: _showLong,
+      bandData,
+    };
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
   function render() {
+    if (_isDragging) { _pendingRender = true; return; }
+    if (!_cacheValid()) _buildCache();
+
     _markerLayer.clearLayers();
     _shortLayer.clearLayers();
     _longLayer.clearLayers();
 
-    const filtered = _allData.filter(d => {
-      const band = (d.band||'?').trim().toUpperCase();
-      d._band = band;
-      return _filterBand === 'ALL' || band === _filterBand;
+    const bandCounts = {};
+    let visStations = 0;
+    Object.entries(_layerCache.bandData).forEach(([band, bd]) => {
+      if (_filterBand !== 'ALL' && band !== _filterBand) return;
+      bandCounts[band] = bd.qsoCount;
+      visStations += bd.stationCount;
+      // Arcs added first so markers paint on top (canvas insertion order)
+      if (_showShort) bd.shortLayers.forEach(l => _shortLayer.addLayer(l));
+      if (_showLong)  bd.longLayers.forEach(l => _longLayer.addLayer(l));
+      bd.markers.forEach(m => _markerLayer.addLayer(m));
     });
 
-    // Legend and stats
-    const bandCounts = {};
-    filtered.forEach(d => { bandCounts[d._band] = (bandCounts[d._band]||0)+d.count; });
     updateLegend(bandCounts);
     const statEl = document.getElementById('map-stats');
     if (statEl) statEl.textContent =
-      `${filtered.length.toLocaleString()} callsigns · ${_allData.length.toLocaleString()} total`;
-
-    const maxCount = Math.max(...filtered.map(d=>d.count), 1);
-
-    // worldCopyJump lets the tile layer repeat seamlessly when panning past
-    // +/-180, but vector layers (markers, geodesic lines) are placed once at
-    // their real coordinate and don't auto-follow into adjacent world-copies.
-    // Markers are cheap to just redraw shifted by a full world-width. Arcs are
-    // computed once at their real (canonical) coordinates — feeding
-    // L.geodesic already-shifted input broke its antimeridian-wrap math — and
-    // the resulting points are instead copied into shifted plain L.polyline
-    // duplicates, so whichever copy the user pans to still has a line.
-    const LON_SHIFTS = [-360, 360];
-
-    function shiftLngTree(node, dLon) {
-      if (Array.isArray(node)) return node.map(n => shiftLngTree(n, dLon));
-      return L.latLng(node.lat, node.lng + dLon);
-    }
-
-    function addShiftedCopies(arc, layerGroup, styleOpts) {
-      if (typeof arc.getLatLngs !== 'function') return;
-      const basePts = arc.getLatLngs();
-      if (!basePts || !basePts.length) return;
-      LON_SHIFTS.forEach(shift => {
-        layerGroup.addLayer(L.polyline(shiftLngTree(basePts, shift), styleOpts));
-      });
-    }
-
-    filtered.forEach(d => {
-      if (d.lat == null || d.lon == null) return;
-      const col    = BAND_COLS[d._band] || '#8b949e';
-      const r      = Math.max(4, Math.min(12, 4 + (d.count/maxCount)*8));
-      const dist   = distKm(HOME[0], HOME[1], d.lat, d.lon);
-      const distLP = Math.round(40075 - dist);
-
-      // ── Short-path arc using Leaflet.Geodesic ──────────────────────────────
-      // L.geodesic draws the shortest great-circle arc automatically, handling
-      // antimeridian wrapping correctly (unlike L.polyline which draws straight)
-      if (_showShort && typeof L.geodesic !== 'undefined') {
-        const shortStyle = { weight: 1.3, color: col, opacity: 0.60 };
-        const arc = L.geodesic(
-          [[L.latLng(HOME[0], HOME[1]), L.latLng(d.lat, d.lon)]],
-          {
-            ...shortStyle,
-            steps: 100,      // more steps = shorter segments = better antimeridian handling
-            wrap: true,      // split at the real antimeridian so each segment
-                              // renders in the same world-copy as its marker
-          }
-        );
-        _shortLayer.addLayer(arc);
-        addShiftedCopies(arc, _shortLayer, shortStyle);
-      } else if (_showShort) {
-        // Fallback: manual SLERP with antimeridian splitting
-        const pts = gcPoints(HOME[0], HOME[1], d.lat, d.lon, 80);
-        const segments = splitAtAntimeridian(pts);
-        segments.forEach(seg => {
-          _shortLayer.addLayer(L.polyline(seg, {color:col, weight:1.2, opacity:0.55}));
-        });
-      }
-
-      // ── Long-path arc (dashed) ─────────────────────────────────────────────
-      // Long path = the great circle from A to B going the "wrong way around".
-      // Correct method: the long path passes through BOTH antipodal points.
-      // We use the antipodal of the TARGET station as an intermediate waypoint
-      // so Leaflet.Geodesic routes home → antiTarget → target, which forces
-      // it to go the long way. This always produces the correct long path.
-      if (_showLong && typeof L.geodesic !== 'undefined') {
-        const antiLat = -(d.lat);
-        const antiLon = d.lon > 0 ? d.lon - 180 : d.lon + 180;
-        const longStyle = { weight: 1.2, color: col, opacity: 0.35, dashArray: '5 7' };
-        const arc = L.geodesic(
-          [[L.latLng(HOME[0], HOME[1]),
-            L.latLng(antiLat, antiLon),
-            L.latLng(d.lat, d.lon)]],
-          {
-            ...longStyle,
-            steps: 120,
-            wrap: true,      // split at the real antimeridian so each segment
-                              // renders in the same world-copy as its marker
-          }
-        );
-        _longLayer.addLayer(arc);
-        addShiftedCopies(arc, _longLayer, longStyle);
-      }
-
-      // ── Station marker (+ shifted copies, see note above) ──────────────────
-      [0, ...LON_SHIFTS].forEach(shift => {
-        const lon = d.lon + shift;
-        const marker = L.circleMarker([d.lat, lon], {
-          radius: r,
-          color: col,
-          fillColor: col,
-          fillOpacity: 0.85,
-          weight: 1.5,
-        }).bindTooltip(`
-          <div style="font-family:Consolas,monospace;font-size:11px;line-height:1.7">
-            <b style="color:${col}">${d.call}</b><br>
-            ${d._band.toLowerCase()} · ${d.count} QSO${d.count>1?'s':''}
-            ${d.mult ? `<br><span style="color:#f0c040">✦ Mult: ${d.mult}</span>` : ''}
-            <br><span style="color:#8b949e">SP: ${dist.toLocaleString()} km</span>
-            <span style="color:#8b949e"> · LP: ${distLP.toLocaleString()} km</span>
-          </div>`, { direction:'top', offset:[0,-r], opacity:0.97 });
-        _markerLayer.addLayer(marker);
-      });
-    });
-
-    // Bring markers to front
-    _markerLayer.eachLayer(l => l.bringToFront?.());
+      `${visStations.toLocaleString()} callsigns · ${_allData.length.toLocaleString()} total`;
   }
 
   function updateLegend(counts) {
@@ -449,7 +513,9 @@
   function _setHome(lat, lon) {
     HOME = [lat, lon];
     if (!_map) return;   // map tab not opened yet — nothing to redraw
-    _map.panTo([HOME[0], HOME[1]], { animate: false });
+    // Skip panTo during drag — it fires moveend which triggers a canvas redraw
+    // mid-drag. The map will not jump to home position until the next render.
+    if (!_isDragging) _map.panTo([HOME[0], HOME[1]], { animate: false });
     if (_homeMarker) _homeMarker.setLatLng([HOME[0], HOME[1]]);
     render();
   }
@@ -488,7 +554,8 @@
         && (d._home_lat !== HOME[0] || d._home_lon !== HOME[1])) {
       _setHome(d._home_lat, d._home_lon);
     }
-    if (_map && document.querySelector('.tab-btn[data-tab="map"]')?.classList.contains('active')) {
+    if (_map && document.querySelector('.tab-btn[data-tab="map"]')?.classList.contains('active')
+        && Date.now() - _lastLoadAt >= LOAD_THROTTLE_MS) {
       load();
     }
   });
