@@ -2025,6 +2025,11 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
     try:
         import webview
 
+        # pywebview's WebView2 backend silently cancels every download unless
+        # this is explicitly enabled (default False) — without it, CSV/report
+        # exports via the in-page <a download> click do nothing with no error.
+        webview.settings['ALLOW_DOWNLOADS'] = True
+
         window = webview.create_window(
             title="VK Contest Analyzer",
             url=url,

@@ -533,6 +533,7 @@ body:has(#tab-map.active) #content {
   transition: opacity 0.4s;
 }
 #splash-box {
+  box-sizing: content-box; /* width below is the content area, matching #splash-canvas's native 620px — with the inherited border-box reset, padding ate into that width and pushed the canvas past the right edge */
   width: 620px; background: #0d1117;
   border: 1px solid #00d4aa; border-radius: 6px;
   padding: 0 28px 24px; font-family: Consolas, monospace;
@@ -546,22 +547,22 @@ body:has(#tab-map.active) #content {
   height: 100%; width: 0%; background: #00d4aa;
   border-radius: 4px; transition: width 0.05s linear;
 }
-#splash-msg { font-size: 13px; color: #8b949e; text-align: center; margin-bottom: 12px; }
+#splash-msg { font-size: 14px; color: #8b949e; text-align: center; margin-bottom: 12px; }
 #splash-disclaimer {
   background: #1a1f26; border: 1px solid #21262d; border-radius: 4px;
-  padding: 14px; font-size: 13px; color: #c5ccd6;
-  height: 190px; overflow-y: auto; line-height: 1.7; white-space: pre-wrap;
+  padding: 16px; font-size: 15px; color: #c5ccd6;
+  height: 190px; overflow-y: auto; line-height: 1.6; white-space: pre-wrap;
 }
-#splash-disclaimer br:first-child { color: #f0c040; font-weight: bold; font-size: 14px; }
+#splash-disclaimer br:first-child { color: #f0c040; font-weight: bold; font-size: 16px; }
 #splash-ack-wrap {
   display: flex; align-items: center; gap: 8px;
-  font-size: 13px; color: #c5ccd6; margin: 12px 0 8px; cursor: pointer;
+  font-size: 14px; color: #c5ccd6; margin: 12px 0 8px; cursor: pointer;
 }
 #splash-btn {
   display: block; width: 220px; margin: 0 auto;
   background: #21262d; color: #21262d;
   border: none; border-radius: 4px; padding: 10px 0;
-  font-family: Consolas, monospace; font-size: 13px; font-weight: bold;
+  font-family: Consolas, monospace; font-size: 14px; font-weight: bold;
   cursor: pointer; transition: background 0.2s, color 0.2s;
 }
 #splash-btn:not(:disabled) {
@@ -569,34 +570,53 @@ body:has(#tab-map.active) #content {
 }
 
 /* ── Splash: supported-plugins screen ────────────────────────────────────── */
+#splash-box.splash-box--plugins { width: 760px; }
 #splash-plugins-title {
-  text-align: center; font-size: 15px; font-weight: bold;
-  color: #e6edf3; margin: 4px 0 2px;
+  text-align: center; font-size: 19px; font-weight: bold;
+  color: #e6edf3; margin: 4px 0 4px;
 }
 #splash-plugins-sub {
-  text-align: center; font-size: 12px; color: #8b949e; margin-bottom: 12px;
+  text-align: center; font-size: 14px; color: #8b949e; margin-bottom: 14px;
 }
 #splash-plugins-list {
   background: #1a1f26; border: 1px solid #21262d; border-radius: 4px;
-  max-height: 220px; overflow-y: auto;
+  max-height: 380px; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: #00d4aa #1a1f26;
 }
+#splash-plugins-list::-webkit-scrollbar { width: 10px; }
+#splash-plugins-list::-webkit-scrollbar-track { background: #1a1f26; }
+#splash-plugins-list::-webkit-scrollbar-thumb {
+  background: #00d4aa; border-radius: 5px; border: 2px solid #1a1f26;
+}
+#splash-plugins-list::-webkit-scrollbar-thumb:hover { background: #00f0c0; }
 .splash-plugin-row {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 14px; font-size: 13px; border-bottom: 1px solid #21262d;
+  padding: 11px 16px; font-size: 15px; border-bottom: 1px solid #21262d;
 }
 .splash-plugin-row:last-child { border-bottom: none; }
 .splash-plugin-row:nth-child(even) { background: #161b22; }
 .splash-plugin-bullet { color: #00d4aa; margin-right: 8px; }
 .splash-plugin-name { color: #e6edf3; font-weight: bold; flex: 1; }
-.splash-plugin-class { color: #8b949e; font-size: 11px; }
+.splash-plugin-class { color: #8b949e; font-size: 13px; }
 #splash-plugins-count {
-  text-align: center; font-size: 12px; color: #8b949e; margin: 10px 0 8px;
+  text-align: center; font-size: 14px; color: #8b949e; margin: 12px 0 10px;
 }
 #splash-launch-btn {
-  display: block; width: 220px; margin: 0 auto;
+  display: block; width: 240px; margin: 0 auto;
   background: #00d4aa; color: #0d1117;
-  border: none; border-radius: 4px; padding: 10px 0;
-  font-family: Consolas, monospace; font-size: 13px; font-weight: bold;
+  border: none; border-radius: 4px; padding: 12px 0;
+  font-family: Consolas, monospace; font-size: 15px; font-weight: bold;
   cursor: pointer; transition: background 0.2s;
 }
 #splash-launch-btn:hover { background: #00f0c0; }
+
+/* ── Print: always print the Report tab regardless of which tab is active ─── */
+@media print {
+  #titlebar, #tabbar, #hud-bar, #session-bar, #splash-overlay,
+  #report-export-btn, #save-toast { display: none !important; }
+  body, #content { position: static !important; overflow: visible !important; height: auto !important; }
+  #content { padding: 0 !important; }
+  .tab-panel { display: none !important; }
+  #tab-report { display: flex !important; }
+  #tab-report .panel-box { break-inside: avoid; }
+}

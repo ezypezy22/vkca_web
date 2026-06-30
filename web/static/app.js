@@ -34,7 +34,7 @@ Users are responsible for verifying all information against N1MM before making d
   el.id = 'splash-overlay';
   el.innerHTML = `
     <div id="splash-box">
-      <canvas id="splash-canvas" width="620" height="200"></canvas>
+      <canvas id="splash-canvas" width="620" height="214"></canvas>
       <div id="splash-bar-wrap">
         <div id="splash-bar"></div>
       </div>
@@ -86,14 +86,14 @@ Users are responsible for verifying all information against N1MM before making d
   ctx.closePath(); ctx.stroke();
   ctx.fillStyle='#00d4aa'; ctx.font='bold 28px Consolas,monospace';
   ctx.textAlign='center'; ctx.fillText('⬡', W/2, cy2+10);
-  ctx.fillStyle='#e6edf3'; ctx.font='bold 22px Consolas,monospace';
+  ctx.fillStyle='#e6edf3'; ctx.font='bold 24px Consolas,monospace';
   ctx.fillText('VK CONTEST ANALYZER', W/2, 135);
-  ctx.fillStyle='#8b949e'; ctx.font='11px Consolas,monospace';
-  ctx.fillText('N1MM+ LOG INTELLIGENCE', W/2, 155);
   ctx.fillStyle='#8b949e'; ctx.font='12px Consolas,monospace';
+  ctx.fillText('N1MM+ LOG INTELLIGENCE', W/2, 156);
+  ctx.fillStyle='#8b949e'; ctx.font='13px Consolas,monospace';
   ctx.fillText('by VK2YI', W/2, 178);
-  ctx.fillStyle='#8b949e'; ctx.font='9px Consolas,monospace';
-  ctx.fillText('v2.0', W/2, 196);
+  ctx.fillStyle='#00d4aa'; ctx.font='bold 13px Consolas,monospace';
+  ctx.fillText('v26.6.1', W/2, 202);
 
   // ── Progress bar animation ─────────────────────────────────────────────────
   const bar = document.getElementById('splash-bar');
@@ -137,6 +137,7 @@ Users are responsible for verifying all information against N1MM before making d
 
     const plugWord = plugins.length === 1 ? 'plugin' : 'plugins';
 
+    box.classList.add('splash-box--plugins');
     box.innerHTML = `
       <div id="splash-plugins-title" style="margin-top:24px">SUPPORTED CONTEST PLUGINS</div>
       <div id="splash-plugins-sub">The following contests are recognised and scored automatically</div>
@@ -537,9 +538,6 @@ Users are responsible for verifying all information against N1MM before making d
   document.addEventListener('click', async function (e) {
 
     // ── CSV ────────────────────────────────────────────────────────────────
-
-
-    // ── Snapshot ───────────────────────────────────────────────────────────
     if (e.target.closest('#btn-csv')) {
       // Show export menu near the button
       const existingMenu = document.getElementById('csv-export-menu');
@@ -604,6 +602,45 @@ Users are responsible for verifying all information against N1MM before making d
       }, 50);
     }
 
+    // ── Snapshot ───────────────────────────────────────────────────────────
+    if (e.target.closest('#btn-snapshot')) {
+      const btn = e.target.closest('#btn-snapshot');
+      const active = document.querySelector('.tab-panel.active');
+      if (!active || typeof html2canvas !== 'function') {
+        showToast('Snapshot Failed', 'Nothing to capture.', '✗', true);
+        return;
+      }
+      btn.textContent = '📷 …'; btn.disabled = true;
+      try {
+        const bg = getComputedStyle(document.body).backgroundColor || '#0d1117';
+        const out = await html2canvas(active, {
+          backgroundColor: bg,
+          scale: window.devicePixelRatio || 1,
+          useCORS: true,
+        });
+
+        // toDataURL()+<a href> gets silently cancelled by the download
+        // manager in some WebView2/Chromium builds — toBlob()+createObjectURL
+        // is the reliable path (same pattern CSV/report export already use).
+        const blob = await new Promise(resolve => out.toBlob(resolve, 'image/png'));
+        const tabName = (document.querySelector('.tab-btn.active .tab-label')?.textContent || 'tab')
+          .trim().toLowerCase().replace(/\s+/g, '_');
+        const fname = `vkcontest_${tabName}_${new Date().toISOString().slice(0,10)}.png`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = fname;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+
+        const loc = await fetch('/api/save_location').then(r => r.json()).catch(() => ({}));
+        showToast('✓ Snapshot Saved', (loc.folder || 'Downloads') + '\\' + fname, '📷');
+        btn.textContent = '✓'; setTimeout(() => { btn.textContent = '📷 Snapshot'; btn.disabled = false; }, 2000);
+      } catch (err) {
+        showToast('Snapshot Failed', err.message, '✗', true);
+        btn.textContent = '📷 Snapshot'; btn.disabled = false;
+      }
+    }
+
   });   // end document.addEventListener click
 
   // ── Toast notification ─────────────────────────────────────────────────────
@@ -626,5 +663,6 @@ Users are responsible for verifying all information against N1MM before making d
     clearTimeout(_toastTimer);
     _toastTimer = setTimeout(() => _toast.classList.remove('show'), isError ? 8000 : 5000);
   }
+  window.VKA.showToast = showToast;
 
 })();

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VK Contest Analyzer v2.0</title>
+<title>VK Contest Analyzer v26.6.1</title>
 <link rel="stylesheet" href="/static/style.css">
 <script>
   // Applied synchronously, before paint, so a popped-out tile/HUD window
@@ -27,7 +27,7 @@
   <!-- Row 1: identity + primary action -->
   <div id="tb-row1">
     <div id="titlebar-logo">⬡</div>
-    <div id="titlebar-title">VK CONTEST ANALYZER <span style="color:var(--muted);font-size:0.75em">v2.0</span></div>
+    <div id="titlebar-title">VK CONTEST ANALYZER <span style="color:var(--muted);font-size:0.75em">v26.6.1</span></div>
     <div id="titlebar-status">
       <span id="status-dot" class="dot dot--disconnected"></span>
       <span id="status-text">No log loaded</span>
@@ -86,7 +86,7 @@
 
     <!-- Export -->
     <button id="btn-csv" class="tb-btn" title="Export current tab data as CSV">⬇ CSV</button>
-    <button id="btn-snapshot" class="tb-btn" title="Save gauges as PNG">📷 Snapshot</button>
+    <button id="btn-snapshot" class="tb-btn" title="Save the current tab as PNG">📷 Snapshot</button>
   </div>
 
 </div>
@@ -107,6 +107,9 @@
 <nav id="tabbar">
   <button class="tab-btn active" data-tab="overview">
     <span class="tab-icon">📊</span><span class="tab-label">Overview</span>
+  </button>
+  <button class="tab-btn" data-tab="report">
+    <span class="tab-icon">📑</span><span class="tab-label">Report</span>
   </button>
   <button class="tab-btn" data-tab="cluster">
     <span class="tab-icon">📡</span><span class="tab-label">DX Cluster</span>
@@ -281,6 +284,96 @@
       </div>
       <div class="region-canvas-wrap"><canvas id="chart-region-bars"></canvas></div>
     </div>
+  </section>
+
+  <!-- ══ REPORT ══ -->
+  <section id="tab-report" class="tab-panel">
+    <div id="report-loading" style="display:none;align-items:center;justify-content:center;gap:8px;
+         padding:30px;color:var(--muted);font-family:var(--font-mono);font-size:0.85em">⏳ Loading report…</div>
+    <div id="report-empty" style="display:none;color:var(--muted);padding:20px;font-family:var(--font-mono);font-size:0.85em">
+      Load a contest log to see the end-of-contest report.
+    </div>
+    <div id="report-error" style="display:none;color:var(--red);padding:20px;font-family:var(--font-mono);font-size:0.85em"></div>
+
+    <div id="report-content">
+    <div class="panel-box" style="flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="panel-header" style="margin:0">
+        <span style="color:var(--accent)">●</span> END-OF-CONTEST REPORT
+      </div>
+      <span id="report-generated" style="font-family:var(--font-mono);font-size:0.77em;color:var(--muted)"></span>
+      <button id="report-export-btn" class="tb-btn tb-btn--primary" style="margin-left:auto">⬇ Export Report (HTML)</button>
+    </div>
+
+    <div class="pace-cards-row" id="report-kpis">
+      <div class="pace-card"><div class="pace-val" id="report-kpi-score">—</div><div class="pace-label">Final Score</div></div>
+      <div class="pace-card"><div class="pace-val" id="report-kpi-qsos">—</div><div class="pace-label">Total QSOs</div></div>
+      <div class="pace-card"><div class="pace-val" id="report-kpi-mults" style="color:var(--accent3)">—</div><div class="pace-label">Total Mults</div></div>
+      <div class="pace-card"><div class="pace-val" id="report-kpi-dupes" style="color:var(--accent2)">—</div><div class="pace-label">Dupe Rate</div></div>
+      <div class="pace-card"><div class="pace-val" id="report-kpi-besthr" style="color:var(--accent3)">—</div><div class="pace-label">Best Hour Rate</div></div>
+      <div class="pace-card" style="border-top-color:var(--accent)"><div class="pace-val" id="report-kpi-duration" style="color:var(--green)">—</div><div class="pace-label">Duration</div></div>
+    </div>
+
+    <div class="panel-box" style="min-height:200px">
+      <div class="panel-header"><span style="color:var(--accent)">●</span> QSO RATE BY HOUR</div>
+      <div style="position:relative;height:170px"><canvas id="chart-report-rate"></canvas></div>
+    </div>
+
+    <div class="panel-box" style="min-height:200px">
+      <div class="panel-header"><span style="color:var(--accent3)">●</span> RUNNING SCORE</div>
+      <div style="position:relative;height:170px"><canvas id="chart-report-score"></canvas></div>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-header"><span style="color:var(--green)">●</span> BAND &amp; MULTIPLIER BREAKDOWN</div>
+      <div class="bands-grid">
+        <div class="bands-chart-wrap"><canvas id="chart-report-bands"></canvas></div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Band</th><th>QSOs</th><th>New Mults</th><th>Efficiency</th></tr></thead>
+            <tbody id="report-bands-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="report-missing-summary" style="font-family:var(--font-mono);font-size:0.85em;color:var(--muted)"></div>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-header"><span style="color:var(--accent2)">●</span> DUPES &amp; DATA QUALITY</div>
+      <div class="bands-grid">
+        <div class="bands-chart-wrap"><canvas id="chart-report-dupes"></canvas></div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Callsign</th><th>Dupes</th></tr></thead>
+            <tbody id="report-dupes-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-header"><span style="color:var(--accent)">●</span> TOP WORKED REGIONS</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Region</th><th>QSOs</th><th>Mults Worked</th><th>% Complete</th></tr></thead>
+          <tbody id="report-regions-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-header"><span style="color:var(--accent3)">●</span> PACE vs GOAL &amp; YEAR-ON-YEAR</div>
+      <div id="report-comparison-msg" style="display:none;color:var(--muted);font-family:var(--font-mono);font-size:0.85em;padding:8px 0"></div>
+      <div id="report-comparison-content">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Year</th><th>Contest</th><th>Score</th><th>QSOs</th><th>Mults</th></tr></thead>
+            <tbody id="report-yoy-tbody"></tbody>
+          </table>
+        </div>
+        <div id="report-pace-insight" style="font-family:var(--font-mono);font-size:0.85em;color:var(--fg);padding:8px 0"></div>
+      </div>
+    </div>
+    </div> <!-- /#report-content -->
   </section>
 
   <!-- ══ DX CLUSTER ══ -->
@@ -800,6 +893,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet.geodesic@2.7.1/dist/leaflet.geodesic.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="/static/app.js"></script>
 <script src="/static/overview.js"></script>
 <script src="/static/cluster.js"></script>
@@ -812,6 +906,7 @@
 <script src="/static/dupes.js"></script>
 <script src="/static/debug.js"></script>
 <script src="/static/worked.js"></script>
+<script src="/static/report.js"></script>
 <script src="/static/worldmap.js"></script>
 </body>
 </html>

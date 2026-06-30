@@ -3,7 +3,7 @@
 ; Expects dist\VKContestAnalyzer\ to already exist (run build.bat first).
 
 #define MyAppName "VK Contest Analyzer"
-#define MyAppVersion "2.0"
+#define MyAppVersion "26.6.1"
 #define MyAppExeName "VKContestAnalyzer.exe"
 #define MyAppSourceDir "dist\VKContestAnalyzer"
 
