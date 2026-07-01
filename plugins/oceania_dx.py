@@ -39,22 +39,34 @@ _OCDX_BAND_POINTS: dict = {
 }
 
 _OCEANIA_PREFIXES: frozenset = frozenset({
-    "VK", "VH", "VI", "VJ", "VK0", "VK9", "AX",
+    # Australia
+    "VK", "VH", "VI", "VJ", "VL", "VK0", "VK9", "AX",
+    # New Zealand (incl. subantarctic/Antarctic calls)
     "ZK", "ZL", "ZM",
+    # Papua New Guinea
     "P2",
+    # Indonesia
     "YB", "YC", "YD", "YE", "YF", "YG", "YH",
+    # Philippines
     "DU", "DV", "DW", "DX",
-    "KH",
+    # US Pacific territories (KH0–KH9 all Oceania for this contest)
+    "KH", "KH0", "KH2", "KH3", "KH4", "KH5", "KH6", "KH7", "KH8", "KH9",
+    # Japan Pacific outliers
     "JD",
-    "A3", "DL", "E5", "FK", "FO", "FW",
-    "H4",
-    "KH0", "KH2", "KH3", "KH4", "KH5", "KH6", "KH7", "KH8", "KH9",
-    "KP1", "NH",
-    "T2", "T30", "T31", "T32", "T33",
-    "V6", "V7", "V8", "VK9", "VR", "W",
-    "YJ",
-    "ZK", "ZL7", "ZL8", "ZL9", "ZM",
-    "3D2", "5W", "8Q", "9M", "9V",
+    # Pacific island nations and territories
+    "A3",           # Tonga
+    "E5",           # Cook Islands
+    "FK",           # New Caledonia
+    "FO",           # French Polynesia
+    "FW",           # Wallis & Futuna
+    "H4",           # Solomon Islands
+    "T2",           # Tuvalu
+    "T30", "T31", "T32", "T33",  # Kiribati / Banaba
+    "V6",           # Micronesia
+    "V7",           # Marshall Islands
+    "YJ",           # Vanuatu
+    "3D2",          # Fiji
+    "5W",           # Samoa
 })
 
 
@@ -152,6 +164,13 @@ class OceaniaDXPlugin(ContestPlugin):
     def recalc_pts(self, qsos: list) -> None:
         for q in qsos:
             if q["dupe"]:
+                q["pts"] = 0
+                continue
+            # Oceania↔world only: both parties must not be the same side.
+            # Assumes Oceania operator perspective (standard for VK/ZL users):
+            # the worked call must be non-Oceania for the QSO to score.
+            call = q.get("call", "")
+            if _is_oceania_call(call):
                 q["pts"] = 0
                 continue
             band = (q.get("band") or "").upper()

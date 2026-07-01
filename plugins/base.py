@@ -241,22 +241,42 @@ class ContestPlugin(ABC):
         return sorted(result, key=lambda x: x["qsos"], reverse=True)
 
     def band_efficiency(self, qsos: list) -> list:
-        ml_set     = set(self.mult_list())
-        band_qsos  = defaultdict(int)
-        band_mults = defaultdict(set)
+        ml_set      = set(self.mult_list())
+        band_qsos   = defaultdict(int)
+        band_pts    = defaultdict(int)
+        band_mults  = defaultdict(set)
+        band_last   = {}              # band → most-recent QSO datetime
+        band_hours  = defaultdict(lambda: defaultdict(int))  # band → hour → count
+
         for q in qsos:
             if not q["dupe"]:
                 b = q["band"] or "?"
                 band_qsos[b] += 1
+                band_pts[b]  += q.get("pts", 0) or 0
                 if q["mult1"] in ml_set:
                     band_mults[b].add(q["mult1"])
+                t = q.get("time")
+                if t is not None:
+                    if b not in band_last or t > band_last[b]:
+                        band_last[b] = t
+                    h_key = t.replace(minute=0, second=0, microsecond=0)
+                    band_hours[b][h_key] += 1
+
         result = []
         for b in band_qsos:
-            qn = band_qsos[b]
-            mn = len(band_mults[b])
-            result.append({"band": b, "qsos": qn,
-                           "new_shires": mn,
-                           "efficiency": mn / qn if qn else 0})
+            qn   = band_qsos[b]
+            mn   = len(band_mults[b])
+            best = max(band_hours[b].values()) if band_hours[b] else 0
+            last = band_last.get(b)
+            result.append({
+                "band":           b,
+                "qsos":           qn,
+                "pts":            band_pts[b],
+                "new_shires":     mn,
+                "efficiency":     mn / qn if qn else 0,
+                "best_hour_rate": best,
+                "last_qso_utc":   last.isoformat() if last else None,
+            })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)
 
     def sparkline_mults(self, q: dict, seen: set) -> int:

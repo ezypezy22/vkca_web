@@ -306,8 +306,8 @@ class ARRLDXDXPlugin(ContestPlugin):
             GaugeDef("TOTAL QSOs",       "total",      "qso_max",    "#00d4aa", "{v}"),
             GaugeDef("VALID QSOs",       "valid",      "qso_max",    "#2ed573", "{v}"),
             GaugeDef("TOTAL SCORE",      "score",      "score_max",  "#f0c040", "{v:,}"),
-            GaugeDef("STATES/PROVS",     "worked",      64,           "#f0c040", "{v}"),
-            GaugeDef("BAND MULTS",       "band_mults",  384,          "#2ed573", "{v}"),
+            GaugeDef("STATES/PROVS",     "worked",      63,           "#f0c040", "{v}"),  # 48+DC+14CA=63
+            GaugeDef("BAND MULTS",       "band_mults",  378,          "#2ed573", "{v}"),  # 63×6 bands
             GaugeDef("% STATES",         "pct",         100.0,        "#8b949e", "{v:.1f}%"),
         ]
 

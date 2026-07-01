@@ -33,3 +33,7 @@ pywin32>=306; sys_platform == 'win32'
 
 # ── Optional: faster JSON (auto-detected by fastapi/uvicorn) ─────────────────
 orjson>=3.9.0
+
+# ── Live ranking (Contest Online ScoreBoard lookup, Overview tab) ────────────
+requests>=2.31.0
+beautifulsoup4>=4.12.0

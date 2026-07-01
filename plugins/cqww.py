@@ -84,7 +84,7 @@ _ZONE_CONTINENT: dict[int, str] = {
     23: "AS", 24: "AS", 25: "AS", 26: "AS", 27: "AS",
     28: "AF",
     29: "OC", 30: "OC",
-    31: "AF",
+    31: "OC",  # Zone 31 = Hawaii/Pacific (was incorrectly "AF")
     32: "OC",
     33: "AF", 34: "AF", 35: "AF", 36: "AF", 37: "AF", 38: "AF", 39: "AF",
     40: "AF",

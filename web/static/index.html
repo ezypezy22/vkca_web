@@ -33,6 +33,7 @@
       <span id="status-text">No log loaded</span>
     </div>
     <div class="tb-spacer"></div>
+    <button id="btn-switch-contest" class="tb-btn" style="display:none" title="Switch to a different contest in the current database">⇄ <span id="switch-contest-label">Switch</span></button>
     <button id="btn-load" class="tb-btn tb-btn--primary tb-btn--open">📂 Open Log</button>
   </div>
 
@@ -75,6 +76,7 @@
     <!-- Theme -->
     <label class="tb-label">THEME</label>
     <select id="theme-select" class="tb-select tb-select--theme">
+      <option value="System (OS default)">System (OS default)</option>
       <option value="Dark (Default)">Dark (Default)</option>
       <option value="Light">Light</option>
       <option value="High Contrast">High Contrast</option>
@@ -224,6 +226,11 @@
       <div class="info-panel" id="panel-op-times">
         <div class="ip-hdr"><span style="color:var(--accent)">[ O ]</span>
           <span class="ip-title" style="color:var(--accent)">OPERATOR TIMES</span></div>
+        <div style="color:var(--muted);font-size:0.85em;padding:8px 0">Loading…</div>
+      </div>
+      <div class="info-panel" id="panel-live-rank">
+        <div class="ip-hdr"><span style="color:var(--red)">[ # ]</span>
+          <span class="ip-title" style="color:var(--red)">LIVE RANKING</span></div>
         <div style="color:var(--muted);font-size:0.85em;padding:8px 0">Loading…</div>
       </div>
     </div>
@@ -500,7 +507,7 @@
       <div class="bands-chart-wrap"><canvas id="chart-band-eff"></canvas></div>
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>Band</th><th>QSOs</th><th>New Mults</th><th>Efficiency</th></tr></thead>
+          <thead><tr><th>Band</th><th>QSOs</th><th>Points</th><th>Score %</th><th>New Mults</th><th>Efficiency</th><th>Best Rate</th><th>Last QSO</th></tr></thead>
           <tbody id="bands-tbody"></tbody>
         </table>
       </div>

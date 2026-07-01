@@ -1,6 +1,17 @@
 ; VK Contest Analyzer — Inno Setup installer script
 ; Compile with: ISCC.exe installer.iss   (Inno Setup 6+)
 ; Expects dist\VKContestAnalyzer\ to already exist (run build.bat first).
+;
+; ── One-time per-machine setup ────────────────────────────────────────────
+; This script needs vendor\dotnetfx\NDP48-x86-x64-AllOS-ENU.exe, which is
+; NOT in git (it's ~115MB, over GitHub's 100MB file limit — see .gitignore).
+; On a fresh checkout/machine, download it yourself before compiling:
+;   1. Official Microsoft Support page:
+;      https://support.microsoft.com/en-us/topic/microsoft-net-framework-4-8-offline-installer-for-windows-9d23f658-3b97-68ab-d013-aa3c3e7495e0
+;      -> "https://go.microsoft.com/fwlink/?linkid=2088631" (offline installer)
+;   2. Save it as vendor\dotnetfx\NDP48-x86-x64-AllOS-ENU.exe (relative to
+;      this file) — create the vendor\dotnetfx\ folder if it doesn't exist.
+; ISCC.exe will fail with a missing-source-file error if this isn't done.
 
 #define MyAppName "VK Contest Analyzer"
 #define MyAppVersion "26.6.1"

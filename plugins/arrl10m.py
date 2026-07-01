@@ -160,10 +160,18 @@ _ALL_FIXED_MULTS: list[str] = (
 )
 
 
-def _pts_for_mode(mode: str) -> int:
-    """QSO point value: Phone = 2, CW = 4 (rule 5.1)."""
+def _pts_for_mode(mode: str, call: str = "") -> int:
+    """QSO point value per rule 5.1:
+      Phone = 2, CW = 4.
+      Exception: CW QSO with a US Novice/Technician station signing /N or /T
+      on 28.1–28.3 MHz = 8 pts (rule 5.1 bonus).
+    """
     m = (mode or "").upper()
     if m == "CW":
+        # /N or /T suffix indicates Novice/Tech station (8-pt bonus)
+        c = (call or "").upper()
+        if c.endswith("/N") or c.endswith("/T"):
+            return 8
         return 4
     return 2   # USB, LSB, PH, SSB, FM, AM — all "Phone" for this contest
 
@@ -435,7 +443,7 @@ class ARRL10MPlugin(ContestPlugin):
                 continue
             if q.get("pts") and q["pts"] > 0:
                 continue
-            q["pts"] = _pts_for_mode(q.get("mode"))
+            q["pts"] = _pts_for_mode(q.get("mode"), q.get("call", ""))
 
     def score(self, qsos: list) -> int:
         """Total QSO points × total multipliers (all categories, both

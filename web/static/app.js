@@ -419,8 +419,61 @@ Users are responsible for verifying all information against N1MM before making d
   const btnBack     = document.getElementById('btn-back');
   const btnCancel   = document.getElementById('btn-load-cancel');
   const btnConfirm  = document.getElementById('btn-load-confirm');
+  const btnSwitch   = document.getElementById('btn-switch-contest');
+  const switchLabel = document.getElementById('switch-contest-label');
 
-  let _selectedContest=null, _scannedPath='';
+  let _selectedContest=null, _scannedPath='', _scannedContests=[], _loadedContest=null;
+
+  function _updateSwitchBtn(contests, current) {
+    if (!btnSwitch) return;
+    _loadedContest = current;
+    const others = contests.filter(c => c.contest_nr !== current?.contest_nr);
+    btnSwitch.style.display = others.length > 0 ? '' : 'none';
+    if (current && switchLabel)
+      switchLabel.textContent = current.display_name || current.contest_name || 'Switch';
+  }
+
+  btnSwitch?.addEventListener('click', () => {
+    const existing = document.getElementById('contest-switch-menu');
+    if (existing) { existing.remove(); return; }
+    const btn = btnSwitch;
+    const rect = btn.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.id = 'contest-switch-menu';
+    menu.style.cssText = `position:fixed;top:${rect.bottom+4}px;right:${window.innerWidth-rect.right}px;
+      background:var(--bg2);border:1px solid var(--accent);border-radius:6px;z-index:9998;
+      font-family:var(--font-mono);font-size:0.77em;box-shadow:0 8px 24px rgba(0,0,0,.6);
+      min-width:280px;overflow:hidden;`;
+    _scannedContests.forEach((ct, idx) => {
+      if (ct.contest_nr === _loadedContest?.contest_nr) return;
+      const row = document.createElement('div');
+      row.style.cssText = `padding:8px 14px;cursor:pointer;transition:background .1s;
+        ${idx < _scannedContests.length-1 ? 'border-bottom:1px solid var(--bg3)' : ''}`;
+      row.innerHTML = `<div style="color:var(--fg);font-weight:bold">${ct.display_name||ct.contest_name}</div>
+        <div style="color:var(--muted);font-size:0.85em">${ct.qso_count||0} QSOs · ${(ct.start_date||'').substring(0,10)}</div>`;
+      row.addEventListener('mouseover', ()=>row.style.background='var(--bg3)');
+      row.addEventListener('mouseout',  ()=>row.style.background='');
+      row.addEventListener('click', async () => {
+        menu.remove();
+        try {
+          _currentContestName = ct.display_name||'';
+          await doLoad(_scannedPath, ct.contest_nr, ct.plugin);
+          _updateSwitchBtn(_scannedContests, ct);
+          emit('vka:loaded',{}); doRefresh(); resetCountdown();
+        } catch(e) { console.warn('Switch contest failed:', e); }
+      });
+      menu.appendChild(row);
+    });
+    if (!menu.children.length) { menu.remove(); return; }
+    document.body.appendChild(menu);
+    setTimeout(() => {
+      document.addEventListener('click', function closeMenu(ev) {
+        if (!menu.contains(ev.target) && ev.target !== btn) {
+          menu.remove(); document.removeEventListener('click', closeMenu);
+        }
+      });
+    }, 50);
+  });
 
   function showDialog() { overlay.classList.remove('hidden'); showStep('path'); setTimeout(()=>pathInput?.focus(),50); }
   function hideDialog() { overlay.classList.add('hidden'); errDiv.classList.add('hidden'); _selectedContest=null; btnConfirm.disabled=true; }
@@ -457,8 +510,8 @@ Users are responsible for verifying all information against N1MM before making d
       if (data.error) { showError(data.error); return; }
       const contests=data.contests||[];
       if (!contests.length) { showError('No contests with QSOs found in this database.'); return; }
-	  if (contests.length===1) { _currentContestName=contests[0].display_name||''; await doLoad(data.path,contests[0].contest_nr,contests[0].plugin); hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown(); return; }
-      _scannedPath=data.path;
+      _scannedContests=contests; _scannedPath=data.path;
+	  if (contests.length===1) { _currentContestName=contests[0].display_name||''; await doLoad(data.path,contests[0].contest_nr,contests[0].plugin); _updateSwitchBtn(contests,contests[0]); hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown(); return; }
       pickerLabel.textContent=data.path.split(/[\\\/]/).pop();
       buildContestList(contests);
       showStep('picker');
@@ -505,6 +558,7 @@ Users are responsible for verifying all information against N1MM before making d
     try {
       _currentContestName = _selectedContest.display_name || '';
       await doLoad(_scannedPath||pathInput.value.trim(), _selectedContest.contest_nr, _selectedContest.plugin);
+      _updateSwitchBtn(_scannedContests, _selectedContest);
       hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown();
     } catch {}
     finally { btnConfirm.disabled=false; btnConfirm.textContent='Load Selected'; }
@@ -527,11 +581,21 @@ Users are responsible for verifying all information against N1MM before making d
     const sel = document.getElementById('theme-select');
     if (!sel) return;
 
+    // "System (OS default)" resolves to Dark or Light based on the OS preference,
+    // live-updating whenever the user changes their system setting.
+    const _osDark = window.matchMedia('(prefers-color-scheme: dark)');
+    function resolveThemeName(name) {
+      if (name === 'System (OS default)')
+        return _osDark.matches ? 'Dark (Default)' : 'Light';
+      return name;
+    }
+
     async function applyTheme(name) {
+      const resolved = resolveThemeName(name);
       try {
         const res     = await fetch('/api/themes');
         const data    = await res.json();
-        const palette = data.palette?.[name];
+        const palette = data.palette?.[resolved];
         if (!palette) return;
 
         // Apply CSS variables to :root
@@ -553,12 +617,17 @@ Users are responsible for verifying all information against N1MM before making d
       } catch(e) { console.warn('Theme error:', e); }
     }
 
+    // Re-apply when the OS flips dark↔light while "System" is selected
+    _osDark.addEventListener('change', () => {
+      if (sel.value === 'System (OS default)') applyTheme('System (OS default)');
+    });
+
     sel.addEventListener('change', () => applyTheme(sel.value));
 
-    // Restore saved theme
+    // Restore saved theme (or default to System on first run)
     try {
-      const saved = localStorage.getItem('vkca_theme');
-      if (saved) { sel.value = saved; applyTheme(saved); }
+      const saved = localStorage.getItem('vkca_theme') || 'System (OS default)';
+      sel.value = saved; applyTheme(saved);
     } catch {}
   })();
 

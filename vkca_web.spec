@@ -19,6 +19,11 @@ hidden += collect_submodules('fastapi')
 hidden += collect_submodules('starlette')
 hidden += collect_submodules('anyio')
 hidden += collect_submodules('multipart')
+# bs4's parser backends (e.g. bs4.builder._htmlparser) are picked at runtime
+# by name, which static analysis can miss — used by web/cosb.py's live-rank
+# scraper (Contest Online ScoreBoard lookup).
+hidden += collect_submodules('bs4')
+hidden += collect_submodules('requests')
 hidden += [
     'multipart',   # python-multipart — starlette imports it lazily on first
                     # form/file upload, so static analysis alone can miss it

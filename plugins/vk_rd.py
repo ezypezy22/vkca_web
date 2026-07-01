@@ -3,19 +3,29 @@ plugins/vk_rd.py
 ────────────────
 WIA Remembrance Day Contest plugin.
 
-Contest rules:
-  Workable: VK/AX, ZL/ZM, P2 (Papua New Guinea) only.
-  Points: 1 per valid contact.
-  Sessions: 3 × 2-hour blocks: B1 0800–1000, B2 1000–1200, B3 1200–1400 UTC.
-  DupeType 3: same call workable once per 2-hour window per band.
-  Scoring per block: total valid QSOs × unique prefixes worked (all bands combined).
-  Final score = B1 + B2 + B3.
-  Date: Saturday of the weekend closest to 15 August.
+Official rules (wia.org.au/members/contests/rdcontest/):
+  Duration:   0300 UTC Saturday – 0300 UTC Sunday (24 hours)
+  Date:       Weekend closest to 15 August
+  Workable:   VK call areas, ZL (ZM), P29 (Papua New Guinea)
+              WARC bands (10, 18, 24 MHz) excluded
+  Dupe rule:  Not less than 3 hours between contacts on same band and mode
+              (SSB and FM count as one mode; CW and RTTY count as one mode)
 
-UDC: VK_RD_RTTY.UDC (author VK4SN)
+QSO point values (all bonuses are multiplicative):
+  160m:            2 pts  (base)
+  23cm or above:   2 pts  (base; i.e. ≥ 1296 MHz)
+  All other bands: 1 pt   (base)
+  CW or RTTY:      × 2   (mode bonus, applies regardless of band)
+  0100–0600 LOCAL: × 3   (night bonus; assumed AEST = UTC+10 — corresponds
+                           to 1500–2000 UTC Saturday within the contest)
+
+Example: CW on 160m during night hours = 2 × 2 × 3 = 12 pts per QSO.
+
+Score: Sum of all valid QSO points. There are NO multipliers.
 """
 
 from __future__ import annotations
+
 import re
 from collections import defaultdict
 from datetime import date as date_, timedelta
@@ -26,6 +36,26 @@ from plugins.base import (
     ACCENT, ACCENT2, ACCENT3, GREEN, MUTED,
 )
 
+
+# ── Band classification ───────────────────────────────────────────────────────
+# Bands worth 2 base points (160m and 23cm/1296 MHz and above)
+_TWO_PT_BANDS = frozenset({
+    "160M", "160m",
+    "23CM", "23cm", "1296",
+    "13CM", "13cm", "2304", "2320",
+    "9CM",  "9cm",  "3400",
+    "6CM",  "6cm",  "5760",
+    "3CM",  "3cm",  "10G",  "10GHZ",
+    "1.25CM", "24G",
+})
+# WARC bands are excluded from the contest entirely
+_WARC_BANDS = frozenset({"30M", "30m", "17M", "17m", "12M", "12m"})
+
+# Night bonus window: 0100–0600 AEST (UTC+10) = 1500–2000 UTC on Saturday.
+# Note: VK operators in ACST (UTC+9.5) or AWST (UTC+8) have slightly shifted
+# windows — this implementation uses AEST as the standard reference.
+_NIGHT_UTC_START = 15   # 15:00 UTC
+_NIGHT_UTC_END   = 20   # 20:00 UTC (exclusive)
 
 _VK_RD_WORKABLE_PREFIXES = frozenset({
     "VK", "VH", "VI", "VJ", "VL", "VM", "VN", "VZ",
@@ -43,34 +73,56 @@ def _is_vkrd_workable(call: str) -> bool:
     return False
 
 
-def _vkrd_prefix(call: str) -> str:
-    """
-    Derive the RD contest prefix.  External territories keep their own prefix
-    and do NOT collapse to plain 'VK'.
-    """
-    call = call.upper().strip()
-    call = re.sub(r'/(P|M|QRP|MM|AM|A|B|LH)$', '', call)
-    if '/' in call:
-        parts = call.split('/')
-        for part in sorted(parts, key=len, reverse=True):
-            if re.search(r'[A-Z]\d', part):
-                call = part
-                break
-        else:
-            call = parts[0]
-    m = re.match(r'^([A-Z]{1,4})(\d)', call)
-    if m:
-        return m.group(1) + m.group(2)
-    return call[:3]
+def _vkrd_band_pts(band: str) -> int:
+    """Base QSO points for the band (before mode/night multipliers)."""
+    b = (band or "").upper()
+    if b in _WARC_BANDS:
+        return 0
+    if b in _TWO_PT_BANDS:
+        return 2
+    return 1
+
+
+def _vkrd_mode_mult(mode: str) -> int:
+    """2× for CW or RTTY; 1× for phone/FM/digital."""
+    m = (mode or "").upper()
+    if m == "CW" or "RTTY" in m or "FSK" in m:
+        return 2
+    return 1
+
+
+def _in_night_bonus(t) -> bool:
+    """True if the QSO time falls in the 1500–2000 UTC night-bonus window."""
+    if t is None:
+        return False
+    try:
+        return _NIGHT_UTC_START <= t.hour < _NIGHT_UTC_END
+    except AttributeError:
+        return False
+
+
+def _vkrd_qso_pts(q: dict) -> int:
+    """Total points for one valid (non-dupe, workable) RD QSO."""
+    band = q.get("band", "")
+    if (band or "").upper() in _WARC_BANDS:
+        return 0
+    base = _vkrd_band_pts(band)
+    if base == 0:
+        return 0
+    pts = base * _vkrd_mode_mult(q.get("mode", ""))
+    if _in_night_bonus(q.get("time")):
+        pts *= 3
+    return pts
 
 
 class VKRDPlugin(ContestPlugin):
     """
     WIA Remembrance Day Contest (VK_RD_RTTY / VK_RD_SSBCW).
-    3 × 2-hour blocks: 0800–1000, 1000–1200, 1200–1400 UTC.
-    Score per block = total valid QSOs × unique prefixes (all bands combined).
-    Final score = sum of three block scores.
-    Date: weekend closest to 15 August, 0300 Sat – 0300 Sun UTC.
+
+    24-hour contest 0300 UTC Saturday – 0300 UTC Sunday.
+    Score = sum of individual QSO point values (no multiplier).
+    QSO points vary by band (160m/23cm+ = 2pts, others = 1pt),
+    mode (CW/RTTY doubles), and time (night bonus × 3).
     """
 
     def identify(self, contest_name: str) -> bool:
@@ -94,19 +146,18 @@ class VKRDPlugin(ContestPlugin):
         return prev_sat
 
     def session_config(self) -> SessionConfig:
-        return SessionConfig(duration_mins=120, num_sessions=3, start_hour=8)
+        # 24h contest starting 0300 UTC, shown as 4 × 6h blocks.
+        # The night bonus window (1500–2000 UTC) falls in the third block.
+        return SessionConfig(duration_mins=360, num_sessions=4, start_hour=3)
 
     def mult_list(self) -> list:
-        return []
+        return []   # No multipliers in this contest
 
     def mult_label(self) -> str:
-        return "Prefix"
+        return "QSO"
 
     def mult_of_qso(self, q: dict) -> Optional[str]:
-        call = q.get("call", "")
-        if call and _is_vkrd_workable(call):
-            return _vkrd_prefix(call)
-        return None
+        return None   # No multipliers
 
     def has_missing_tab(self) -> bool:
         return False
@@ -122,88 +173,69 @@ class VKRDPlugin(ContestPlugin):
             if q["dupe"] or not _is_vkrd_workable(q.get("call", "")):
                 q["pts"] = 0
             else:
-                q["pts"] = 1
-
-    @staticmethod
-    def _block_score(qsos_in_block: list) -> int:
-        total_qsos = 0
-        all_pfx: set = set()
-        for q in qsos_in_block:
-            if q["dupe"] or not _is_vkrd_workable(q.get("call", "")):
-                continue
-            total_qsos += 1
-            pfx = _vkrd_prefix(q.get("call", ""))
-            if pfx:
-                all_pfx.add(pfx)
-        return total_qsos * len(all_pfx)
+                q["pts"] = _vkrd_qso_pts(q)
 
     def score(self, qsos: list) -> int:
-        blocks: dict = defaultdict(list)
-        for q in qsos:
-            t = q.get("time")
-            if t is None:
-                continue
-            h = t.hour
-            if   8 <= h < 10: blocks[0].append(q)
-            elif 10 <= h < 12: blocks[1].append(q)
-            elif 12 <= h < 14: blocks[2].append(q)
-        return sum(self._block_score(blocks[b]) for b in range(3))
+        return sum(
+            q.get("pts", 0) or 0
+            for q in qsos
+            if not q["dupe"] and _is_vkrd_workable(q.get("call", ""))
+        )
 
     def multipliers(self, qsos: list) -> MultResult:
-        primary = set()
-        for q in qsos:
-            if q["dupe"] or not _is_vkrd_workable(q.get("call", "")):
-                continue
-            pfx = _vkrd_prefix(q.get("call", ""))
-            if pfx:
-                primary.add((pfx, q.get("band", "?")))
-        return MultResult(primary, set(), "PREFIX MULTS", "")
+        # No formal multipliers — expose unique worked callsigns so gauges
+        # and the band-efficiency panel have something to display.
+        worked = {q.get("call", "") for q in qsos
+                  if not q["dupe"] and _is_vkrd_workable(q.get("call", ""))}
+        return MultResult(worked, set(), "WORKED", "")
 
     def worked_primary_mults(self, qsos: list) -> set:
-        return {_vkrd_prefix(q["call"]) for q in qsos
-                if not q["dupe"] and _is_vkrd_workable(q.get("call", ""))
-                and q.get("call")}
+        return {q["call"] for q in qsos
+                if not q["dupe"] and _is_vkrd_workable(q.get("call", ""))}
 
     def band_efficiency(self, qsos: list) -> list:
         band_qsos: dict = defaultdict(int)
-        band_pfx:  dict = defaultdict(set)
+        band_pts:  dict = defaultdict(int)
+        band_last: dict = {}
+        band_hours: dict = defaultdict(lambda: defaultdict(int))
         for q in qsos:
             if not q["dupe"] and _is_vkrd_workable(q.get("call", "")):
                 b = q.get("band") or "?"
+                pts = q.get("pts", 0) or 0
                 band_qsos[b] += 1
-                band_pfx[b].add(_vkrd_prefix(q.get("call", "")))
+                band_pts[b]  += pts
+                t = q.get("time")
+                if t is not None:
+                    if b not in band_last or t > band_last[b]:
+                        band_last[b] = t
+                    h_key = t.replace(minute=0, second=0, microsecond=0)
+                    band_hours[b][h_key] += 1
         result = []
         for b in band_qsos:
-            qn = band_qsos[b]
-            mn = len(band_pfx[b])
-            result.append({"band": b, "qsos": qn, "new_shires": mn,
-                           "efficiency": mn / qn if qn else 0})
-        return sorted(result, key=lambda x: x["efficiency"], reverse=True)
+            qn   = band_qsos[b]
+            pts  = band_pts[b]
+            best = max(band_hours[b].values()) if band_hours[b] else 0
+            last = band_last.get(b)
+            result.append({
+                "band": b, "qsos": qn, "pts": pts, "new_shires": 0,
+                "efficiency": pts / qn if qn else 0,
+                "best_hour_rate": best,
+                "last_qso_utc": last.isoformat() if last else None,
+            })
+        return sorted(result, key=lambda x: x["pts"], reverse=True)
 
     def sparkline_mults(self, q: dict, seen: set) -> int:
-        if not _is_vkrd_workable(q.get("call", "")):
-            return 0
-        pfx = _vkrd_prefix(q.get("call", ""))
-        key = (pfx, q.get("band", "?"))
-        if key not in seen:
-            seen.add(key)
-            return 1
-        return 0
+        return 0   # No multipliers
 
     def running_score_for_sparkline(self, qsos_up_to_hour: list) -> int:
         return self.score(qsos_up_to_hour)
 
     def gauge_defs(self, data: dict, total_mults: int) -> list:
-        worked   = data.get("worked", 0)
-        band_mult = data.get("band_mults", 0)
-        soft_max = max(worked * 1.25, band_mult * 1.25, 20)
-        valid    = data.get("valid", 1) or 1
+        valid = data.get("valid", 1) or 1
         return [
-            GaugeDef("TOTAL QSOs",  "total",      "qso_max",   ACCENT(),  "{v}"),
-            GaugeDef("VALID QSOs",  "valid",      "qso_max",   GREEN(),   "{v}"),
-            GaugeDef("TOTAL SCORE", "score",      "score_max", ACCENT3(), "{v:,}"),
-            GaugeDef("PFX WORKED",  "worked",     soft_max,    ACCENT3(), "{v}"),
-            GaugeDef("PFX MULTS",   "band_mults", soft_max,    GREEN(),   "{v}"),
-            GaugeDef("VK CONTACTS", "vk_cnt",     valid,       ACCENT2(), "{v}"),
-            GaugeDef("ZL CONTACTS", "zl_cnt",     valid,       "#64b5f6", "{v}"),
+            GaugeDef("TOTAL QSOs",  "total",  "qso_max",   ACCENT(),  "{v}"),
+            GaugeDef("VALID QSOs",  "valid",  "qso_max",   GREEN(),   "{v}"),
+            GaugeDef("TOTAL SCORE", "score",  "score_max", ACCENT3(), "{v:,}"),
+            GaugeDef("VK CONTACTS", "vk_cnt", valid,       ACCENT2(), "{v}"),
+            GaugeDef("ZL CONTACTS", "zl_cnt", valid,       "#64b5f6", "{v}"),
         ]

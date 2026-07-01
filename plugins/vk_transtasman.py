@@ -3,12 +3,16 @@ plugins/vk_transtasman.py
 ─────────────────────────
 WIA VK Trans-Tasman Contest (VKTTRTTY / VKTTSSBCW).
 
-Contest rules:
-  6 hours total: 0800–1400 UTC.
-  2 sessions × 200 minutes (DupeType 3 = once per session per band).
-  Multiplier: unique WPX prefixes per band — open-ended, no fixed list.
-  Score: total valid points × total WPX-prefix band mults.
-  Only VK / ZL / VJ / VL / AX contacts score 1 point each.
+Contest rules (wia.org.au/members/contests/transtasman/):
+  6 hours total: 0800–1400 UTC, 3 × 2-hour blocks.
+    Block 1: 0800–1000 UTC
+    Block 2: 1000–1200 UTC
+    Block 3: 1200–1400 UTC
+  Workable: VK and ZL (ZM) stations only. 1 point per QSO.
+  Dupe rule: DupeType 3 — same call workable once per block per band.
+  Multiplier: unique WPX prefixes per band PER BLOCK (open-ended, no fixed list).
+    A prefix on 40m in Block 1 and again in Block 2 counts as 2 multipliers.
+  Score: total valid QSO points × total prefix-band-block mults.
 
 UDC: VKTTRTTY.UDC (author VK4SN)
 """
@@ -54,6 +58,19 @@ def _wpx_prefix(call: str) -> str:
 
 _VKTT_WORKABLE_PREFIXES = frozenset({"AX", "VI", "VJ", "VK", "VL", "ZL", "ZM"})
 
+# Contest blocks (UTC hours, inclusive–exclusive)
+_BLOCKS = [(8, 10), (10, 12), (12, 14)]
+
+def _vktt_block(t) -> int:
+    """Return 0/1/2 for the QSO's block, or -1 if outside contest hours."""
+    if t is None:
+        return -1
+    h = t.hour
+    for i, (start, end) in enumerate(_BLOCKS):
+        if start <= h < end:
+            return i
+    return -1
+
 
 def _is_vktt_workable(call: str) -> bool:
     call = call.upper().strip()
@@ -66,11 +83,9 @@ def _is_vktt_workable(call: str) -> bool:
 class VKTransTasmanPlugin(ContestPlugin):
     """
     WIA VK Trans-Tasman Contest (VKTTRTTY / VKTTSSBCW).
-    6 hours total: 0800–1400 UTC.
-    2 sessions × 200 minutes (DupeType 3 = once per session per band).
-    Multiplier: unique WPX prefixes per band — open-ended, no fixed list.
-    Score: total valid points × total WPX-prefix band mults.
-    Only VK / ZL / VJ / VL / AX contacts score 1 point each.
+    6 hours: 0800–1400 UTC in 3 × 2-hour blocks.
+    Multipliers are unique WPX prefixes per band PER BLOCK — not just per band.
+    Score = total QSO points × total prefix-band-block multipliers.
     """
 
     def identify(self, contest_name: str) -> bool:
@@ -152,28 +167,25 @@ class VKTransTasmanPlugin(ContestPlugin):
         return pts * total_mults if total_mults else pts
 
     def multipliers(self, qsos: list) -> MultResult:
-        has_m1 = any(q["is_mult1"] is not None for q in qsos)
-        if has_m1:
-            primary = {
-                (q["mult1"], q["band"])
-                for q in qsos
-                if not q["dupe"] and q["is_mult1"] == 1 and q["mult1"]
-            }
-        else:
-            primary = set()
-            for q in qsos:
-                if q["dupe"]:
-                    continue
-                pfx = self.mult_of_qso(q)
-                if pfx and _is_vktt_workable(q.get("call", "")):
-                    primary.add((pfx, q["band"]))
+        # Multipliers are per-band PER BLOCK — a prefix on 40m in block 1
+        # and again on 40m in block 2 counts as two separate multipliers.
+        # We always derive from the QSO list directly rather than relying on
+        # N1MM's is_mult1 flag, since N1MM's per-block mult-reset behaviour
+        # may not align perfectly with this contest's block structure.
+        primary: set = set()
+        for q in qsos:
+            if q["dupe"]:
+                continue
+            pfx = self.mult_of_qso(q)
+            if pfx and _is_vktt_workable(q.get("call", "")):
+                block = _vktt_block(q.get("time"))
+                if block >= 0:
+                    primary.add((pfx, q["band"], block))
         return MultResult(primary, set(), "WPX MULTS", "")
 
     def worked_primary_mults(self, qsos: list) -> set:
-        has_m1 = any(q["is_mult1"] is not None for q in qsos)
-        if has_m1:
-            return {(q["mult1"], q["band"]) for q in qsos
-                    if not q["dupe"] and q["is_mult1"] == 1 and q["mult1"]}
+        # For display purposes (UI gauge "worked" count) use unique (pfx, band)
+        # pairs rather than the (pfx, band, block) triples used in scoring.
         return {(self.mult_of_qso(q), q["band"]) for q in qsos
                 if not q["dupe"] and _is_vktt_workable(q.get("call", ""))
                 and self.mult_of_qso(q)}

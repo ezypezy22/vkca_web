@@ -5,3 +5,7 @@ fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 pywebview>=5.0.0
 python-multipart>=0.0.9   # required by FastAPI/Starlette to parse file uploads
+
+# Live ranking (Contest Online ScoreBoard lookup, Overview tab)
+requests>=2.31.0
+beautifulsoup4>=4.12.0

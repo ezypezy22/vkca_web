@@ -61,6 +61,7 @@ from fastapi.responses import FileResponse, JSONResponse
 # Direct import — no tkinter mocking needed
 from contest_log import ContestLog
 from plugins.loader import plugin_for, get_all_plugins
+import cosb
 
 log = logging.getLogger(__name__)
 
@@ -110,6 +111,11 @@ class AppState:
         self.yoy_extra_paths: list                = []    # extra .s3db files added on the YOY tab
         self.pace_extra_paths: list               = []    # [{"path":..., "kind":"s3db"|"adif"|"cabrillo"}]
         self.fatigue_extra_paths: list            = []    # extra .s3db files added on the Fatigue tab
+        # Live-ranking lookup cache: {callsign: (fetched_at, result_or_None)}.
+        # Keeps the Overview tab's Contest Online ScoreBoard panel from
+        # re-scraping on every request — see /api/live_rank.
+        self._live_rank_cache: dict               = {}
+        self._live_rank_ttl:   float               = 120.0
 
     # ── Path validation (no DB open) ─────────────────────────────────────────
 
@@ -465,6 +471,35 @@ async def api_load(body: dict):
 @app.get("/api/snapshot")
 async def api_snapshot():
     return STATE.snapshot()
+
+
+def _live_rank_state() -> dict:
+    """Look up the loaded log's own callsign on Contest Online ScoreBoard,
+    using a short-TTL cache so the Overview panel's poll doesn't hit COSB on
+    every request. Runs in a thread executor — fetch_live_rank() is a
+    blocking network call."""
+    with STATE._lock:
+        cl = STATE.contest_log
+    call = getattr(cl, "my_call", None) if cl else None
+    if not call:
+        return {"available": False, "reason": "no_callsign"}
+
+    cached = STATE._live_rank_cache.get(call)
+    now = time.time()
+    if cached and (now - cached[0]) < STATE._live_rank_ttl:
+        result = cached[1]
+    else:
+        result = cosb.fetch_live_rank(call)
+        STATE._live_rank_cache[call] = (now, result)
+
+    if result is None:
+        return {"available": False, "reason": "no_live_data", "call": call}
+    return {"available": True, "call": call, **result}
+
+
+@app.get("/api/live_rank")
+async def api_live_rank():
+    return await asyncio.get_event_loop().run_in_executor(None, _live_rank_state)
 
 
 # ── Replay scrubber ───────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@
   };
 
   let bandChart = null;
+  let _be = [];   // current band_efficiency rows — kept in sync for tooltip callbacks
 
   function update(snap) {
     const be = snap?.band_efficiency;
@@ -24,11 +25,15 @@
     const mults   = be.map(r => r.new_shires || 0);
     const colours = labels.map(b => BAND_COLS[b] || C.muted);
 
-    updateChart(labels, effic, colours, qsos, mults);
-    updateTable(be, colours);
+    // Total score for % contribution calculation
+    const totalScore = snap?.score || 0;
+
+    updateChart(labels, effic, colours, qsos, mults, be);
+    updateTable(be, colours, totalScore);
   }
 
-  function updateChart(labels, effic, colours, qsos, mults) {
+  function updateChart(labels, effic, colours, qsos, mults, be) {
+    _be = be || [];   // keep in sync so the tooltip callback always reads latest values
     const canvas = document.getElementById('chart-band-eff');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -74,6 +79,7 @@
                   ` Efficiency: ${effic[i].toFixed(3)}`,
                   ` QSOs: ${qsos[i]}`,
                   ` New mults: ${mults[i]}`,
+                  ` Best hr rate: ${_be[i]?.best_hour_rate ?? '—'} Q/hr`,
                 ];
               },
             },
@@ -102,19 +108,39 @@
     });
   }
 
-  function updateTable(be, colours) {
+  function updateTable(be, colours, totalScore) {
     const tbody = document.getElementById('bands-tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
     const frag = document.createDocumentFragment();
+    const now = new Date();
     be.forEach((r, i) => {
       const col = colours[i] || C.muted;
+      const pts = r.pts || 0;
+      const scorePct = totalScore > 0 ? (pts / totalScore * 100).toFixed(1) + '%' : '—';
+      const bestRate = r.best_hour_rate ? r.best_hour_rate + '/hr' : '—';
+
+      // Band temperature — time since last QSO on this band
+      let lastStr = '—';
+      let tempCol = C.muted;
+      if (r.last_qso_utc) {
+        const last = new Date(r.last_qso_utc + 'Z');   // force UTC interpretation
+        const minAgo = Math.floor((now - last) / 60000);
+        if (minAgo < 60)        { lastStr = minAgo + 'm ago'; tempCol = C.green; }
+        else if (minAgo < 180)  { lastStr = Math.floor(minAgo/60) + 'h ago'; tempCol = '#f0c040'; }
+        else                    { lastStr = Math.floor(minAgo/60) + 'h ago'; tempCol = C.muted; }
+      }
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="color:${col};font-weight:bold">${r.band.toLowerCase()}</td>
         <td>${r.qsos || 0}</td>
+        <td style="color:${col}">${pts.toLocaleString()}</td>
+        <td style="color:${C.muted}">${scorePct}</td>
         <td>${r.new_shires || 0}</td>
-        <td>${(r.efficiency || 0).toFixed(3)}</td>`;
+        <td>${(r.efficiency || 0).toFixed(3)}</td>
+        <td style="color:${C.muted}">${bestRate}</td>
+        <td style="color:${tempCol}">${lastStr}</td>`;
       frag.appendChild(tr);
     });
     tbody.appendChild(frag);

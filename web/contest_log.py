@@ -201,6 +201,19 @@ class ContestLog:
         except Exception as e:
             logging.warning("Could not read ContestInstance.StartDate: %s", e)
 
+        # ── Read the station's own callsign (for the live-ranking lookup) ──────
+        # N1MM's Station table holds the logging station's identity — distinct
+        # from DXLOG's per-QSO "Operator" column (multi-op operator credit).
+        # Not every .s3db has this table/row populated, so this must degrade
+        # to None rather than raise.
+        self.my_call = None
+        try:
+            row = c.execute("SELECT Call FROM Station LIMIT 1").fetchone()
+            if row and row[0]:
+                self.my_call = str(row[0]).strip().upper() or None
+        except Exception as e:
+            logging.info("Could not read Station.Call (live ranking will be unavailable): %s", e)
+
         target = None
         for t in tables:
             if "log" in t.lower() or "dxlog" in t.lower() or "qso" in t.lower():
@@ -1204,6 +1217,7 @@ class ContestLog:
 
         return_dict = {
             "_plugin_name":    getattr(plugin, "display_name", ""),
+            "my_call":         self.my_call,
             # ── scalar card values ────────────────────────────────────────────
             "total":           total_qsos_n,
             "valid":           valid_qsos_n,

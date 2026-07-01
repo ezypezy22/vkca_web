@@ -266,7 +266,11 @@
   window.addEventListener('resize',redrawAll);
 
   // ══ SPARKLINES ═════════════════════════════════════════════════════════════
+  // UTC start hour of the current contest — used by the x-axis tick callback
+  // to show real UTC hours (e.g. "00z", "06z") rather than bucket indices.
+  let _sparkStartUTC = 0;
   let _sparks={};
+
   function makeSparkline(id,colour){
     const canvas=document.getElementById(id); if(!canvas) return null;
     canvas.style.filter=`drop-shadow(0 0 4px ${colour}80)`;
@@ -283,12 +287,34 @@
         pointHoverBorderColor:'#fff',pointHoverBorderWidth:2}]},
       options:{responsive:true,maintainAspectRatio:false,animation:{duration:400},
         interaction:{mode:'index',intersect:false},
+        layout:{padding:{bottom:2}},
         plugins:{legend:{display:false},
           tooltip:{mode:'index',intersect:false,backgroundColor:T.bg3,
             borderColor:colour,borderWidth:1,titleColor:colour,bodyColor:T.fg,
-            displayColors:false,padding:8}},
+            displayColors:false,padding:8,
+            callbacks:{title:items=>{
+              // Show actual UTC hour in tooltip title
+              const h=(_sparkStartUTC+items[0].dataIndex)%24;
+              return String(h).padStart(2,'0')+':00 UTC';
+            }}}},
         scales:{
-          x:{display:false},
+          x:{
+            display:true,
+            grid:{display:false},
+            border:{display:false},
+            ticks:{
+              color:T.muted+'aa',
+              font:{size:8,family:'Consolas,monospace'},
+              maxTicksLimit:5,
+              maxRotation:0,
+              autoSkip:true,
+              // Convert bucket index → "HHz" UTC label
+              callback:(val,i)=>{
+                const h=(_sparkStartUTC+i)%24;
+                return String(h).padStart(2,'0')+'z';
+              },
+            },
+          },
           y:{display:false,beginAtZero:true},
         }},
     });
@@ -305,9 +331,21 @@
 
   function updateSparklines(snap){
     const sl=snap?.sparklines; if(!sl) return;
+
+    // Extract contest start UTC hour for the x-axis labels.
+    // start_dt comes back as an ISO string like "2024-07-20T00:00:00" (naive UTC).
+    const startDt=snap?.session_status?.start_dt;
+    if(startDt) {
+      // Parse the hour directly from the ISO string — avoids local-timezone
+      // ambiguity that new Date() would introduce on the user's machine.
+      const hStr=String(startDt).substring(11,13);
+      const parsed=parseInt(hStr,10);
+      if(!isNaN(parsed)) _sparkStartUTC=parsed;
+    }
+
     function apply(chart,data,heroId){
       if(!chart||!data?.length) return;
-      chart.data.labels=data.map((_,i)=>String(i).padStart(2,'0'));
+      chart.data.labels=data.map((_,i)=>i);
       chart.data.datasets[0].data=data;
       const peak=Math.max(...data,0),pi=data.lastIndexOf(peak);
       chart.data.datasets[0].pointRadius=data.map((_,i)=>i===pi?4:0);
@@ -488,6 +526,45 @@
             ${(op.qsos||0).toLocaleString()} QSOs · ${fmH(op.span_minutes||0)} span</td></tr>`
         ).join('')}
       </table>`;
+  }
+
+  // ── Live Ranking (Contest Online ScoreBoard) — polled independently on its
+  // own timer below, NOT from render()/vka:snapshot, since it's a slow
+  // external network call unrelated to local log state.
+  function updateLiveRank(data){
+    const el=ip('panel-live-rank'); if(!el) return;
+    if(!data || !data.available){
+      const msg = data?.reason==='no_callsign'
+        ? 'No callsign found in this log.'
+        : 'Not currently posting to Contest Online ScoreBoard.';
+      el.innerHTML=hdr('[ # ]',T.red,'LIVE RANKING')+
+        `<div style="color:${T.muted};font-size:0.85em;padding:8px 0">${msg}</div>`;
+      return;
+    }
+    el.innerHTML=hdr('[ # ]',T.red,'LIVE RANKING')+`
+      <table class="ip-tbl">
+        <tr><td>Rank</td><td style="color:${T.accent};font-weight:bold">#${data.rank} of ${data.total_in_category}</td></tr>
+        <tr><td>Category</td><td style="color:${T.muted}">${data.category||'—'}</td></tr>
+        <tr><td>Score</td><td style="color:${T.accent3}">${(data.score||0).toLocaleString()}</td></tr>
+        <tr><td>QSOs</td><td style="color:${T.muted}">${(data.qsos||0).toLocaleString()}</td></tr>
+        <tr><td colspan="2" style="color:${T.muted};font-size:0.77em;padding-top:4px">
+          ${data.contest_name||''}${data.profile_url?` — <a href="${data.profile_url}" target="_blank" style="color:${T.accent}">View on COSB &rarr;</a>`:''}
+        </td></tr>
+      </table>`;
+  }
+
+  async function fetchLiveRank(){
+    try {
+      const res = await fetch('/api/live_rank');
+      updateLiveRank(await res.json());
+    } catch(e) { /* leave the panel showing its last known state */ }
+  }
+
+  let _liveRankTimer=null;
+  function startLiveRankPolling(){
+    fetchLiveRank();
+    if(_liveRankTimer) clearInterval(_liveRankTimer);
+    _liveRankTimer=setInterval(fetchLiveRank,120000);   // matches server cache TTL
   }
 
   // ══ SESSION BAR ════════════════════════════════════════════════════════════
@@ -979,6 +1056,8 @@
     if (_replaying && _lastReplaySnap) { render(_lastReplaySnap); return; }
     const snap=window.VKA.lastSnap(); if(snap) render(snap);
   });
-  window.addEventListener('vka:loaded',()=>{_metaLoaded=false;_firstSnap=true;});
+  window.addEventListener('vka:loaded',()=>{_metaLoaded=false;_firstSnap=true;startLiveRankPolling();});
+
+  if (!HUD_MODE) startLiveRankPolling();
 
 })();
