@@ -14,7 +14,7 @@ Versions follow a `YY.M.patch` scheme:
 - `M` — month of release (no leading zero)
 - `patch` — incrementing patch number for that month, reset to `1` at the start of each new month's releases
 
-Example: `26.6.1` = the 1st release in June 2026.
+Example: `26.7.1` = the 1st release in July 2026.
 
 <img width="1524" height="1030" alt="image" src="https://github.com/user-attachments/assets/02d4ce3a-2c0e-4c9c-8473-198f4ba0fc09" />
 

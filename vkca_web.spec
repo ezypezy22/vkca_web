@@ -83,7 +83,7 @@ runtime_hooks = [str(rthook_path)] if rthook_path.exists() else []
 # ── Analysis ──────────────────────────────────────────────────────────────────
 a = Analysis(
     [str(ROOT / 'web' / 'server.py')],
-    pathex=[str(ROOT)],
+    pathex=[str(ROOT), str(ROOT / 'web')],
     binaries=[],
     datas=datas,
     hiddenimports=hidden,

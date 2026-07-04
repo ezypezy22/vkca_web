@@ -73,13 +73,19 @@
     const tbody = document.getElementById('rate-sess-tbody');
     if (!tbody || !sessions.length) return;
     tbody.innerHTML = '';
+    const totalQsos = sessions.reduce((sum, s) => sum + (s.qsos || 0), 0);
+    const bestQsos   = Math.max(...sessions.map(s => s.qsos || 0));
     const frag = document.createDocumentFragment();
     sessions.forEach(s => {
       const tr = document.createElement('tr');
-      const score = (s.running_score || 0).toLocaleString();
+      const score   = (s.running_score || 0).toLocaleString();
+      const pctQsos = totalQsos > 0 ? (s.qsos / totalQsos * 100).toFixed(1) + '%' : '—';
+      const isBest  = s.qsos > 0 && s.qsos === bestQsos;
+      if (isBest) tr.style.borderLeft = '2px solid var(--green)';
       tr.innerHTML = `
-        <td style="color:var(--accent)">${s.label || s.session}</td>
+        <td style="color:var(--accent)">${s.label || s.session}${isBest ? ' 🔥' : ''}</td>
         <td>${s.qsos}</td>
+        <td style="color:${isBest ? 'var(--green)' : 'var(--muted)'}">${pctQsos}</td>
         <td>${s.new_mults}</td>
         <td>${s.cum_mults}</td>
         <td>${(s.pts||0).toLocaleString()}</td>

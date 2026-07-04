@@ -292,8 +292,13 @@ class VKShiresPlugin(ContestPlugin):
             if not state:
                 continue
             region_qsos[state] += 1
-            if q.get("is_mult1") == 1 and q.get("raw_mult"):
-                region_worked[state].add(q["raw_mult"].strip().upper())
+            # Dedupe on the resolved canonical shire code, not the raw
+            # exchange string — two QSOs whose raw text differs (e.g. a
+            # short-form "BN4" vs the full "QLD-BN3") but resolve to the
+            # same shire must count as one worked mult, matching
+            # worked_primary_mults()/mult_of_qso() elsewhere.
+            if q.get("is_mult1") == 1 and shire:
+                region_worked[state].add(shire)
         result = []
         for reg in _SHIRE_STATES_ORDERED:
             w = len(region_worked[reg])

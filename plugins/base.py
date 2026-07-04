@@ -177,9 +177,19 @@ class ContestPlugin(ABC):
     # ── Multiplier helpers ────────────────────────────────────────────────────
 
     def worked_primary_mults(self, qsos: list) -> set:
-        ml = self.mult_list()
-        return {q["mult1"] for q in qsos
-                if not q["dupe"] and q["mult1"] and q["mult1"] in ml}
+        # Delegates to mult_of_qso() rather than checking q["mult1"] against
+        # mult_list() directly, so plugins with extra per-QSO resolution logic
+        # beyond a literal mult1 match (e.g. vk_shires.py's short-form-to-full
+        # shire code resolution via callsign area) are correctly counted as
+        # worked here too, not just in their own overrides.
+        result: set = set()
+        for q in qsos:
+            if q["dupe"]:
+                continue
+            m = self.mult_of_qso(q)
+            if m:
+                result.add(m)
+        return result
 
     def worked_primary_band_mults(self, qsos: list) -> set:
         has_m1 = any(q["is_mult1"] is not None for q in qsos)

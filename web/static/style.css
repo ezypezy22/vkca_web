@@ -281,6 +281,11 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
 .filter-input:focus{border-color:var(--accent);}
 .filter-input::placeholder{color:var(--muted);}
 
+/* Generic hidden-toggle utility — several elements (step-path/step-picker in
+   the load dialog, detected-dbs-wrap) only ever had classList.toggle('hidden')
+   applied with no matching CSS rule, so they silently never actually hid. */
+.hidden{display:none!important;}
+
 /* ── Dialog ──────────────────────────────────────────────────────────────── */
 .dialog-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);
   display:flex;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(4px);}
@@ -303,6 +308,27 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
 .dialog-error.hidden{display:none;}
 .dialog-footer{display:flex;justify-content:flex-end;gap:8px;padding:10px 16px;
   border-top:1px solid var(--bg3);}
+.dialog--wide{width:640px;max-width:92vw;}
+.dialog-body--scroll{max-height:66vh;overflow-y:auto;}
+.dialog-textarea{width:100%;background:var(--bg3);border:1px solid #30363d;color:var(--fg);
+  font-family:var(--font-ui);font-size:0.88em;padding:7px 10px;
+  border-radius:var(--radius);outline:none;transition:border-color .15s;resize:vertical;}
+.dialog-textarea:focus{border-color:var(--accent);}
+.dialog-radio-row{display:flex;gap:16px;margin-bottom:10px;}
+.dialog-radio-row label{display:flex;align-items:center;gap:6px;font-size:0.9em;cursor:pointer;}
+.dialog-check{display:flex;align-items:flex-start;gap:7px;font-size:0.85em;color:var(--fg);
+  margin-bottom:6px;cursor:pointer;line-height:1.3;}
+.dialog-check input{margin-top:3px;flex-shrink:0;}
+.dialog-section-label{font-family:var(--font-mono);font-size:0.75em;font-weight:bold;
+  color:var(--accent3);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 4px;}
+.dialog-hint{font-size:0.78em;color:var(--muted);margin-bottom:8px;}
+.missing-region-strip{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 10px;}
+.missing-region-chip{font-family:var(--font-mono);font-size:0.77em;padding:3px 9px;
+  border-radius:12px;border:1px solid;cursor:pointer;background:transparent;
+  transition:background .12s,opacity .12s;}
+.missing-region-chip:hover{opacity:.8;}
+.missing-region-chip.active{background:currentColor;}
+.missing-region-chip.active span{color:var(--bg);}
 .path-row{display:flex;gap:6px;align-items:center;}
 .path-row .dialog-input{flex:1;}
 .picker-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;}

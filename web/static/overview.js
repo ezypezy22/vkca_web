@@ -528,6 +528,27 @@
       </table>`;
   }
 
+  // Per-operator on-air efficiency + rate — same formulas as fatigue.js's
+  // renderOpCards(), condensed into the Overview's info-panel table style so
+  // it's visible at a glance without switching to the Fatigue tab.
+  function updateFatigueTile(snap){
+    const ops=snap?.operator_times; const el=ip('panel-fatigue'); if(!el||!ops?.length) return;
+    const pal=[T.accent,T.accent3,T.accent2,'#a78bfa'];
+    el.innerHTML=hdr('[ Z ]',T.accent2,'FATIGUE')+`
+      <table class="ip-tbl">
+        <tr><th>Operator</th><th>On-Air %</th><th>Q/hr</th></tr>
+        ${ops.slice(0,4).map((op,i)=>{
+          const onPct = op.span_minutes>0 ? Math.round(op.on_minutes/op.span_minutes*100) : 0;
+          const rate  = op.on_minutes>0 ? ((op.qsos||0)/(op.on_minutes/60)).toFixed(1) : '—';
+          const pctCol = onPct>=70?T.green:onPct>=40?T.accent3:T.red;
+          const flag = onPct<40 ? ' 😴' : onPct>=85 ? ' 🔥' : '';
+          return `<tr><td style="color:${pal[i%4]};font-weight:bold">${op.operator||'—'}</td>
+              <td style="color:${pctCol}">${onPct}%${flag}</td>
+              <td style="color:${T.muted}">${rate}</td></tr>`;
+        }).join('')}
+      </table>`;
+  }
+
   // ── Live Ranking (Contest Online ScoreBoard) — polled independently on its
   // own timer below, NOT from render()/vka:snapshot, since it's a slow
   // external network call unrelated to local log state.
@@ -1038,6 +1059,7 @@
     updateSessionStatus(snap); updateContestTime(snap);
     updateBandEfficiency(snap); updatePersonalBests(snap);
     updateQsoValue(snap); updateLastWorked(snap); updateOperatorTimes(snap);
+    updateFatigueTile(snap);
     updateInsightBar(snap);
     updateExtraAnalytics(snap);
     updateContestOverPanel(snap);

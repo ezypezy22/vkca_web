@@ -269,6 +269,7 @@ class ContestLog:
         m1_col    = col(["IsMultiplier1","ismultiplier1"])
         m2_col    = col(["IsMultiplier2","ismultiplier2"])
         op_col    = col(["Operator","operator","OPERATOR"])
+        continent_col = col(["Continent","continent","CONTINENT"])
 
         logging.info(
             "Using columns: call=%s band=%s freq=%s mode=%s time=%s "
@@ -279,7 +280,7 @@ class ContestLog:
 
         sel_cols = [call_col, band_col, freq_col, mode_col, time_col,
                     mult_col, sect_col, zone_col, m1_col, m2_col,
-                    dupe_col, pts_col, id_col, op_col]
+                    dupe_col, pts_col, id_col, op_col, continent_col]
         sel_cols = [cn for cn in sel_cols if cn]
         seen = set(); sel_cols_dedup = []
         for c_ in sel_cols:
@@ -479,6 +480,10 @@ class ContestLog:
                 mult = call
                 mult_source = mult_source or "IS_MULT2_FALLBACK"
 
+            # ── Continent (N1MM's own country-file lookup, when available) ─────
+            continent = str(d.get(continent_col) or "").strip().upper() \
+                if continent_col else ""
+
             if call and t:
                 self.qsos.append({
                     "call":        call,
@@ -498,6 +503,7 @@ class ContestLog:
                     "mult_source": mult_source,
                     "qso_id":      str(d.get(id_col) or "") if id_col else "",
                     "operator":    operator,
+                    "continent":   continent,
                     "_table":      target,
                 })
 

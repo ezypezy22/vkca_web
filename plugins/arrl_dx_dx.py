@@ -209,7 +209,13 @@ class ARRLDXDXPlugin(ContestPlugin):
     # ── Per-QSO points ────────────────────────────────────────────────────────
 
     def recalc_pts(self, qsos: list) -> None:
-        """Every non-dupe QSO on a valid band = 3 points."""
+        """Every non-dupe QSO with a W/VE (North America) station on a
+        valid band = 3 points (rule 5.2.1). Contacts with other DX
+        stations (e.g. VK working JA or another VK) are logged but
+        non-scoring — N1MM itself flags these Points=0, ContactType='N',
+        Continent != 'NA'; skip crediting them rather than letting the
+        generic loader's "0-pt non-dupe -> 1 pt" fallback (meant for
+        contests like CQWW) leak a false point value in here."""
         seen: set = set()
 
         for q in qsos:
@@ -219,13 +225,18 @@ class ARRLDXDXPlugin(ContestPlugin):
                 q["dupe"] = 1
                 continue
 
-            raw_pts = q.get("pts")
-            call    = str(q.get("call") or "").upper()
-            key     = (call, b)
+            raw_pts   = q.get("pts")
+            call      = str(q.get("call") or "").upper()
+            continent = q.get("continent") or ""
+            key       = (call, b)
 
             if q.get("dupe") or raw_pts == 0 or key in seen:
                 q["pts"]  = 0
                 q["dupe"] = 1
+                continue
+
+            if continent and continent != "NA":
+                q["pts"] = 0
                 continue
 
             seen.add(key)

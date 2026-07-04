@@ -337,6 +337,43 @@ async def api_browse():
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
+# ── Auto-discover N1MM databases in well-known locations ─────────────────────
+# N1MM Logger+ always keeps user contest databases in this folder alongside a
+# handful of its own internal system databases (admin log, packet spot cache)
+# — those aren't contest logs, so they're filtered out by name.
+
+_N1MM_SYSTEM_DBS = {"n1mm admin.s3db", "n1mm dxlog.s3db", "n1mm packet spots.s3db"}
+
+
+def _known_n1mm_db_dirs() -> list:
+    return [Path.home() / "Documents" / "N1MM Logger+" / "Databases"]
+
+
+@app.get("/api/scan_known_locations")
+async def api_scan_known_locations():
+    """Look for .s3db files in N1MM Logger+'s default database folder, so the
+    user doesn't have to browse to/type a path for the common case."""
+    found = []
+    for d in _known_n1mm_db_dirs():
+        if not d.is_dir():
+            continue
+        for f in d.glob("*.s3db"):
+            if f.name.lower() in _N1MM_SYSTEM_DBS:
+                continue
+            try:
+                st = f.stat()
+            except OSError:
+                continue
+            found.append({
+                "path":  str(f),
+                "name":  f.name,
+                "size":  st.st_size,
+                "mtime": st.st_mtime,
+            })
+    found.sort(key=lambda r: r["mtime"], reverse=True)
+    return {"databases": found}
+
+
 # ── Pop-out tile window (pywebview) ───────────────────────────────────────────
 
 @app.post("/api/popout")

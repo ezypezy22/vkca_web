@@ -6,7 +6,7 @@ Built and maintained by **VK2YI**.
 
 ## Current version
 
-`26.7.1`
+`26.7.2`
 
 Versions follow a `YY.M.patch` scheme:
 
@@ -14,7 +14,7 @@ Versions follow a `YY.M.patch` scheme:
 - `M` — month of release (no leading zero)
 - `patch` — incrementing patch number for that month, reset to `1` at the start of each new month's releases
 
-Example: `26.7.1` = the 1st release in June 2026.
+Example: `26.7.1` = the 1st release in July 2026.
 
 ## Features
 

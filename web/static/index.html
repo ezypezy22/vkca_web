@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VK Contest Analyzer v26.7.1</title>
+<title>VK Contest Analyzer v26.7.2</title>
 <link rel="stylesheet" href="/static/style.css">
 <script>
   // Applied synchronously, before paint, so a popped-out tile/HUD window
@@ -27,7 +27,7 @@
   <!-- Row 1: identity + primary action -->
   <div id="tb-row1">
     <div id="titlebar-logo">⬡</div>
-    <div id="titlebar-title">VK CONTEST ANALYZER <span style="color:var(--muted);font-size:0.75em">v26.7.1</span></div>
+    <div id="titlebar-title">VK CONTEST ANALYZER <span style="color:var(--muted);font-size:0.75em">v26.7.2</span></div>
     <div id="titlebar-status">
       <span id="status-dot" class="dot dot--disconnected"></span>
       <span id="status-text">No log loaded</span>
@@ -77,7 +77,7 @@
     <label class="tb-label">THEME</label>
     <select id="theme-select" class="tb-select tb-select--theme">
       <option value="System (OS default)">System (OS default)</option>
-      <option value="Dark (Default)">Dark</option>
+      <option value="Dark (Default)" selected>Dark</option>
       <option value="Light">Light</option>
       <option value="High Contrast">High Contrast</option>
       <option value="Deuteranopia-Safe">Deuteranopia-Safe</option>
@@ -89,6 +89,11 @@
     <!-- Export -->
     <button id="btn-csv" class="tb-btn" title="Export current tab data as CSV">⬇ CSV</button>
     <button id="btn-snapshot" class="tb-btn" title="Save the current tab as PNG">📷 Snapshot</button>
+
+    <div class="tb-sep"></div>
+
+    <!-- Report issue / request feature -->
+    <button id="btn-report-issue" class="tb-btn" title="Report a bug or request a feature">🐛 Report Issue</button>
   </div>
 
 </div>
@@ -109,9 +114,6 @@
 <nav id="tabbar">
   <button class="tab-btn active" data-tab="overview">
     <span class="tab-icon">📊</span><span class="tab-label">Overview</span>
-  </button>
-  <button class="tab-btn" data-tab="report">
-    <span class="tab-icon">📑</span><span class="tab-label">Report</span>
   </button>
   <button class="tab-btn" data-tab="cluster">
     <span class="tab-icon">📡</span><span class="tab-label">DX Cluster</span>
@@ -145,6 +147,9 @@
   </button>
   <button class="tab-btn" data-tab="worked">
     <span class="tab-icon">📋</span><span class="tab-label">Worked</span>
+  </button>
+  <button class="tab-btn" data-tab="report">
+    <span class="tab-icon">📑</span><span class="tab-label">Postcontest Report</span>
   </button>
 </nav>
 
@@ -226,6 +231,11 @@
       <div class="info-panel" id="panel-op-times">
         <div class="ip-hdr"><span style="color:var(--accent)">[ O ]</span>
           <span class="ip-title" style="color:var(--accent)">OPERATOR TIMES</span></div>
+        <div style="color:var(--muted);font-size:0.85em;padding:8px 0">Loading…</div>
+      </div>
+      <div class="info-panel" id="panel-fatigue">
+        <div class="ip-hdr"><span style="color:var(--accent2)">[ Z ]</span>
+          <span class="ip-title" style="color:var(--accent2)">FATIGUE</span></div>
         <div style="color:var(--muted);font-size:0.85em;padding:8px 0">Loading…</div>
       </div>
       <div class="info-panel" id="panel-live-rank">
@@ -478,7 +488,7 @@
       <div class="panel-header"><span style="color:var(--accent3)">●</span> SESSION BREAKDOWN</div>
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>Session</th><th>QSOs</th><th>New Mults</th><th>Cum Mults</th><th>Pts</th><th>Running Score</th></tr></thead>
+          <thead><tr><th>Session</th><th>QSOs</th><th>% QSOs</th><th>New Mults</th><th>Cum Mults</th><th>Pts</th><th>Running Score</th></tr></thead>
           <tbody id="rate-sess-tbody"></tbody>
         </table>
       </div>
@@ -492,6 +502,7 @@
       <span class="badge" id="missing-count">0</span>
       <input id="missing-filter" class="filter-input" placeholder="Filter…" type="text">
     </div>
+    <div id="missing-region-strip" class="missing-region-strip"></div>
     <div class="table-wrap">
       <table class="data-table">
         <thead><tr><th>Mult Code</th><th>Region</th></tr></thead>
@@ -872,6 +883,13 @@
     <div class="dialog-title">Open Contest Log</div>
     <div class="dialog-body">
       <div id="step-path">
+        <div id="detected-dbs-wrap" class="hidden">
+          <label class="dialog-label">Detected N1MM Databases</label>
+          <div class="contest-list-wrap" style="max-height:160px">
+            <div id="detected-dbs-list" class="contest-list"></div>
+          </div>
+          <div class="dialog-hint" style="margin:10px 0 2px">— or enter a path manually —</div>
+        </div>
         <label class="dialog-label">Path to .s3db file</label>
         <div class="path-row">
           <input id="load-path-input" class="dialog-input" placeholder="C:\N1MM Logger+\Logs\contest.s3db" type="text">
@@ -895,6 +913,47 @@
   </div>
 </div>
 
+<!-- ── Report Issue / Request Feature dialog ──────────────────────────────────── -->
+<div id="report-issue-dialog" class="dialog-overlay hidden">
+  <div class="dialog dialog--wide">
+    <div class="dialog-title">⬡ Report an Issue / Request a Feature</div>
+    <div class="dialog-body dialog-body--scroll">
+      <div class="dialog-hint" id="report-issue-repo-line">VK Contest Analyzer — github.com/ezypezy22/VK-Contest-Analyzer</div>
+
+      <div class="dialog-radio-row">
+        <label><input type="radio" name="report-issue-kind" value="bug" checked> Bug Report</label>
+        <label><input type="radio" name="report-issue-kind" value="feature"> Feature Request</label>
+      </div>
+
+      <label class="dialog-label">Title</label>
+      <input id="report-issue-title" class="dialog-input" type="text" placeholder="Short, specific title">
+
+      <div id="report-issue-fields"></div>
+
+      <div class="dialog-section-label">Optional — paste an AI-polished report here (overrides the fields above)</div>
+      <textarea id="report-issue-override" class="dialog-textarea" rows="4"
+                placeholder="Paste an AI reply here. If it starts with 'TITLE: ...' that title is used automatically."></textarea>
+
+      <label class="dialog-check" style="margin-top:12px">
+        <input type="checkbox" id="report-issue-diag" checked>
+        <span>Attach diagnostic info (version, browser, active plugin, theme)</span>
+      </label>
+
+      <div class="dialog-section-label">Step 1 (optional) — polish with AI</div>
+      <div class="dialog-hint">Copies a prompt to your clipboard. Paste it into your preferred AI chat, then paste the reply into the override box above.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="btn-report-copy-prompt" class="btn btn--ghost btn--sm">Copy AI Prompt</button>
+        <button id="btn-report-open-claude" class="btn btn--ghost btn--sm">Open Claude</button>
+        <button id="btn-report-open-chatgpt" class="btn btn--ghost btn--sm">Open ChatGPT</button>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button id="btn-report-cancel" class="btn btn--ghost">Close</button>
+      <button id="btn-report-submit" class="btn btn--primary">Open GitHub Issue →</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Scripts ─────────────────────────────────────────────────────────────── -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -914,6 +973,7 @@
 <script src="/static/debug.js"></script>
 <script src="/static/worked.js"></script>
 <script src="/static/report.js"></script>
+<script src="/static/report-issue.js"></script>
 <script src="/static/worldmap.js"></script>
 </body>
 </html>

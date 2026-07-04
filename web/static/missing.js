@@ -9,6 +9,7 @@
   const tbody  = document.getElementById('missing-tbody');
   const count  = document.getElementById('missing-count');
   const filter = document.getElementById('missing-filter');
+  const strip  = document.getElementById('missing-region-strip');
 
   const STATE_COLS = {
     NSW:'#00d4aa',QLD:'#f0c040',VIC:'#64b5f6',SA:'#ff6b35',
@@ -16,6 +17,37 @@
   };
 
   let _rows = [];
+
+  // ── Region summary chips (worked/total per region, click to quick-filter) ──
+  // Reuses snap.region_heat, already computed for the Overview state-bars
+  // panel — no extra fetch needed.
+  function renderRegionStrip() {
+    if (!strip) return;
+    const heat = window.VKA?.lastSnap?.()?.region_heat;
+    if (!heat || !heat.length) { strip.innerHTML = ''; return; }
+
+    const activeRegion = (filter.value || '').trim().toUpperCase();
+    strip.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    heat.forEach(r => {
+      const region  = r.state || r.region || '?';
+      const missing = Math.max(0, (r.total || 0) - (r.worked || 0));
+      if (!missing) return;   // fully worked — nothing to quick-filter to
+      const col = STATE_COLS[region] || 'var(--muted)';
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'missing-region-chip' + (activeRegion === region ? ' active' : '');
+      chip.style.color = col;
+      chip.style.borderColor = col;
+      chip.innerHTML = `<span>${region} · ${missing} missing</span>`;
+      chip.addEventListener('click', () => {
+        filter.value = (filter.value.trim().toUpperCase() === region) ? '' : region;
+        render();
+      });
+      frag.appendChild(chip);
+    });
+    strip.appendChild(frag);
+  }
 
   async function load() {
     try {
@@ -37,6 +69,7 @@
       : _rows;
 
     count.textContent = filtered.length;
+    renderRegionStrip();
 
     tbody.innerHTML = '';
     if (!filtered.length) {

@@ -13,3 +13,6 @@ __pycache__/
 # Runtime logs / local app state
 *.log
 vkcontest_config.json
+
+# Local N1MM test/dev databases — contest logs, not source
+*.s3db

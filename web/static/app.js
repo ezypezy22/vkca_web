@@ -93,7 +93,7 @@ Users are responsible for verifying all information against N1MM before making d
   ctx.fillStyle='#8b949e'; ctx.font='13px Consolas,monospace';
   ctx.fillText('by VK2YI', W/2, 178);
   ctx.fillStyle='#00d4aa'; ctx.font='bold 13px Consolas,monospace';
-  ctx.fillText('v26.7.1', W/2, 202);
+  ctx.fillText('v26.7.2', W/2, 202);
 
   // ── Progress bar animation ─────────────────────────────────────────────────
   const bar = document.getElementById('splash-bar');
@@ -423,6 +423,7 @@ Users are responsible for verifying all information against N1MM before making d
   const switchLabel = document.getElementById('switch-contest-label');
 
   let _selectedContest=null, _scannedPath='', _scannedContests=[], _loadedContest=null;
+  let _scanInFlight=false, _pickerRenderedAt=0;
 
   function _updateSwitchBtn(contests, current) {
     if (!btnSwitch) return;
@@ -475,7 +476,61 @@ Users are responsible for verifying all information against N1MM before making d
     }, 50);
   });
 
-  function showDialog() { overlay.classList.remove('hidden'); showStep('path'); setTimeout(()=>pathInput?.focus(),50); }
+  const detectedWrap = document.getElementById('detected-dbs-wrap');
+  const detectedList = document.getElementById('detected-dbs-list');
+
+  function fmtBytes(n) {
+    if (!n) return '0 KB';
+    const kb = n/1024;
+    return kb < 1024 ? `${kb.toFixed(0)} KB` : `${(kb/1024).toFixed(1)} MB`;
+  }
+  function fmtAgo(epochSec) {
+    const mins = Math.max(0, (Date.now()/1000 - epochSec) / 60);
+    if (mins < 60)   return `${Math.round(mins)}m ago`;
+    if (mins < 1440) return `${Math.round(mins/60)}h ago`;
+    return `${Math.round(mins/1440)}d ago`;
+  }
+
+  async function scanKnownLocations() {
+    if (!detectedWrap || !detectedList) return;
+    try {
+      const res  = await fetch('/api/scan_known_locations');
+      const data = await res.json();
+      const dbs  = data.databases || [];
+      if (!dbs.length) { detectedWrap.classList.add('hidden'); return; }
+      detectedList.innerHTML = '';
+      dbs.forEach(db => {
+        const row = document.createElement('div');
+        row.className = 'contest-row';
+        row.innerHTML = `<div class="contest-row-accent" style="background:var(--accent)"></div>
+          <div class="contest-row-body">
+            <div class="contest-row-name">${db.name}</div>
+            <div class="contest-row-meta">
+              <span>${fmtAgo(db.mtime)}</span>
+              <span>${fmtBytes(db.size)}</span>
+            </div>
+          </div>
+          <div class="contest-row-arrow">›</div>`;
+        row.addEventListener('click', () => {
+          pathInput.value = db.path;
+          errDiv.classList.add('hidden');
+          // Always show the contest picker for a detected database, even
+          // when it contains only one contest — picking a .s3db from this
+          // list is a distinct step from picking the contest inside it, so
+          // it shouldn't silently skip straight to loading.
+          doScan({ alwaysShowPicker: true });
+        });
+        detectedList.appendChild(row);
+      });
+      detectedWrap.classList.remove('hidden');
+    } catch { detectedWrap.classList.add('hidden'); }
+  }
+
+  function showDialog() {
+    overlay.classList.remove('hidden'); showStep('path');
+    setTimeout(()=>pathInput?.focus(),50);
+    scanKnownLocations();
+  }
   function hideDialog() { overlay.classList.add('hidden'); errDiv.classList.add('hidden'); _selectedContest=null; btnConfirm.disabled=true; }
   function showStep(step) {
     stepPath.classList.toggle('hidden',step!=='path');
@@ -499,9 +554,19 @@ Users are responsible for verifying all information against N1MM before making d
     finally { btnBrowse.disabled=false; btnBrowse.textContent='📁'; }
   });
 
-  async function doScan() {
+  async function doScan(opts) {
+    // Guards a rapid double-click on a detected-database row: without this,
+    // the second click of the gesture re-enters doScan() while the first
+    // fetch is still in flight, and if that first fetch resolves fast enough
+    // (common on localhost) it can swap step-path's content for step-picker
+    // mid-gesture — landing the second click on a freshly-rendered contest
+    // row instead of the database row it was aimed at, which the browser can
+    // still report as a dblclick and auto-load an unintended contest.
+    if (_scanInFlight) return;
+    _scanInFlight = true;
+    const alwaysShowPicker = !!(opts && opts.alwaysShowPicker);
     const path=pathInput.value.trim();
-    if (!path) { showError('Enter or browse to a .s3db file path.'); return; }
+    if (!path) { showError('Enter or browse to a .s3db file path.'); _scanInFlight=false; return; }
     errDiv.classList.add('hidden');
     btnScan.disabled=true; btnScan.textContent='Scanning…';
     try {
@@ -511,12 +576,12 @@ Users are responsible for verifying all information against N1MM before making d
       const contests=data.contests||[];
       if (!contests.length) { showError('No contests with QSOs found in this database.'); return; }
       _scannedContests=contests; _scannedPath=data.path;
-	  if (contests.length===1) { _currentContestName=contests[0].display_name||''; await doLoad(data.path,contests[0].contest_nr,contests[0].plugin); _updateSwitchBtn(contests,contests[0]); hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown(); return; }
+	  if (!alwaysShowPicker && contests.length===1) { _currentContestName=contests[0].display_name||''; await doLoad(data.path,contests[0].contest_nr,contests[0].plugin); _updateSwitchBtn(contests,contests[0]); hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown(); return; }
       pickerLabel.textContent=data.path.split(/[\\\/]/).pop();
       buildContestList(contests);
       showStep('picker');
     } catch(e) { showError(`Scan failed: ${e.message}`); }
-    finally { btnScan.disabled=false; btnScan.textContent='Scan for Contests →'; }
+    finally { btnScan.disabled=false; btnScan.textContent='Scan for Contests →'; _scanInFlight=false; }
   }
 
   btnScan?.addEventListener('click', doScan);
@@ -528,6 +593,11 @@ Users are responsible for verifying all information against N1MM before making d
 
   function buildContestList(contests) {
     contestList.innerHTML=''; _selectedContest=null; btnConfirm.disabled=true;
+    // Record when this list was (re)built so the dblclick handler below can
+    // reject a double-click gesture that started on different content (see
+    // the doScan() comment) — a real double-click on a freshly-shown row
+    // still needs the user to see it first, which takes longer than this.
+    _pickerRenderedAt = Date.now();
     contests.forEach((ct,i)=>{
       const col=PLUGIN_COLS[ct.plugin]||'#8b949e';
       const row=document.createElement('div');
@@ -546,7 +616,10 @@ Users are responsible for verifying all information against N1MM before making d
         document.querySelectorAll('.contest-row').forEach(r=>r.classList.remove('selected'));
         row.classList.add('selected'); _selectedContest=ct; btnConfirm.disabled=false;
       });
-      row.addEventListener('dblclick', async()=>{ _selectedContest=ct; await confirmLoad(); });
+      row.addEventListener('dblclick', async()=>{
+        if (Date.now() - _pickerRenderedAt < 400) return;   // carried-over click from prior content — ignore
+        _selectedContest=ct; await confirmLoad();
+      });
       contestList.appendChild(row);
       if (i===0) { row.classList.add('selected'); _selectedContest=ct; btnConfirm.disabled=false; }
     });
@@ -624,9 +697,9 @@ Users are responsible for verifying all information against N1MM before making d
 
     sel.addEventListener('change', () => applyTheme(sel.value));
 
-    // Restore saved theme (or default to System on first run)
+    // Restore saved theme (or default to Dark on first run)
     try {
-      const saved = localStorage.getItem('vkca_theme') || 'System (OS default)';
+      const saved = localStorage.getItem('vkca_theme') || 'Dark (Default)';
       sel.value = saved; applyTheme(saved);
     } catch {}
   })();
