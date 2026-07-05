@@ -47,6 +47,51 @@
   const chkWorked  = document.getElementById('cluster-show-worked');
   const chkNotMult = document.getElementById('cluster-show-notmult');
   const chkBandsOnly = document.getElementById('cluster-bands-only');
+  const chkAlert    = document.getElementById('cluster-alert-toggle');
+
+  // ── Audio / desktop alert on a spotted needed mult or band ──────────────────
+  const ALERT_KEY = 'vka_cluster_alert';
+  if (chkAlert) {
+    const stored = localStorage.getItem(ALERT_KEY);
+    chkAlert.checked = stored === null ? true : stored === '1';
+    chkAlert.addEventListener('change', () => {
+      localStorage.setItem(ALERT_KEY, chkAlert.checked ? '1' : '0');
+      if (chkAlert.checked && 'Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
+    });
+  }
+
+  let _audioCtx = null;
+  function beep() {
+    try {
+      _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const osc  = _audioCtx.createOscillator();
+      const gain = _audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.15, _audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, _audioCtx.currentTime + 0.25);
+      osc.connect(gain).connect(_audioCtx.destination);
+      osc.start();
+      osc.stop(_audioCtx.currentTime + 0.25);
+    } catch (e) { /* Web Audio unavailable — ignore */ }
+  }
+
+  function alertOnSpot(spot) {
+    if (!chkAlert?.checked) return;
+    if (spot.status !== 'NEW_MULT' && spot.status !== 'NEW_BAND') return;
+    beep();
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const kind = spot.status === 'NEW_MULT' ? 'New mult' : 'New band';
+      try {
+        new Notification(`${kind}: ${spot.dx}`, {
+          body: `${spot.band}  ${spot.mult || ''}`.trim(),
+          tag: 'vka-cluster-alert',
+        });
+      } catch (e) { /* Notification unavailable — ignore */ }
+    }
+  }
 
   function setStatus(connected, msg) {
     if (statusDot)  { statusDot.className = 'cluster-dot ' + (connected?'dot-conn':'dot-disc'); }
@@ -179,6 +224,7 @@
   function addSpot(spot) {
     spots.unshift(spot);
     if (spots.length > MAX_SPOTS) spots = spots.slice(0, MAX_SPOTS);
+    alertOnSpot(spot);
     renderSpots();
   }
 

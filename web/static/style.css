@@ -144,6 +144,10 @@ body.has-session-bar #content{top:calc(var(--titlebar-h) + var(--sessbar-h) + va
 #replay-slider{flex:1;accent-color:var(--accent2);}
 #replay-time{color:var(--fg);min-width:150px;flex-shrink:0;}
 
+#whatif-bar{display:flex;flex-shrink:0;
+  background:var(--bg2);border:1px solid var(--accent2);border-radius:var(--radius);
+  padding:8px 14px;font-family:var(--font-mono);font-size:0.77em;}
+
 /* ── Mini HUD (rendered only in its own popped-out window, /hud) ────────── */
 #hud-bar{display:none;align-items:center;justify-content:space-around;
   position:fixed;inset:0;background:var(--bg);

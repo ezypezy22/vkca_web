@@ -111,6 +111,7 @@ class AppState:
         self.yoy_extra_paths: list                = []    # extra .s3db files added on the YOY tab
         self.pace_extra_paths: list               = []    # [{"path":..., "kind":"s3db"|"adif"|"cabrillo"}]
         self.fatigue_extra_paths: list            = []    # extra .s3db files added on the Fatigue tab
+        self.bandeff_extra_paths: list             = []    # extra .s3db files added on the Band Breakdown YoY view
         # Live-ranking lookup cache: {callsign: (fetched_at, result_or_None)}.
         # Keeps the Overview tab's Contest Online ScoreBoard panel from
         # re-scraping on every request — see /api/live_rank.
@@ -589,9 +590,123 @@ async def api_missing():
     return rows
 
 
+@app.post("/api/replay_whatif")
+async def api_replay_whatif(body: dict):
+    """'What if I worked this missing mult on this band right now?' The
+    synthetic QSO is scored in total isolation via recalc_pts() on a
+    one-item list and then discarded — the real QSO list is never mutated
+    or even copied into the same list as the synthetic entry, since several
+    plugins' recalc_pts() mutates QSO dicts in place."""
+    mult = (body.get("mult") or "").strip()
+    band = (body.get("band") or "").strip().upper()
+    zone = body.get("zone")
+    if not mult or not band:
+        return JSONResponse({"error": "mult and band are required"}, status_code=400)
+
+    with STATE._lock:
+        if not STATE.contest_log:
+            return JSONResponse({"error": "No log loaded"}, status_code=400)
+        plugin = STATE.contest_log.plugin
+        qsos   = list(STATE.contest_log.qsos)
+
+    try:
+        valid_mults = set(plugin.mult_list())
+    except Exception:
+        valid_mults = set()
+    if valid_mults and mult not in valid_mults:
+        return JSONResponse({"error": f"'{mult}' is not a recognized multiplier for this contest"}, status_code=400)
+
+    try:
+        zone_int = int(zone) if zone not in (None, "") else None
+    except (TypeError, ValueError):
+        zone_int = None
+
+    try:
+        is_new_mult = mult not in plugin.worked_primary_mults(qsos)
+    except Exception:
+        is_new_mult = True
+
+    # Dominant mode already logged, as a sane default for the synthetic QSO.
+    mode_counts: dict = {}
+    for q in qsos:
+        m = q.get("mode")
+        if m:
+            mode_counts[m] = mode_counts.get(m, 0) + 1
+    default_mode = max(mode_counts, key=mode_counts.get) if mode_counts else "CW"
+
+    synthetic = {
+        "call": "WHATIF", "band": band, "mode": default_mode,
+        "mult1": mult, "mult2": mult, "cqz": zone_int, "raw_mult": mult,
+        "dupe": False, "is_mult1": 1, "is_mult2": 1 if zone_int is not None else 0,
+        "time": datetime.utcnow(), "pts": 0,
+    }
+
+    caveat = None
+    try:
+        plugin.recalc_pts([synthetic])
+    except Exception:
+        log.exception("what-if replay: recalc_pts failed for plugin %s", getattr(plugin, "display_name", "?"))
+        caveat = "Could not estimate an exact point value for this contest type — treat as approximate."
+
+    pts_delta = synthetic.get("pts") or 0
+    if pts_delta <= 0 and caveat is None:
+        caveat = "This contest's scoring doesn't expose a per-QSO point estimate here — treat the point delta as approximate."
+    if zone_int is None and plugin.uses_cq_zone_scoring():
+        zone_note = "Enter a CQ zone for exact scoring in this contest."
+        caveat = f"{caveat} {zone_note}" if caveat else zone_note
+
+    return {
+        "band": band, "mult": mult, "pts_delta": pts_delta,
+        "is_new_mult": is_new_mult, "caveat": caveat,
+    }
+
+
 @app.get("/api/bands")
 async def api_bands():
     return STATE.snapshot().get("band_efficiency", [])
+
+
+@app.get("/api/band_advice")
+async def api_band_advice():
+    """Best-value band right now, using the same per-band QSO value estimate
+    that feeds the Overview tab's 'QSO VALUE' panel — CQWW's own model where
+    the plugin implements one, otherwise ContestLog's generic
+    points-times-mults fallback that works for any contest type."""
+    with STATE._lock:
+        if not STATE.contest_log:
+            return {"recommended_band": None}
+        cl     = STATE.contest_log
+        plugin = cl.plugin
+        qsos   = list(cl.qsos)
+    try:
+        est = cl._qso_value_estimate(qsos, plugin)
+    except Exception:
+        est = None
+    if not est:
+        return {"recommended_band": None}
+
+    current_band = None
+    timed = [(q["time"], q["band"]) for q in qsos
+             if not q.get("dupe") and q.get("time") and q.get("band")]
+    if timed:
+        current_band = max(timed, key=lambda t: t[0])[1]
+
+    best_band, best_val = None, -1.0
+    for band, data in est.get("bands", {}).items():
+        if band == current_band:
+            continue
+        val = data.get("one_mult", 0) or 0
+        if val > best_val:
+            best_band, best_val = band, val
+
+    if best_band is None:
+        return {"recommended_band": None}
+    return {
+        "recommended_band": best_band,
+        "avg_pts":  est["bands"][best_band].get("avg_pts", 0),
+        "one_mult_value": best_val,
+        "reason": f"Working a new mult on {best_band} is currently worth ~{round(best_val):,} pts",
+    }
 
 
 @app.get("/api/worked")
@@ -1337,6 +1452,122 @@ async def api_fatigue_clear_logs():
     return await asyncio.get_event_loop().run_in_executor(None, _fatigue_full_state)
 
 
+# ── Band efficiency (cross-year, same contest series) ────────────────────────
+# Mirrors the Fatigue cross-year mechanism above, but calls each historical
+# contest's plugin.band_efficiency() instead of hourly-binning. Scoped to the
+# primary log's contest series (auto-loaded, like Pace's YoY) rather than
+# blending across contest types, since "efficiency" and even the "band" field
+# itself mean different things for different plugins (see efficiency_label()).
+
+def _bandeff_build_contest_entry(cl: "ContestLog", ci: dict, db_path: str) -> Optional[dict]:
+    if not cl.qsos:
+        return None
+    try:
+        rows = cl.plugin.band_efficiency(cl.qsos)
+    except Exception:
+        return None
+    if not rows:
+        return None
+
+    sd   = str(ci.get("StartDate", ""))[:4]
+    year = int(sd) if sd.isdigit() else (cl.qsos[0]["time"].year if cl.qsos else 0)
+    name = str(ci.get("DisplayName") or ci.get("ContestName") or "?").strip()
+
+    return {
+        "key": f"{db_path}::{ci['ContestNR']}", "year": year, "name": name,
+        "label": f"{year}  {name}", "db_path": db_path, "contest_nr": ci["ContestNR"],
+        "efficiency_label": cl.plugin.efficiency_label(),
+        "bands": rows,
+    }
+
+
+def _bandeff_collect_from_db(db_path: str, plugin_type_filter, existing_keys: set) -> list:
+    """Load contests from db_path. When plugin_type_filter is given (the
+    primary log's auto-load), only contests resolving to that same plugin
+    class are included — mirrors _pace_collect_same_contest's approach of
+    matching by plugin type rather than by contest_nr/ContestName string,
+    since STATE.contest_nr is often None (ContestLog auto-picks the latest
+    contest without writing the resolved number back). Manually-added extra
+    logs pass plugin_type_filter=None and include every contest in the file,
+    same as Pace's manual reference logs."""
+    out = []
+    try:
+        contests = ContestLog.available_contests(db_path)
+    except Exception:
+        log.exception("BandEff YoY: available_contests failed for %s", db_path)
+        return out
+    for ci in contests:
+        if not ci.get("QSOCount", 0):
+            continue
+        key = f"{db_path}::{ci['ContestNR']}"
+        if key in existing_keys:
+            continue
+        cname = str(ci.get("ContestName", ""))
+        p     = plugin_for(cname)
+        if plugin_type_filter is not None and type(p) is not plugin_type_filter:
+            continue
+        try:
+            cl    = ContestLog(db_path, contest_nr=ci["ContestNR"], plugin=p)
+            entry = _bandeff_build_contest_entry(cl, ci, db_path)
+            if entry is None:
+                continue
+            out.append(entry)
+            existing_keys.add(key)
+        except Exception:
+            log.exception("BandEff YoY: failed loading ContestNR %s from %s", ci.get("ContestNR"), db_path)
+    return out
+
+
+def _bandeff_full_state() -> dict:
+    with STATE._lock:
+        primary = STATE.db_path
+        extra   = list(STATE.bandeff_extra_paths)
+        cl      = STATE.contest_log
+
+    current_plugin_type = type(cl.plugin) if cl else None
+
+    existing_keys: set = set()
+    contests = []
+    if primary:
+        contests.extend(_bandeff_collect_from_db(primary, current_plugin_type, existing_keys))
+    for p in extra:
+        contests.extend(_bandeff_collect_from_db(p, None, existing_keys))
+    return {"contests": _json_safe(contests), "extra_paths": extra}
+
+
+@app.get("/api/bandeff_yoy")
+async def api_bandeff_yoy():
+    """Cross-year band-efficiency data, scoped to the primary log's contest
+    series, for the Band Breakdown tab's year-over-year comparison."""
+    return await asyncio.get_event_loop().run_in_executor(None, _bandeff_full_state)
+
+
+@app.post("/api/bandeff_yoy/add_log")
+async def api_bandeff_yoy_add_log(body: dict):
+    """Add another .s3db file's matching contests to the band-efficiency YoY view."""
+    path = (body.get("path") or "").strip()
+    if not path:
+        return JSONResponse({"error": "No path supplied"}, status_code=400)
+    err = STATE.validate_path(path)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
+    path = str(Path(path).resolve())
+    with STATE._lock:
+        is_primary = STATE.db_path and os.path.normcase(path) == os.path.normcase(STATE.db_path)
+        already = any(os.path.normcase(p) == os.path.normcase(path) for p in STATE.bandeff_extra_paths)
+        if not is_primary and not already:
+            STATE.bandeff_extra_paths.append(path)
+    return await asyncio.get_event_loop().run_in_executor(None, _bandeff_full_state)
+
+
+@app.post("/api/bandeff_yoy/clear_logs")
+async def api_bandeff_yoy_clear_logs():
+    """Remove all extra logs added to the band-efficiency YoY view (primary log stays)."""
+    with STATE._lock:
+        STATE.bandeff_extra_paths = []
+    return await asyncio.get_event_loop().run_in_executor(None, _bandeff_full_state)
+
+
 @app.get("/api/plugin_meta")
 async def api_plugin_meta():
     """
@@ -1384,6 +1615,7 @@ async def api_plugin_meta():
         "has_region_heat":  getattr(p, "has_region_heat", lambda: False)(),
         "has_state_bars":   getattr(p, "has_state_bars",  lambda: False)(),
         "mult_label":       getattr(p, "mult_label",      lambda: "Mult")(),
+        "uses_cq_zone_scoring": getattr(p, "uses_cq_zone_scoring", lambda: False)(),
         "gauge_defs":       gauge_list,
     }
 

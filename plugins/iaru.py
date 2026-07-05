@@ -267,6 +267,9 @@ class IARUPlugin(ContestPlugin):
         """
         return _DEFAULT_OP_ITUZ
 
+    def uses_cq_zone_scoring(self) -> bool:
+        return True
+
     def recalc_pts(self, qsos: list) -> None:
         """
         Re-derive QSO point values per rule 5.1 when N1MM hasn't already

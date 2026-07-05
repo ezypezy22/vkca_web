@@ -163,6 +163,7 @@
       <div style="display:flex;gap:8px">
         <button id="btn-hud" class="btn btn--ghost btn--sm" title="Open a tiny always-on-top HUD with score, rate and time since last QSO">📌 Mini HUD</button>
         <button id="btn-replay-toggle" class="btn btn--ghost btn--sm" title="Scrub back through the contest's progression">⏪ Replay</button>
+        <button id="btn-whatif-toggle" class="btn btn--ghost btn--sm" title="Simulate working a missing multiplier">🔮 What if?</button>
         <button id="btn-reset-layout" class="btn btn--ghost btn--sm" title="Restore the default tile order">↺ Reset layout</button>
       </div>
     </div>
@@ -180,6 +181,15 @@
       <input type="range" id="replay-slider" min="0" max="1000" value="1000">
       <span id="replay-time">—</span>
       <button id="btn-replay-live" class="btn btn--primary btn--sm">⏹ Back to Live</button>
+    </div>
+
+    <div id="whatif-bar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="replay-badge" style="background:var(--accent2)">WHAT IF?</span>
+      <select id="whatif-mult-select" class="tb-select" style="width:170px"><option value="">— missing mult —</option></select>
+      <select id="whatif-band-select" class="tb-select" style="width:90px"><option value="">— band —</option></select>
+      <input id="whatif-zone-input" class="tb-input" type="number" min="1" max="40" placeholder="CQ zone" style="width:80px;display:none">
+      <button id="btn-whatif-simulate" class="btn btn--primary btn--sm">Simulate</button>
+      <span id="whatif-result" style="font-family:var(--font-mono);font-size:0.85em;margin-left:4px"></span>
     </div>
 
     <div id="gauge-row" class="gauge-row"></div>
@@ -456,6 +466,10 @@
           <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
             <input id="cluster-bands-only" type="checkbox"><span>Contest bands only</span>
           </label>
+          <div class="tb-sep"></div>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input id="cluster-alert-toggle" type="checkbox" checked><span>🔊 Alert on new mult/band</span>
+          </label>
         </div>
         <div class="table-wrap" style="flex:1;max-height:none">
           <table class="data-table">
@@ -521,6 +535,24 @@
           <thead><tr><th>Band</th><th>QSOs</th><th>Points</th><th>Score %</th><th>New Mults</th><th>Efficiency</th><th>Best Rate</th><th>Last QSO</th></tr></thead>
           <tbody id="bands-tbody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- ══ BAND EFFICIENCY — CROSS-YEAR ══ -->
+    <div class="yoy-toolbar panel-box" style="flex-direction:row;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap">
+      <div class="panel-header" style="margin:0">
+        <span style="color:var(--accent2)">●</span> BAND EFFICIENCY — YEAR OVER YEAR
+      </div>
+      <button id="bandeff-add-log-btn" class="tb-btn tb-btn--primary">+ Add Log File</button>
+      <button id="bandeff-clear-logs-btn" class="tb-btn">✕ Clear Extra Logs</button>
+    </div>
+    <div id="bandeff-yoy-msg" class="panel-box" style="color:var(--muted);font-family:var(--font-mono);font-size:0.85em">
+      Load prior years of this same contest to compare band efficiency across years. Use '+ Add Log File' above.
+    </div>
+    <div id="bandeff-yoy-content" style="display:none">
+      <div class="panel-box" style="min-height:220px">
+        <div style="position:relative;height:200px"><canvas id="chart-bandeff-yoy"></canvas></div>
+        <div id="bandeff-yoy-footnote" style="font-family:var(--font-mono);font-size:0.75em;color:var(--muted);margin-top:6px"></div>
       </div>
     </div>
   </section>
@@ -711,6 +743,7 @@
     <!-- ══ SCORE PROJECTION (current rate) ══ -->
     <div class="panel-header"><span style="color:var(--green)">●</span> PACE TRACKER — Score Projection vs Current Rate</div>
     <div id="pace-alarm" class="pace-alarm" style="display:none"></div>
+    <div id="pace-band-advice" style="display:none;font-family:var(--font-mono);font-size:0.85em;color:var(--accent);margin:4px 0 8px"></div>
     <div class="pace-cards-row">
       <div class="pace-card"><div class="pace-val" id="pace-cur-rate">—</div><div class="pace-label">Current Rate/hr</div></div>
       <div class="pace-card"><div class="pace-val" id="pace-prev-rate" style="color:var(--muted)">—</div><div class="pace-label">Prev Hour Rate</div></div>
@@ -723,6 +756,15 @@
     <div class="panel-box" style="min-height:220px">
       <div class="panel-header"><span style="color:var(--accent3)">●</span> SCORE PROJECTION</div>
       <div style="position:relative;height:180px"><canvas id="chart-pace-proj"></canvas></div>
+    </div>
+    <div class="panel-box" style="padding:10px 14px">
+      <div class="panel-header"><span style="color:var(--accent)">●</span> MY TARGET SCORE</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <input id="pace-mytarget-input" class="tb-input" type="number" min="0" step="1000" placeholder="e.g. 50000" style="width:140px">
+        <button id="pace-mytarget-btn" class="tb-btn tb-btn--primary">Set Target</button>
+        <button id="pace-mytarget-clear-btn" class="tb-btn">Clear</button>
+      </div>
+      <div id="pace-mytarget-status" style="font-family:var(--font-mono);font-size:0.85em;margin-top:6px;color:var(--muted)"></div>
     </div>
     <div class="panel-box">
       <div class="panel-header"><span style="color:var(--green)">●</span> SCORE TARGETS</div>

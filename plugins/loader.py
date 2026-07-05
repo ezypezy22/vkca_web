@@ -48,7 +48,7 @@ def _discover() -> None:
     _loaded = True
 
     pkg_dir = os.path.dirname(__file__)
-    skip = {"__init__", "base", "loader", "generic", "vkca_v3"} #handled seperately
+    skip = {"__init__", "base", "loader", "generic"}
 
     seen_classes: set = set()
 

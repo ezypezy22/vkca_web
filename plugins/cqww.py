@@ -48,30 +48,6 @@ from plugins.base import (
 
 # ── CQ zone → continent mapping ───────────────────────────────────────────────
 # Used to derive continent when N1MM doesn't supply it directly.
-_ZONE_TO_CONTINENT: dict[int, str] = {
-    # North America
-    1: "NA", 2: "NA", 3: "NA", 4: "NA", 5: "NA",
-    6: "NA", 7: "NA", 8: "NA",
-    # South America
-    9: "SA", 10: "SA", 11: "SA",
-    # Europe
-    14: "EU", 15: "EU", 16: "EU", 17: "EU", 18: "EU",
-    20: "EU", 21: "EU", 22: "EU", 25: "EU", 26: "EU",
-    27: "EU", 28: "EU",
-    # Africa
-    33: "AF", 34: "AF", 35: "AF", 36: "AF", 37: "AF", 38: "AF",
-    # Asia
-    17: "AS", 18: "AS", 19: "AS", 22: "AS", 23: "AS", 24: "AS",
-    25: "AS", 26: "AS",
-    # Middle East overlaps
-    20: "AS", 21: "AS",
-    # Oceania
-    28: "OC", 29: "OC", 30: "OC", 32: "OC",
-    # Antarctica
-    38: "AN",
-}
-
-# Refined, non-overlapping map (above has deliberate duplicates – use this one)
 _ZONE_CONTINENT: dict[int, str] = {
     1: "NA", 2: "NA", 3: "NA", 4: "NA", 5: "NA", 6: "NA", 7: "NA", 8: "NA",
     9: "SA", 10: "SA", 11: "SA",
@@ -268,13 +244,8 @@ class CQWWPlugin(ContestPlugin):
             # worked_continent != op_continent here
             q["pts"] = 3
 
-    @staticmethod
-    def _guess_op_zone(qsos: list) -> int:
-        """Return the most common CQ zone in the log (proxy for op's own zone)."""
-        # The operator's own QSOs won't have their zone stored as cqz —
-        # that field holds the *worked* station's zone.  We just pick zone 29
-        # (VK) as a sensible default for a VK operator.
-        return 29
+    def uses_cq_zone_scoring(self) -> bool:
+        return True
 
     def score(self, qsos: list) -> int:
         """Total QSO points × total multipliers (zones + countries, all bands)."""

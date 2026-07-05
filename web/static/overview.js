@@ -173,7 +173,7 @@
   }
 
   // ══ PLUGIN-DRIVEN GAUGES ═══════════════════════════════════════════════════
-  let _gaugeDefs=[], _gaugeState={}, _snap=null, _fs=15, _metaLoaded=false;
+  let _gaugeDefs=[], _gaugeState={}, _snap=null, _fs=15, _metaLoaded=false, _usesCqZoneScoring=false;
 
   const _tip = document.createElement('div');
   _tip.style.cssText=`position:fixed;display:none;pointer-events:none;z-index:9999;
@@ -190,7 +190,7 @@
     try {
       const res=await fetch('/api/plugin_meta'); const meta=await res.json();
       if (!meta.loaded) return;
-      _metaLoaded=true; _gaugeDefs=meta.gauge_defs||[];
+      _metaLoaded=true; _gaugeDefs=meta.gauge_defs||[]; _usesCqZoneScoring=!!meta.uses_cq_zone_scoring;
       setTabVisible('missing', meta.has_missing_tab!==false);
       const br=document.getElementById('bars-row');
       if (br) br.style.display=meta.has_state_bars?'':'none';
@@ -1051,6 +1051,58 @@
   replaySlider?.addEventListener('change',()=>{
     if (_scrubStartMs==null) return;
     scrubToFrac(Number(replaySlider.value)/1000);
+  });
+
+  // ── "What if?" — simulate working a missing multiplier ──────────────────
+  const whatifBar      = document.getElementById('whatif-bar');
+  const whatifToggleBtn= document.getElementById('btn-whatif-toggle');
+  const whatifMultSel  = document.getElementById('whatif-mult-select');
+  const whatifBandSel  = document.getElementById('whatif-band-select');
+  const whatifZoneInp  = document.getElementById('whatif-zone-input');
+  const whatifSimBtn   = document.getElementById('btn-whatif-simulate');
+  const whatifResultEl = document.getElementById('whatif-result');
+
+  async function openWhatif(){
+    if (!whatifBar) return;
+    whatifBar.style.display='flex';
+    whatifZoneInp.style.display = _usesCqZoneScoring ? '' : 'none';
+    whatifResultEl.textContent = '';
+    try {
+      const res = await fetch('/api/missing');
+      const rows = await res.json();
+      whatifMultSel.innerHTML = '<option value="">— missing mult —</option>' +
+        rows.map(r=>`<option value="${r.mult}">${r.mult} (${r.region})</option>`).join('');
+    } catch(e){ console.warn('missing mults load failed:',e); }
+    const WHATIF_BANDS = ["160M","80M","60M","40M","30M","20M","17M","15M","12M","10M","6M","2M","70CM"];
+    whatifBandSel.innerHTML = '<option value="">— band —</option>' +
+      WHATIF_BANDS.map(b=>`<option value="${b}">${b.toLowerCase()}</option>`).join('');
+  }
+  function closeWhatif(){ if (whatifBar) whatifBar.style.display='none'; }
+
+  whatifToggleBtn?.addEventListener('click',()=>{
+    const open = whatifBar && whatifBar.style.display!=='none';
+    if (open) closeWhatif(); else openWhatif();
+  });
+
+  whatifSimBtn?.addEventListener('click', async ()=>{
+    const mult = whatifMultSel?.value, band = whatifBandSel?.value;
+    if (!mult || !band) { whatifResultEl.textContent='Pick a mult and band first.'; return; }
+    whatifSimBtn.disabled = true;
+    try {
+      const body = { mult, band };
+      if (_usesCqZoneScoring && whatifZoneInp?.value) body.zone = whatifZoneInp.value;
+      const res  = await fetch('/api/replay_whatif', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.error) { whatifResultEl.textContent = data.error; whatifResultEl.style.color = T.red; return; }
+      whatifResultEl.style.color = T.green;
+      let txt = `+${Math.round(data.pts_delta).toLocaleString()} pts` +
+                (data.is_new_mult ? ', +1 mult' : ' (already worked)');
+      if (data.caveat) txt += `  —  ${data.caveat}`;
+      whatifResultEl.textContent = txt;
+    } catch(e){ whatifResultEl.textContent='Simulation failed.'; console.warn('what-if simulate failed:',e); }
+    finally { whatifSimBtn.disabled = false; }
   });
 
   // ══ MAIN ═══════════════════════════════════════════════════════════════════

@@ -18,6 +18,31 @@
     updateKPIs(snap);
     updateTrajectory(snap);
     updateTargets(snap);
+    updateMyTarget(snap);
+    refreshBandAdvice();
+  }
+
+  // ── Band-value advisory (best band right now, when the plugin supports it) ─
+  let _bandAdvice = null;
+  let _bandAdviceFetching = false;
+
+  async function refreshBandAdvice() {
+    if (_bandAdviceFetching) return;
+    _bandAdviceFetching = true;
+    try {
+      const r = await fetch('/api/band_advice');
+      _bandAdvice = await r.json();
+    } catch (e) { /* keep stale value */ }
+    _bandAdviceFetching = false;
+    renderBandAdvice();
+  }
+
+  function renderBandAdvice() {
+    const el = document.getElementById('pace-band-advice');
+    if (!el) return;
+    if (!_bandAdvice || !_bandAdvice.recommended_band) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    el.textContent = `💡 Best band right now: ${_bandAdvice.recommended_band} — ${_bandAdvice.reason}`;
   }
 
   // ── KPI cards ──────────────────────────────────────────────────────────────
@@ -51,14 +76,16 @@
     // Alarm banner
     const alarm = document.getElementById('pace-alarm');
     if (alarm) {
+      const bandHint = (_bandAdvice && _bandAdvice.recommended_band)
+        ? ` (${_bandAdvice.recommended_band} is currently your best value band.)` : '';
       if (cur < prev * 0.7 && cur > 0 && rem > 0) {
         alarm.style.display = 'block';
-        alarm.textContent   = `⚠ Rate dropping — ${cur} Q/hr vs ${prev} Q/hr last hour. Consider changing bands or calling CQ more aggressively.`;
+        alarm.textContent   = `⚠ Rate dropping — ${cur} Q/hr vs ${prev} Q/hr last hour. Consider changing bands or calling CQ more aggressively.${bandHint}`;
         alarm.style.borderColor = C.red;
         alarm.style.color       = C.red;
       } else if (cur === 0 && valid > 0 && rem > 30) {
         alarm.style.display = 'block';
-        alarm.textContent   = '⚠ No QSOs in the current hour. Check propagation or try a new band.';
+        alarm.textContent   = `⚠ No QSOs in the current hour. Check propagation or try a new band.${bandHint}`;
         alarm.style.borderColor = C.accent3;
         alarm.style.color       = C.accent3;
       } else {
@@ -189,6 +216,72 @@
     });
     tbody.appendChild(frag);
   }
+
+  // ── My Target Score (operator-entered goal, persisted locally) ─────────────
+  const MYTARGET_KEY = 'vka_pace_target';
+
+  function updateMyTarget(snap) {
+    const status = document.getElementById('pace-mytarget-status');
+    if (!status) return;
+    const raw    = localStorage.getItem(MYTARGET_KEY);
+    const target = raw ? parseFloat(raw) : null;
+    if (!target || target <= 0) { status.textContent = ''; return; }
+
+    const ss      = snap.session_status || {};
+    const pb      = snap.personal_bests || {};
+    const score   = snap.score || 0;
+    const valid   = snap.valid || 0;
+    const remMins = ss.total_remaining_mins ?? ss.remaining_mins ?? 0;
+    const remHrs  = remMins / 60;
+    const curRate = pb.current_hour_rate || 0;
+    const ptsPerQso = valid > 0 ? score / valid : 0;
+    const needed  = target - score;
+
+    if (needed <= 0) {
+      status.style.color = C.green;
+      status.textContent = `✅ Target ${target.toLocaleString()} reached! (+${Math.abs(needed).toLocaleString()} over)`;
+      return;
+    }
+    if (ptsPerQso <= 0) {
+      status.style.color = C.muted;
+      status.textContent = `Target ${target.toLocaleString()}: ${needed.toLocaleString()} points to go — log some QSOs to see pace.`;
+      return;
+    }
+    const addQsos = needed / ptsPerQso;
+    if (remHrs <= 0) {
+      status.style.color = C.red;
+      status.textContent = `Target ${target.toLocaleString()}: ${needed.toLocaleString()} points short at contest end.`;
+      return;
+    }
+    const reqRate    = addQsos / remHrs;
+    const hoursNeeded = curRate > 0 ? addQsos / curRate : null;
+    const onPace = hoursNeeded !== null && hoursNeeded <= remHrs;
+    status.style.color = onPace ? C.green : C.red;
+    status.textContent = onPace
+      ? `✅ On pace for ${target.toLocaleString()} — need ${reqRate.toFixed(1)} Q/hr (currently ${curRate}/hr)`
+      : `⚠ Behind pace for ${target.toLocaleString()} — need ${reqRate.toFixed(1)} Q/hr, currently ${curRate}/hr`;
+  }
+
+  document.getElementById('pace-mytarget-btn')?.addEventListener('click', () => {
+    const inp = document.getElementById('pace-mytarget-input');
+    const v   = parseFloat(inp?.value || '');
+    if (!isNaN(v) && v > 0) {
+      localStorage.setItem(MYTARGET_KEY, String(v));
+      if (_snap) updateMyTarget(_snap);
+    }
+  });
+  document.getElementById('pace-mytarget-clear-btn')?.addEventListener('click', () => {
+    localStorage.removeItem(MYTARGET_KEY);
+    const inp = document.getElementById('pace-mytarget-input');
+    if (inp) inp.value = '';
+    const status = document.getElementById('pace-mytarget-status');
+    if (status) status.textContent = '';
+  });
+  (function initMyTarget() {
+    const raw = localStorage.getItem(MYTARGET_KEY);
+    const inp = document.getElementById('pace-mytarget-input');
+    if (raw && inp) inp.value = raw;
+  })();
 
   window.addEventListener('vka:snapshot', e => update(e.detail));
   window.addEventListener('vka:tabchange', e => {

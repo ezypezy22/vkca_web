@@ -418,6 +418,9 @@ class HASprint80mPlugin(ContestPlugin):
 
     # ── Band efficiency (mode breakdown for a single-band contest) ────────────
 
+    def efficiency_label(self) -> str:
+        return "pts/qso"
+
     def band_efficiency(self, qsos: list) -> list:
         """
         Per-mode breakdown (Phone vs CW), mirroring the ARRL 10M approach —

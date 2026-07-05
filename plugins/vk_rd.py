@@ -193,6 +193,9 @@ class VKRDPlugin(ContestPlugin):
         return {q["call"] for q in qsos
                 if not q["dupe"] and _is_vkrd_workable(q.get("call", ""))}
 
+    def efficiency_label(self) -> str:
+        return "pts/qso"
+
     def band_efficiency(self, qsos: list) -> list:
         band_qsos: dict = defaultdict(int)
         band_pts:  dict = defaultdict(int)

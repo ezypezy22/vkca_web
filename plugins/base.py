@@ -22,16 +22,19 @@ from typing import Optional
 
 
 # ── Colour shim ───────────────────────────────────────────────────────────────
-# Plugins reference theme colours by name.  The values live in the main
-# script's module namespace and are rebound when the user switches themes.
-# We probe sys.modules at call time so changes propagate automatically.
+# Plugins reference theme colours by name.  The values live in vkcontest_
+# analyzer.py's module namespace and are rebound when the user switches
+# themes.  We read that module directly at call time so changes propagate
+# automatically without needing to scan every loaded module.
 
 def _colour(name: str, fallback: str) -> str:
-    import sys
-    for mod in sys.modules.values():
-        val = getattr(mod, name, None)
-        if isinstance(val, str) and val.startswith("#") and len(val) in (7, 9):
-            return val
+    try:
+        import vkcontest_analyzer as _va
+    except ImportError:
+        return fallback
+    val = getattr(_va, name, None)
+    if isinstance(val, str) and val.startswith("#") and len(val) in (7, 9):
+        return val
     return fallback
 
 def ACCENT()  -> str: return _colour("ACCENT",  "#00d4aa")
@@ -288,6 +291,19 @@ class ContestPlugin(ABC):
                 "last_qso_utc":   last.isoformat() if last else None,
             })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)
+
+    def uses_cq_zone_scoring(self) -> bool:
+        """True when recalc_pts()/scoring for this contest depends on the
+        worked station's CQ/ITU zone (stored in the 'cqz' field) — used by
+        the what-if replay to warn when a zone wasn't supplied."""
+        return False
+
+    def efficiency_label(self) -> str:
+        """Human label for what band_efficiency()'s 'efficiency' field means.
+        Most plugins rank bands by mults-per-QSO; a few (vk_rd, hasprnt) rank
+        by points-per-QSO instead — this lets cross-year comparisons avoid
+        conflating the two."""
+        return "mults/qso"
 
     def sparkline_mults(self, q: dict, seen: set) -> int:
         count = 0
