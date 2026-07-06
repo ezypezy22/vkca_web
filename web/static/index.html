@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VK Contest Analyzer v26.7.3</title>
+<title>VK Contest Analyzer v26.7.4</title>
 <link rel="stylesheet" href="/static/style.css">
 <script>
   // Applied synchronously, before paint, so a popped-out tile/HUD window
@@ -27,7 +27,7 @@
   <!-- Row 1: identity + primary action -->
   <div id="tb-row1">
     <div id="titlebar-logo">⬡</div>
-    <div id="titlebar-title">VK CONTEST ANALYZER <span style="color:var(--muted);font-size:0.75em">v26.7.3</span></div>
+    <div id="titlebar-title">VK CONTEST ANALYZER <span style="color:var(--muted);font-size:0.75em">v26.7.4</span></div>
     <div id="titlebar-status">
       <span id="status-dot" class="dot dot--disconnected"></span>
       <span id="status-text">No log loaded</span>
@@ -46,7 +46,7 @@
 
     <!-- Zoom -->
     <label class="tb-label">ZOOM</label>
-    <input id="zoom-slider" type="range" min="70" max="140" value="107" class="tb-slider" title="Double-click to reset to 100%">
+    <input id="zoom-slider" type="range" min="70" max="150" step="0.5" value="107" class="tb-slider" title="Scroll to fine-tune · double-click to reset to 100%">
     <span id="zoom-label" class="tb-label" id="zoom-label">100%</span>
 
     <div class="tb-sep"></div>
@@ -925,14 +925,20 @@
     <div class="dialog-title">Open Contest Log</div>
     <div class="dialog-body">
       <div id="step-path">
+        <div class="dialog-label-row">
+          <label class="dialog-label" style="margin:0">Detected Databases</label>
+          <button id="btn-manage-folders" class="btn btn--ghost btn--sm" style="margin-left:auto">⚙ Manage Folders</button>
+        </div>
         <div id="detected-dbs-wrap" class="hidden">
-          <label class="dialog-label">Detected N1MM Databases</label>
           <div class="contest-list-wrap" style="max-height:160px">
             <div id="detected-dbs-list" class="contest-list"></div>
           </div>
           <div class="dialog-hint" style="margin:10px 0 2px">— or enter a path manually —</div>
         </div>
-        <label class="dialog-label">Path to .s3db file</label>
+        <div id="no-detected-hint" class="dialog-hint" style="margin:2px 0 10px">
+          No databases found yet — add a folder to search via "Manage Folders" above, or enter a path manually.
+        </div>
+        <label class="dialog-label">Path to log file</label>
         <div class="path-row">
           <input id="load-path-input" class="dialog-input" placeholder="C:\N1MM Logger+\Logs\contest.s3db" type="text">
           <button id="btn-browse" class="btn btn--ghost btn--icon" title="Browse…">📁</button>
@@ -946,6 +952,27 @@
           <span class="dialog-label" style="margin:0" id="picker-path-label"></span>
         </div>
         <div class="contest-list-wrap"><div id="contest-list" class="contest-list"></div></div>
+      </div>
+      <div id="step-folders" class="hidden">
+        <div class="picker-header">
+          <button id="btn-folders-back" class="btn btn--ghost btn--sm">← Back</button>
+          <span class="dialog-label" style="margin:0">Manage Search Folders</span>
+        </div>
+        <div class="dialog-hint" style="margin:2px 0 10px">
+          VK Contest Analyzer always searches N1MM's default folder
+          (<code id="default-log-dir"></code>). Add other folders below to
+          also search there — e.g. where NotN1MM or another logger keeps
+          its <code>.db</code>/<code>.sqlite</code> files.
+        </div>
+        <div class="contest-list-wrap" style="max-height:160px">
+          <div id="log-dirs-list" class="contest-list"></div>
+        </div>
+        <div class="path-row" style="margin-top:10px">
+          <input id="add-folder-input" class="dialog-input" placeholder="/home/user/notn1mm/databases" type="text">
+          <button id="btn-browse-folder" class="btn btn--ghost btn--icon" title="Browse…">📁</button>
+        </div>
+        <div id="folder-error" class="dialog-error hidden"></div>
+        <button id="btn-add-folder" class="btn btn--primary" style="margin-top:12px;width:100%">+ Add Folder</button>
       </div>
     </div>
     <div class="dialog-footer">

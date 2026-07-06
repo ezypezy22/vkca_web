@@ -152,22 +152,30 @@
     });
 
     // ── Value text
+    // Font sizes scale off the gauge's own rendered radius (ri) so text stays
+    // legible whether there are 3 wide gauges or 8 narrow ones on the row —
+    // a fixed pixel size (the old `fs * const` approach) looked fine at one
+    // tile width and tiny at another. `fs`/15 (from the zoom slider, default
+    // ~1.07) still scales everything up/down around that responsive baseline.
+    const zoomMult = fs / 15;
     const sf    = valStr.length > 7 ? (7/valStr.length) : valStr.length > 5 ? 0.88 : 1.0;
-    const valFs = fs * 1.1 * sf;
+    const valFs = Math.max(12, ri * 0.30 * sf * zoomMult);
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillStyle=colour;
     ctx.font=`bold ${valFs}px Consolas, monospace`;
     ctx.fillText(valStr, cx, cy - ri*0.05);
 
     // ── Label
+    const labelFs = Math.max(8, ri * 0.17 * zoomMult);
     ctx.fillStyle=T.muted;
-    ctx.font=`${fs*0.50}px Consolas, monospace`;
+    ctx.font=`${labelFs}px Consolas, monospace`;
     ctx.fillText(label, cx, cy + ri*0.33);
 
     // ── 0 at G_START (150°=lower-left), max at G_END (30°=lower-right)
+    const endFs = Math.max(7, ri * 0.15 * zoomMult);
     const [x0,y0] = polarXY(cx, cy, ro*1.10, G_START);
     const [xm,ym] = polarXY(cx, cy, ro*1.10, G_END);
-    ctx.fillStyle=T.muted; ctx.font=`${fs*0.44}px Consolas, monospace`; ctx.textAlign='center';
+    ctx.fillStyle=T.muted; ctx.font=`${endFs}px Consolas, monospace`; ctx.textAlign='center';
     ctx.fillText('0', x0, y0);
     ctx.fillText(maxStr, xm, ym);
   }

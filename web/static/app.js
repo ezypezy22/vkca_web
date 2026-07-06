@@ -93,7 +93,7 @@ Users are responsible for verifying all information against N1MM before making d
   ctx.fillStyle='#8b949e'; ctx.font='13px Consolas,monospace';
   ctx.fillText('by VK2YI', W/2, 178);
   ctx.fillStyle='#00d4aa'; ctx.font='bold 13px Consolas,monospace';
-  ctx.fillText('v26.7.3', W/2, 202);
+  ctx.fillText('v26.7.4', W/2, 202);
 
   // ── Progress bar animation ─────────────────────────────────────────────────
   const bar = document.getElementById('splash-bar');
@@ -276,7 +276,7 @@ Users are responsible for verifying all information against N1MM before making d
     _uploadInput = document.createElement('input');
     _uploadInput.type = 'file';
     _uploadInput.style.display = 'none';
-    _uploadInput.accept = '.s3db,.adi,.adif,.log,.cbr,.txt';
+    _uploadInput.accept = '.s3db,.db,.sqlite,.adi,.adif,.log,.cbr,.txt';
     document.body.appendChild(_uploadInput);
     return _uploadInput;
   }
@@ -393,15 +393,27 @@ Users are responsible for verifying all information against N1MM before making d
     if (!slider) return;
 
     function applyZoom(pct) {
-      pct = Math.max(70, Math.min(150, parseInt(pct,10)));
+      pct = Math.max(70, Math.min(150, Math.round(parseFloat(pct)*10)/10));
       document.documentElement.style.fontSize = pct+'%';
-      if (label)  label.textContent = pct+'%';
+      if (label)  label.textContent = Math.round(pct)+'%';
       slider.value = pct;
       if (window.VKA?.setZoom) window.VKA.setZoom(pct);
       try { localStorage.setItem('vkca_zoom',pct); } catch {}
     }
 
     slider.addEventListener('input', ()=>applyZoom(slider.value));
+    slider.addEventListener('dblclick', ()=>applyZoom(100));
+
+    // Scroll wheel over the slider (or its label) nudges zoom in fine, 1%
+    // steps — finer-grained than a mouse drag on the slider track can hit.
+    function onWheel(e){
+      e.preventDefault();
+      const dir = e.deltaY < 0 ? 1 : -1;   // scroll up = zoom in
+      applyZoom(parseFloat(slider.value) + dir);
+    }
+    slider.addEventListener('wheel', onWheel, {passive:false});
+    if (label) label.addEventListener('wheel', onWheel, {passive:false});
+
     try { applyZoom(localStorage.getItem('vkca_zoom')||107); } catch { applyZoom(107); }
   })();
 
@@ -476,8 +488,88 @@ Users are responsible for verifying all information against N1MM before making d
     }, 50);
   });
 
-  const detectedWrap = document.getElementById('detected-dbs-wrap');
-  const detectedList = document.getElementById('detected-dbs-list');
+  const detectedWrap   = document.getElementById('detected-dbs-wrap');
+  const detectedList   = document.getElementById('detected-dbs-list');
+  const noDetectedHint = document.getElementById('no-detected-hint');
+
+  // ── Manage search folders ───────────────────────────────────────────────
+  const stepFolders     = document.getElementById('step-folders');
+  const btnManageFolders= document.getElementById('btn-manage-folders');
+  const btnFoldersBack  = document.getElementById('btn-folders-back');
+  const logDirsList     = document.getElementById('log-dirs-list');
+  const defaultLogDirEl = document.getElementById('default-log-dir');
+  const addFolderInput  = document.getElementById('add-folder-input');
+  const btnBrowseFolder = document.getElementById('btn-browse-folder');
+  const btnAddFolder    = document.getElementById('btn-add-folder');
+  const folderError     = document.getElementById('folder-error');
+
+  function showFolderError(msg) { folderError.textContent=msg; folderError.classList.remove('hidden'); }
+
+  async function loadLogDirs() {
+    if (!logDirsList) return;
+    try {
+      const res  = await fetch('/api/settings/log_dirs');
+      const data = await res.json();
+      if (defaultLogDirEl) defaultLogDirEl.textContent = data.default_dir || '';
+      const dirs = data.dirs || [];
+      logDirsList.innerHTML = '';
+      if (!dirs.length) {
+        logDirsList.innerHTML = `<div class="dialog-hint" style="margin:6px 2px">No custom folders added yet.</div>`;
+        return;
+      }
+      dirs.forEach(d => {
+        const row = document.createElement('div');
+        row.className = 'log-dir-row' + (d.exists ? '' : ' log-dir-missing');
+        row.innerHTML = `<span class="log-dir-path" title="${d.path}">${d.path}${d.exists ? '' : ' (not found)'}</span>
+          <button class="log-dir-remove" title="Remove">✕</button>`;
+        row.querySelector('.log-dir-remove').addEventListener('click', async () => {
+          await fetch('/api/settings/log_dirs', {
+            method: 'DELETE', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({path: d.path})
+          });
+          loadLogDirs();
+          scanKnownLocations();
+        });
+        logDirsList.appendChild(row);
+      });
+    } catch (e) { console.warn('loadLogDirs failed:', e); }
+  }
+
+  btnManageFolders?.addEventListener('click', () => {
+    folderError.classList.add('hidden');
+    addFolderInput.value = '';
+    showStep('folders');
+    loadLogDirs();
+  });
+  btnFoldersBack?.addEventListener('click', () => { showStep('path'); scanKnownLocations(); });
+
+  btnAddFolder?.addEventListener('click', async () => {
+    const path = addFolderInput.value.trim();
+    folderError.classList.add('hidden');
+    if (!path) { showFolderError('Enter or browse to a folder path.'); return; }
+    try {
+      const res  = await fetch('/api/settings/log_dirs', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({path})
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) { showFolderError(data.error || 'Failed to add folder.'); return; }
+      addFolderInput.value = '';
+      loadLogDirs();
+    } catch (e) { showFolderError(`Add failed: ${e.message}`); }
+  });
+
+  btnBrowseFolder?.addEventListener('click', async () => {
+    btnBrowseFolder.disabled=true; btnBrowseFolder.textContent='…';
+    try {
+      const res = await fetch('/api/browse_folder');
+      const data = await res.json();
+      if (res.status === 503) { showFolderError('No native browser available — enter the folder path manually.'); return; }
+      if (data.error) { showFolderError(data.error); return; }
+      if (data.path)  { addFolderInput.value = data.path; folderError.classList.add('hidden'); }
+    } catch(e) { showFolderError(`Browse failed: ${e.message}`); }
+    finally { btnBrowseFolder.disabled=false; btnBrowseFolder.textContent='📁'; }
+  });
 
   function fmtBytes(n) {
     if (!n) return '0 KB';
@@ -497,7 +589,12 @@ Users are responsible for verifying all information against N1MM before making d
       const res  = await fetch('/api/scan_known_locations');
       const data = await res.json();
       const dbs  = data.databases || [];
-      if (!dbs.length) { detectedWrap.classList.add('hidden'); return; }
+      if (!dbs.length) {
+        detectedWrap.classList.add('hidden');
+        noDetectedHint?.classList.remove('hidden');
+        return;
+      }
+      noDetectedHint?.classList.add('hidden');
       detectedList.innerHTML = '';
       dbs.forEach(db => {
         const row = document.createElement('div');
@@ -523,7 +620,7 @@ Users are responsible for verifying all information against N1MM before making d
         detectedList.appendChild(row);
       });
       detectedWrap.classList.remove('hidden');
-    } catch { detectedWrap.classList.add('hidden'); }
+    } catch { detectedWrap.classList.add('hidden'); noDetectedHint?.classList.remove('hidden'); }
   }
 
   function showDialog() {
@@ -535,6 +632,7 @@ Users are responsible for verifying all information against N1MM before making d
   function showStep(step) {
     stepPath.classList.toggle('hidden',step!=='path');
     stepPicker.classList.toggle('hidden',step!=='picker');
+    stepFolders?.classList.toggle('hidden',step!=='folders');
     btnConfirm.style.display=step==='picker'?'':'none';
   }
   function showError(msg) { errDiv.textContent=msg; errDiv.classList.remove('hidden'); }

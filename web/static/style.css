@@ -53,7 +53,7 @@ body{height:100%;background:var(--bg);color:var(--fg);
 .tb-sep{width:1px;height:16px;background:var(--bg3);margin:0 1px;flex-shrink:0;}
 .tb-label{font-family:var(--font-mono);font-size:0.69em;color:var(--muted);
            letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;}
-.tb-slider{-webkit-appearance:none;appearance:none;width:64px;height:3px;
+.tb-slider{-webkit-appearance:none;appearance:none;width:110px;height:3px;
             background:var(--bg3);border-radius:2px;outline:none;cursor:pointer;}
 .tb-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
   border-radius:50%;background:var(--accent);cursor:pointer;}
@@ -222,11 +222,14 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
 .info-panels-row{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--gap);flex-shrink:0;}
 .info-panel{background:var(--bg2);border:1px solid var(--bg3);
   border-top:2px solid var(--bg3);border-radius:var(--radius);
-  padding:8px 10px;font-family:var(--font-mono);font-size:0.77em;overflow:hidden;
+  padding:8px 10px;font-family:var(--font-mono);font-size:0.88em;overflow:hidden;
   position:relative;}
 .ip-hdr{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
-.ip-title{font-size:0.77em;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;}
-.ip-tbl{width:100%;border-collapse:collapse;font-size:0.85em;}
+/* 1em, not a fraction — this already sits inside .info-panel's reduced context;
+   another multiplier here previously compounded to the smallest text on the
+   page, making headers read smaller than their own body content. */
+.ip-title{font-size:1em;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;}
+.ip-tbl{width:100%;border-collapse:collapse;font-size:0.95em;}
 .ip-tbl th{color:var(--muted);font-size:0.85em;letter-spacing:.05em;text-transform:uppercase;
             padding:0 4px 3px 0;text-align:left;font-weight:normal;
             border-bottom:1px solid var(--bg3);}
@@ -302,6 +305,17 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
 .dialog-body{padding:16px;}
 .dialog-label{display:block;font-family:var(--font-mono);font-size:0.69em;
   color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;}
+.dialog-label-row{display:flex;align-items:center;margin-bottom:5px;}
+.dialog-hint code{font-family:var(--font-mono);background:var(--bg3);
+  padding:1px 5px;border-radius:3px;color:var(--fg);}
+.log-dir-row{display:flex;align-items:center;gap:8px;padding:6px 8px;
+  border-radius:var(--radius);background:var(--bg3);margin-bottom:6px;}
+.log-dir-row .log-dir-path{flex:1;min-width:0;font-family:var(--font-mono);
+  font-size:0.82em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.log-dir-row.log-dir-missing .log-dir-path{color:var(--muted);text-decoration:line-through;}
+.log-dir-remove{background:none;border:none;color:var(--muted);cursor:pointer;
+  font-size:1em;line-height:1;padding:2px 4px;flex-shrink:0;}
+.log-dir-remove:hover{color:var(--red);}
 .dialog-input{width:100%;background:var(--bg3);border:1px solid #30363d;color:var(--fg);
   font-family:var(--font-mono);font-size:0.92em;padding:7px 10px;
   border-radius:var(--radius);outline:none;transition:border-color .15s;}

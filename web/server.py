@@ -65,17 +65,25 @@ import cosb
 
 log = logging.getLogger(__name__)
 
-def _setup_logging():
-    """Write logs to a per-user-writable folder. A properly installed exe
-    typically lives under Program Files, which standard (non-admin) users
-    can't write to — writing the log next to the exe there raises
-    PermissionError the moment logging is set up, before anything else
-    even runs."""
+def _app_data_dir() -> Path:
+    """Per-user-writable app folder. A properly installed exe typically lives
+    under Program Files, which standard (non-admin) users can't write to —
+    writing files next to the exe there raises PermissionError immediately."""
     if getattr(sys, 'frozen', False):
-        log_dir = Path(os.environ['LOCALAPPDATA']) / "VKContestAnalyzer"
-        log_dir.mkdir(parents=True, exist_ok=True)
-    else:
-        log_dir = Path(__file__).resolve().parent
+        if sys.platform == 'win32':
+            app_data = os.environ.get('LOCALAPPDATA') or str(Path.home() / 'AppData' / 'Local')
+        elif sys.platform == 'darwin':
+            app_data = str(Path.home() / 'Library' / 'Application Support')
+        else:
+            app_data = os.environ.get('XDG_DATA_HOME') or str(Path.home() / '.local' / 'share')
+        d = Path(app_data) / "VKContestAnalyzer"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    return Path(__file__).resolve().parent
+
+
+def _setup_logging():
+    log_dir = _app_data_dir()
     log_path = log_dir / "vkca_errors.log"
     logging.basicConfig(
         level=logging.INFO,
@@ -88,6 +96,28 @@ def _setup_logging():
     log.info(f"Log file: {log_path}")
 
 _setup_logging()
+
+
+# ── Persisted app settings (currently: user-added log-file folders) ──────────
+# Separate from vkcontest_config.json, which belongs to the older tkinter
+# desktop app — this is the web app's own small settings store, living
+# alongside its log file in the per-user app-data folder.
+
+_SETTINGS_PATH = _app_data_dir() / "vkca_web_settings.json"
+
+
+def _load_settings() -> dict:
+    try:
+        with open(_SETTINGS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_settings(settings: dict):
+    _SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(_SETTINGS_PATH, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=2)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -120,6 +150,12 @@ class AppState:
 
     # ── Path validation (no DB open) ─────────────────────────────────────────
 
+    # N1MM itself only ever writes .s3db, but the schema (DXLOG/ContestInstance/
+    # Contest tables) is just SQLite — compatible loggers like NotN1MM (a Linux
+    # N1MM alternative) write the identical schema to a plain .db file. sqlite3
+    # doesn't care about extensions at all, so neither should we.
+    _VALID_SUFFIXES = (".s3db", ".db", ".sqlite")
+
     @staticmethod
     def validate_path(path: str) -> Optional[str]:
         """Return an error string, or None if the path looks valid."""
@@ -128,9 +164,9 @@ class AppState:
             return f"File not found: {path}"
         if p.is_dir():
             return (f"That is a folder, not a file. "
-                    f"Please select a .s3db file inside: {path}")
-        if p.suffix.lower() != ".s3db":
-            return f"Expected a .s3db file, got: {p.name}"
+                    f"Please select a log file inside: {path}")
+        if p.suffix.lower() not in AppState._VALID_SUFFIXES:
+            return f"Expected a .s3db/.db/.sqlite file, got: {p.name}"
         return None
 
     # ── Scan contests (read-only, no ContestLog instance created) ────────────
@@ -322,7 +358,7 @@ async def api_browse():
         result = win.create_file_dialog(
             dialog_type=_wv.FileDialog.OPEN,
             allow_multiple=False,
-            file_types=("N1MM Log Files (*.s3db)", "All files (*.*)")
+            file_types=("Contest Log Files (*.s3db;*.db;*.sqlite)", "All files (*.*)")
         )
         if not result:
             return {"path": None}
@@ -330,7 +366,7 @@ async def api_browse():
         # Guard: pywebview may return a directory if the user didn't select a file
         if os.path.isdir(chosen):
             return JSONResponse(
-                {"error": f"Selected a folder, not a .s3db file: {chosen}"},
+                {"error": f"Selected a folder, not a log file: {chosen}"},
                 status_code=400)
         return {"path": chosen}
     except Exception as exc:
@@ -338,39 +374,119 @@ async def api_browse():
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
-# ── Auto-discover N1MM databases in well-known locations ─────────────────────
+@app.get("/api/browse_folder")
+async def api_browse_folder():
+    """Trigger the OS native folder-open dialog via pywebview — used to add a
+    custom folder to search for contest databases (see /api/settings/log_dirs).
+    Falls back to manual path entry in the UI if pywebview isn't available."""
+    win = STATE._webview_window
+    if win is None:
+        return JSONResponse({"error": "PyWebView window not ready"}, status_code=503)
+    try:
+        import webview as _wv
+        result = win.create_file_dialog(dialog_type=_wv.FileDialog.FOLDER)
+        if not result:
+            return {"path": None}
+        return {"path": str(result[0])}
+    except Exception as exc:
+        log.exception("browse_folder failed")
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+# ── Auto-discover contest databases in well-known + user-added locations ─────
 # N1MM Logger+ always keeps user contest databases in this folder alongside a
 # handful of its own internal system databases (admin log, packet spot cache)
-# — those aren't contest logs, so they're filtered out by name.
+# — those aren't contest logs, so they're filtered out by name. Other loggers
+# (e.g. NotN1MM on Linux) don't share that folder, so users can add their own
+# via /api/settings/log_dirs — persisted in _SETTINGS_PATH, not hardcoded.
 
 _N1MM_SYSTEM_DBS = {"n1mm admin.s3db", "n1mm dxlog.s3db", "n1mm packet spots.s3db"}
 
 
-def _known_n1mm_db_dirs() -> list:
-    return [Path.home() / "Documents" / "N1MM Logger+" / "Databases"]
+def _default_log_dir() -> Path:
+    return Path.home() / "Documents" / "N1MM Logger+" / "Databases"
+
+
+def _custom_log_dirs() -> list:
+    return list(_load_settings().get("log_dirs", []))
+
+
+def _known_log_dirs() -> list:
+    """Default N1MM folder plus every user-added folder, de-duplicated."""
+    seen, dirs = set(), []
+    for raw in [str(_default_log_dir())] + _custom_log_dirs():
+        key = os.path.normcase(os.path.normpath(raw))
+        if key in seen:
+            continue
+        seen.add(key)
+        dirs.append(Path(raw))
+    return dirs
+
+
+@app.get("/api/settings/log_dirs")
+async def api_get_log_dirs():
+    """List user-added folders to search for contest databases, plus whether
+    each still exists on disk (shown greyed-out/removable in the UI if not)."""
+    return {
+        "default_dir": str(_default_log_dir()),
+        "dirs": [{"path": d, "exists": Path(d).is_dir()} for d in _custom_log_dirs()],
+    }
+
+
+@app.post("/api/settings/log_dirs")
+async def api_add_log_dir(body: dict):
+    """Add a folder to search for contest databases (e.g. where NotN1MM or
+    another non-N1MM logger keeps its .db files)."""
+    path = (body.get("path") or "").strip()
+    if not path:
+        return JSONResponse({"error": "No path supplied"}, status_code=400)
+    p = Path(path).expanduser()
+    if not p.is_dir():
+        return JSONResponse({"error": f"Not a folder: {path}"}, status_code=400)
+    resolved = str(p.resolve())
+    settings = _load_settings()
+    dirs = settings.setdefault("log_dirs", [])
+    key = os.path.normcase(os.path.normpath(resolved))
+    if not any(os.path.normcase(os.path.normpath(d)) == key for d in dirs):
+        dirs.append(resolved)
+        _save_settings(settings)
+    return {"ok": True, "dirs": dirs}
+
+
+@app.delete("/api/settings/log_dirs")
+async def api_remove_log_dir(body: dict):
+    path = (body.get("path") or "").strip()
+    settings = _load_settings()
+    dirs = settings.setdefault("log_dirs", [])
+    key = os.path.normcase(os.path.normpath(path))
+    dirs[:] = [d for d in dirs if os.path.normcase(os.path.normpath(d)) != key]
+    _save_settings(settings)
+    return {"ok": True, "dirs": dirs}
 
 
 @app.get("/api/scan_known_locations")
 async def api_scan_known_locations():
-    """Look for .s3db files in N1MM Logger+'s default database folder, so the
-    user doesn't have to browse to/type a path for the common case."""
+    """Look for contest databases in N1MM's default folder plus any
+    user-added folders, so the user doesn't have to browse to/type a path
+    for the common case."""
     found = []
-    for d in _known_n1mm_db_dirs():
+    for d in _known_log_dirs():
         if not d.is_dir():
             continue
-        for f in d.glob("*.s3db"):
-            if f.name.lower() in _N1MM_SYSTEM_DBS:
-                continue
-            try:
-                st = f.stat()
-            except OSError:
-                continue
-            found.append({
-                "path":  str(f),
-                "name":  f.name,
-                "size":  st.st_size,
-                "mtime": st.st_mtime,
-            })
+        for suffix in AppState._VALID_SUFFIXES:
+            for f in d.glob(f"*{suffix}"):
+                if f.name.lower() in _N1MM_SYSTEM_DBS:
+                    continue
+                try:
+                    st = f.stat()
+                except OSError:
+                    continue
+                found.append({
+                    "path":  str(f),
+                    "name":  f.name,
+                    "size":  st.st_size,
+                    "mtime": st.st_mtime,
+                })
     found.sort(key=lambda r: r["mtime"], reverse=True)
     return {"databases": found}
 

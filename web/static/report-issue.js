@@ -5,7 +5,7 @@
 // GitHub "New Issue" URL.
 (function () {
   const GITHUB_REPO = 'ezypezy22/VK-Contest-Analyzer';
-  const VERSION      = '26.7.3';
+  const VERSION      = '26.7.4';
 
   const overlay   = document.getElementById('report-issue-dialog');
   const btnOpen   = document.getElementById('btn-report-issue');

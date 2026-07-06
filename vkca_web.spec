@@ -49,6 +49,17 @@ try:
 except ImportError:
     pass
 
+# Add pywebview's GTK/WebKit2 backend on Linux, if available — lets the
+# embedded window work instead of falling back to the default browser.
+try:
+    import gi
+    gi.require_version('Gtk', '3.0')
+    gi.require_version('WebKit2', '4.1')
+    from gi.repository import Gtk, WebKit2
+    hidden += ['gi', 'gi.repository.Gtk', 'gi.repository.WebKit2', 'gi.repository.Gdk', 'gi.repository.GLib']
+except (ImportError, ValueError):
+    pass
+
 # ── Data files ────────────────────────────────────────────────────────────────
 datas = []
 
@@ -104,9 +115,26 @@ a = Analysis(
         # we don't need the httptools alternative, and we configure
         # logging ourselves (log_config=None) rather than via a YAML file.
         'watchfiles', 'httptools', 'yaml',
+        # plugins/base.py does a try/except-guarded `import vkcontest_analyzer`
+        # just to read theme colour constants — static analysis follows that
+        # into vkcontest_analyzer.py's top-level `scipy` import. scipy needs
+        # numpy (excluded above) to function, so it can never actually import
+        # at runtime here; it's ~30MB of dead weight.
+        'scipy',
     ],
     noarchive=False,
 )
+
+# The gi/GTK hook pulls in every icon theme and GTK theme installed on the
+# build machine's desktop (Mint-Y/Mint-L/Mint-X, Adwaita, Papirus, Bibata
+# cursors, etc. — ~1.4GB uncompressed) because the venv has
+# --system-site-packages access to them. pywebview's GTK backend only sets
+# the window icon from our own file (Gtk.Window.set_icon_from_file) — it
+# never resolves icons by theme name — so none of this is needed at runtime.
+a.datas = [d for d in a.datas if not (d[0].startswith('share/icons' + os.sep)
+                                      or d[0].startswith('share/themes' + os.sep)
+                                      or d[0].startswith('share/icons/')
+                                      or d[0].startswith('share/themes/'))]
 
 pyz = PYZ(a.pure, a.zipped_data)
 
