@@ -6,7 +6,7 @@ Built and maintained by **VK2YI**.
 
 ## Current version
 
-`26.7.3`
+`26.7.4`
 
 Versions follow a `YY.M.patch` scheme:
 
@@ -33,6 +33,8 @@ Example: `26.7.1` = the 1st release in July 2026.
 - 😴 Fatigue — operator fatigue tracking
 - 📈 Year on Year — historical comparison
 - 🏁 Pace Tracker — pace against goals/history
+
+& Many more features.... 
 
 Available as a native desktop app and a web/HUD mode (`web/`) for browser- or pop-out-window-based dashboards.
 
