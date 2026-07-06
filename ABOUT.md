@@ -36,7 +36,7 @@ Available as a native desktop app and a web/HUD mode (`web/`) for browser- or po
 
 ## Repository
 
-- Source: [github.com/ezypezy22/VK-Contest-Analyzer](https://github.com/ezypezy22/VK-Contest-Analyzer)
+- Source: [github.com/ezypezy22/vkca_web](https://github.com/ezypezy22/vkca_web)
 - Issues / feature requests: use the in-app **Help → Report Issue / Request Feature**, or open a GitHub issue.
 
 ## Contact

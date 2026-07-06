@@ -4,7 +4,7 @@
 // an AI-polish round-trip and a diagnostics block, then opens a pre-filled
 // GitHub "New Issue" URL.
 (function () {
-  const GITHUB_REPO = 'ezypezy22/VK-Contest-Analyzer';
+  const GITHUB_REPO = 'ezypezy22/vkca_web';
   const VERSION      = '26.7.4';
 
   const overlay   = document.getElementById('report-issue-dialog');

@@ -429,7 +429,7 @@ FONT_MONO_S = (MONO_FONT, 9)
 VERSION = "26.7.4"   # year.month.patch — displayed in title bar and header label
 
 # GitHub repo used by Help → Report Issue / Request Feature
-GITHUB_REPO = "ezypezy22/VK-Contest-Analyzer"
+GITHUB_REPO = "ezypezy22/vkca_web"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ── Tab Registry & Persistence ───────────────────────────────────────────────
