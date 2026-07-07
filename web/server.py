@@ -2465,6 +2465,73 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
         # exports via the in-page <a download> click do nothing with no error.
         webview.settings['ALLOW_DOWNLOADS'] = True
 
+        # Frameless: the OS title bar (and its minimize/maximize/close buttons)
+        # is gone, so the frontend draws its own (#window-controls in
+        # index.html) and calls back into _WindowApi below via pywebview's
+        # js_api bridge. easy_drag is explicitly OFF — pywebview's easy_drag
+        # makes mousedown+move ANYWHERE in the page drag the window, which
+        # would fight the tile drag-to-reorder feature and the zoom slider.
+        # Instead, only elements with the 'pywebview-drag-region' class
+        # (the titlebar logo/title — see index.html) act as a drag handle.
+        #
+        # toggle_maximize deliberately does NOT use window.maximize()/restore().
+        # WinForms' native maximize sizes the window to Screen.Bounds (the full
+        # monitor rectangle) instead of Screen.WorkingArea once FormBorderStyle
+        # is None (i.e. frameless) — a long-standing WinForms quirk where a
+        # borderless form's maximize no longer accounts for the taskbar, so it
+        # visibly doesn't "fill" the usable screen correctly. Instead we move
+        # window .resize()/.move() to the real work-area rect ourselves.
+        from webview.window import FixPoint
+
+        _maximized     = False   # starts windowed — see create_window() below
+        _pre_max_geom  = None    # (x, y, width, height) to restore back to
+        _MIN_W, _MIN_H = 900, 600   # keep in sync with min_size below
+
+        class _WindowApi:
+            def minimize(self):
+                window.minimize()
+
+            def toggle_maximize(self):
+                nonlocal _maximized, _pre_max_geom
+                if not _maximized:
+                    _pre_max_geom = (window.x, window.y, window.width, window.height)
+                    screen = webview.screens[0]
+                    work = getattr(screen, 'frame', None)
+                    if work is not None and hasattr(work, 'Width'):
+                        x, y, w, h = work.X, work.Y, work.Width, work.Height
+                    else:
+                        x, y, w, h = screen.x, screen.y, screen.width, screen.height
+                    window.move(x, y)
+                    window.resize(w, h)
+                elif _pre_max_geom:
+                    x, y, w, h = _pre_max_geom
+                    window.move(x, y)
+                    window.resize(w, h)
+                _maximized = not _maximized
+
+            def close(self):
+                window.destroy()
+
+            def get_size(self):
+                # One-shot snapshot the frontend reads at the start of an
+                # edge/corner drag (see wireResizeHandles in app.js) — the
+                # rest of the drag computes absolute sizes from this origin
+                # instead of round-tripping on every mousemove.
+                return {'width': window.width, 'height': window.height}
+
+            def resize_to(self, width, height, edge):
+                # 'edge' is which border/corner is being dragged ('n', 'sw',
+                # etc). FixPoint anchors the *opposite* side so e.g. dragging
+                # the left edge grows the window leftward instead of
+                # pywebview's default top-left-anchored growth.
+                nonlocal _maximized
+                _maximized = False
+                width  = max(_MIN_W, int(width))
+                height = max(_MIN_H, int(height))
+                horiz = FixPoint.EAST if 'w' in edge else FixPoint.WEST
+                vert  = FixPoint.SOUTH if 'n' in edge else FixPoint.NORTH
+                window.resize(width, height, horiz | vert)
+
         window = webview.create_window(
             title="VK Contest Analyzer",
             url=url,
@@ -2472,7 +2539,9 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
             height=860,
             min_size=(900, 600),
             background_color="#0d1117",
-            maximized=True,
+            frameless=True,
+            easy_drag=False,
+            js_api=_WindowApi(),
         )
 
         def _on_loaded():

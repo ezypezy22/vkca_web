@@ -70,6 +70,34 @@ body{height:100%;background:var(--bg);color:var(--fg);
 .tb-btn--primary{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:bold;}
 .tb-btn--primary:hover{background:#00efc0;color:var(--bg);}
 
+/* ── Frameless-window caption buttons (desktop app only — see app.js
+   wireWindowControls) ─────────────────────────────────────────────────────── */
+#window-controls{align-items:stretch;height:28px;margin-left:4px;flex-shrink:0;}
+.win-ctrl-btn{width:38px;height:100%;background:transparent;color:var(--muted);
+  border:none;font-family:var(--font-ui);font-size:0.85em;line-height:1;
+  cursor:pointer;transition:background .12s,color .12s;}
+.win-ctrl-btn:hover{background:var(--bg3);color:var(--fg);}
+.win-ctrl-btn--close:hover{background:var(--red);color:#fff;}
+
+/* ── Frameless-window resize handles (desktop app only — see app.js
+   wireResizeHandles) — hidden until pywebview-desktop is added to <body>,
+   so they never appear in a plain browser tab or in the HUD/tile pop-outs
+   (separate, non-frameless windows that still have a native resize border). */
+.resize-handle{display:none;position:fixed;z-index:1000;}
+.pywebview-desktop .resize-handle{display:block;}
+.resize-handle--n,.resize-handle--s{left:10px;right:10px;height:5px;}
+.resize-handle--e,.resize-handle--w{top:10px;bottom:10px;width:5px;}
+.resize-handle--n{top:0;cursor:n-resize;}
+.resize-handle--s{bottom:0;cursor:s-resize;}
+.resize-handle--e{right:0;cursor:e-resize;}
+.resize-handle--w{left:0;cursor:w-resize;}
+.resize-handle--ne,.resize-handle--nw,.resize-handle--se,.resize-handle--sw{
+  width:10px;height:10px;z-index:1001;}
+.resize-handle--ne{top:0;right:0;cursor:ne-resize;}
+.resize-handle--nw{top:0;left:0;cursor:nw-resize;}
+.resize-handle--se{bottom:0;right:0;cursor:se-resize;}
+.resize-handle--sw{bottom:0;left:0;cursor:sw-resize;}
+
 /* LIVE badge */
 .live-badge{font-family:var(--font-mono);font-size:0.69em;letter-spacing:.1em;
              padding:2px 8px;border-radius:10px;border:1px solid transparent;transition:all .3s;}
@@ -253,7 +281,11 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
 .region-canvas-wrap canvas{position:absolute;inset:0;width:100%!important;height:100%!important;}
 
 /* ── DX Cluster ──────────────────────────────────────────────────────────── */
-#tab-cluster{gap:var(--gap);}
+/* Without a bounded height here, .cluster-raw-feed's flex:1/overflow-y:auto
+   has nothing to clamp against — the box (and #content under it) just grows
+   with every appended line instead of scrolling. Same fix as #tab-map. */
+#tab-cluster{gap:var(--gap);height:100%;overflow:hidden;}
+body:has(#tab-cluster.active) #content{overflow:hidden;}
 .cluster-header{flex-shrink:0;}
 .cluster-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
 .dot-conn{background:var(--green);box-shadow:0 0 6px var(--green);}

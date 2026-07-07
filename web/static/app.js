@@ -153,7 +153,73 @@ Users are responsible for verifying all information against N1MM before making d
     launchBtn.focus();
   }
 })();
- 
+
+  // ── Frameless-window caption buttons (desktop app only) ────────────────────
+  // #window-controls stays hidden until we know we're actually running inside
+  // pywebview's main window — checking for pywebview.api.minimize specifically
+  // (rather than just window.pywebview) also keeps it hidden in the Mini HUD
+  // and tile pop-out windows, which are separate pywebview windows with no
+  // js_api of their own.
+  (function () {
+    // Frameless windows have no OS border, so nothing resizes them by
+    // default — these invisible edge/corner strips do it manually: mousedown
+    // snapshots the current size (one round-trip via get_size), then every
+    // mousemove computes an absolute new size from that snapshot + the mouse
+    // delta and pushes it through resize_to(), which anchors the *opposite*
+    // edge server-side (via pywebview's FixPoint) so e.g. dragging the left
+    // edge grows the window leftward instead of the default top-left-anchored
+    // growth. Throttled to one call per animation frame so a fast mouse
+    // doesn't flood the js_api bridge.
+    function wireResizeHandles(api) {
+      document.body.classList.add('pywebview-desktop');
+      const MIN_W = 900, MIN_H = 600;
+      document.querySelectorAll('.resize-handle').forEach(handle => {
+        const edge = handle.dataset.edge;
+        handle.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          const startX = e.screenX, startY = e.screenY;
+          api.get_size().then(({width, height}) => {
+            let pending = null, raf = null;
+            function apply() {
+              raf = null;
+              api.resize_to(pending.width, pending.height, edge);
+            }
+            function onMove(ev) {
+              const dx = ev.screenX - startX, dy = ev.screenY - startY;
+              let w = width, h = height;
+              if (edge.includes('e')) w = width + dx;
+              if (edge.includes('w')) w = width - dx;
+              if (edge.includes('s')) h = height + dy;
+              if (edge.includes('n')) h = height - dy;
+              pending = {width: Math.max(MIN_W, w), height: Math.max(MIN_H, h)};
+              if (!raf) raf = requestAnimationFrame(apply);
+            }
+            function onUp() {
+              window.removeEventListener('mousemove', onMove);
+              window.removeEventListener('mouseup', onUp);
+              if (raf) cancelAnimationFrame(raf);
+            }
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+          });
+        });
+      });
+    }
+
+    function wireWindowControls() {
+      const api = window.pywebview && window.pywebview.api;
+      if (!api || !api.minimize) return;
+      const wrap = document.getElementById('window-controls');
+      if (wrap) wrap.style.display = 'flex';
+      document.getElementById('btn-win-minimize')?.addEventListener('click', () => api.minimize());
+      document.getElementById('btn-win-maximize')?.addEventListener('click', () => api.toggle_maximize());
+      document.getElementById('btn-win-close')?.addEventListener('click', () => api.close());
+      wireResizeHandles(api);
+    }
+    if (window.pywebview) wireWindowControls();
+    else window.addEventListener('pywebviewready', wireWindowControls);
+  })();
+
   // ── Tab routing ───────────────────────────────────────────────────────────
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {

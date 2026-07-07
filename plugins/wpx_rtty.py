@@ -1,23 +1,24 @@
 """
-plugins/wpx.py
-──────────────
-CQ World Wide WPX Contest plugin for the VK Contest Analyzer.
+plugins/wpx_rtty.py
+────────────────────
+CQ World Wide WPX RTTY Contest plugin for the VK Contest Analyzer.
 
-Covers both CW (May) and SSB (March) weekends.
-N1MM+ ContestName strings: "CQ-WPX-CW", "CQ-WPX-SSB", "CQWPXCW", "CQWPXSSB"
-and common variants. CQ WPX RTTY uses different QSO-point values and is
-deliberately NOT matched by this plugin (identify() returns False for any
-name containing "RTTY") — see plugins/wpx_rtty.py, which owns it instead.
+N1MM+ ContestName strings: "CQ-WPX-RTTY", "CQWPXRTTY" and common variants.
+Split out from plugins/wpx.py (CW/SSB) because RTTY uses different QSO-point
+values for same-continent and same-country contacts — see wpx.py's identify(),
+which deliberately excludes "RTTY" so the two plugins never both claim a log.
 
-Scoring (per rules at https://cqwpx.com/rules/):
-  • QSO points (same for CW and SSB):
+Scoring (per rules at http://cqwpxrtty.com/rules.htm):
+  • QSO points:
       – Different continent          → 3 pts on 10/15/20m, 6 pts on 40/80/160m
-      – Same continent, diff country → 1 pt  on 10/15/20m, 2 pts on 40/80/160m
-        (NA-NA exception: 2 pts / 4 pts — not relevant for a VK operator)
-      – Same country                 → 1 pt, any band
+        (same as CW/SSB)
+      – Same continent, diff country → 2 pts on 10/15/20m, 4 pts on 40/80/160m
+        (CW/SSB is only 1 pt / 2 pts here — this is the main RTTY difference)
+      – Same country                 → 1 pt  on 10/15/20m, 2 pts on 40/80/160m
+        (CW/SSB is a flat 1 pt on any band — RTTY doubles it on 40/80/160m)
   • Multiplier: WPX prefix (callsign prefix, e.g. "VK2", "W1", "JA3").
-      Each prefix counts ONCE for the whole contest — NOT per band, unlike
-      CQWW's country/zone mults.
+      Each prefix counts ONCE for the whole contest — NOT per band, same as
+      CW/SSB WPX and unlike CQWW's country/zone mults.
   • Final score = total QSO points × total unique prefixes worked.
 
 N1MM stores:
@@ -25,13 +26,13 @@ N1MM stores:
                    preferred_exchange_columns below)
   IsMultiplier1  → 1 = new prefix (first time worked, any band)
   pts            → QSO point value (1 / 2 / 3 / 4 / 6)
-  CQZone / ZN    → CQ zone of the worked station (used here only as a
-                   continent lookup for the recalc_pts() fallback)
+  CQZone / ZN    → CQ zone of the worked station (not used here — see
+                   recalc_pts() for why zone-based re-derivation is wrong)
 
 Session structure: 48-hour contest, Saturday 00:00–Sunday 23:59 UTC, same
-shape as CQWW — modelled as 4 × 12-hour chunks for the generic rate/session
-machinery, with uses_block_structure() = False so the overview shows
-whole-contest elapsed/remaining time rather than a per-block countdown.
+shape as CW/SSB WPX and CQWW — modelled as 4 × 12-hour chunks for the generic
+rate/session machinery, with uses_block_structure() = False so the overview
+shows whole-contest elapsed/remaining time rather than a per-block countdown.
 """
 
 from __future__ import annotations
@@ -60,15 +61,6 @@ def _peak_rate_per_hour(times: list, window_minutes: int = 60) -> int:
     """
     Best sliding-window QSO rate, expressed as QSOs/hour, matching N1MM's
     "Max Rates" report (Window menu) for the given window size.
-
-    For each QSO time ``t``, counts how many QSOs (including ``t`` itself)
-    fall within ``[t, t + window_minutes]``, takes the maximum over all
-    ``t``, and scales that count to a per-hour rate. ``times`` must already
-    be sorted ascending and contain only valid (non-dupe) QSO timestamps.
-
-    With the default 60-minute window the scale factor is 1, so the
-    returned value is simply the QSO count in the single busiest rolling
-    hour — the figure most operators mean by "my best rate".
     """
     if not times:
         return 0
@@ -91,28 +83,26 @@ def _peak_rate_per_hour(times: list, window_minutes: int = 60) -> int:
 # Plugin
 # ═════════════════════════════════════════════════════════════════════════════
 
-class CQWPXPlugin(ContestPlugin):
+class CQWPXRTTYPlugin(ContestPlugin):
     """
-    CQ World Wide WPX Contest — CW and SSB.
+    CQ World Wide WPX RTTY Contest.
 
     Multiplier : WPX prefix, counted once for the whole log (not per band).
-    Exchange   : RS(T) + serial number.
+    Exchange   : RST + serial number.
     """
 
     # ── Identity ──────────────────────────────────────────────────────────────
 
     def identify(self, contest_name: str) -> bool:
         cn = contest_name.upper().replace(" ", "").replace("_", "").replace("-", "")
-        if "RTTY" in cn:
-            # WPX RTTY has different QSO-point values (2/4 same-continent,
-            # 1/2 same-country) — not handled by this plugin.
+        if "RTTY" not in cn:
             return False
-        keywords = ("CQWPX", "WPXSSB", "WPXCW", "WORLDWIDEPREFIX")
+        keywords = ("CQWPX", "WPXRTTY", "WORLDWIDEPREFIX")
         return any(kw in cn for kw in keywords)
 
     @property
     def display_name(self) -> str:
-        return "CQ WPX"
+        return "CQ WPX RTTY"
 
     # ── Session / block structure ─────────────────────────────────────────────
 
@@ -129,10 +119,10 @@ class CQWPXPlugin(ContestPlugin):
 
     def uses_block_structure(self) -> bool:
         """
-        WPX is a single continuous 48-hour contest with no "block"
-        subdivision (same as CQWW). The overview's time panel should show
-        whole-contest start/elapsed/remaining instead of a per-block
-        countdown.
+        WPX RTTY is a single continuous 48-hour contest with no "block"
+        subdivision (same as CW/SSB WPX and CQWW). The overview's time panel
+        should show whole-contest start/elapsed/remaining instead of a
+        per-block countdown.
         """
         return False
 
@@ -160,32 +150,17 @@ class CQWPXPlugin(ContestPlugin):
         """
         Deliberately a no-op: trust N1MM's stored Points unconditionally.
 
-        An earlier draft of this method tried to "fix up" pts==1 QSOs by
-        re-deriving the worked station's continent from its CQ zone and
-        recomputing 1/2/3/6 from the continent + band. That re-derivation
-        is WRONG for several common DXCC entities whose CQ zone suggests
-        one continent but whose DXCC CONTINENT (the field WPX scoring
-        actually uses) is different — most importantly for a VK operator:
+        Same reasoning as plugins/wpx.py's recalc_pts(): re-deriving
+        continent from CQ zone is wrong for entities whose CQ zone suggests
+        one continent but whose DXCC CONTINENT (what WPX scoring actually
+        uses) is different — e.g. Indonesia/Philippines/Hawaii read as Asia
+        or Oceania depending on which field you use. N1MM already applies
+        the correct DXCC continent table per QSO, so there is nothing for
+        this method to safely improve on.
 
-          • Indonesia (YB-YH, CQ zone 28) → CQ zone 28 covers parts of
-            continental Asia, but Indonesia's DXCC continent is OC.
-          • Philippines (DU/DX, CQ zone 27) → likewise DXCC continent OC.
-          • Hawaii (KH6, CQ zone 31) → DXCC continent OC.
-
-        N1MM correctly scores VK<->these-entities QSOs as same-continent
-        (1 pt on 10/15/20m, 2 pts on 40/80/160m) using its own DXCC table.
-        The zone-based re-derivation instead classified them as a
-        different continent (3/6 pts), silently inflating a real log's
-        score by ~6% (119 of 1281 QSOs changed, total points 3529 -> 3761,
-        score 2,442,068 -> 2,602,612 — confirmed against N1MM's own
-        per-band report for this log).
-
-        WPX also has no legitimate 0-point QSO (minimum is 1 pt for a
-        same-country contact on any band), so the base loader's
-        ``dupe = 1 if pts == 0 else 0`` fallback — and its accompanying
-        "pts == 0 -> 1" floor for non-dupe QSOs — are already correct for
-        WPX. There is nothing for this method to safely improve on without
-        a real DXCC continent/country table, so it does nothing.
+        WPX RTTY also has no legitimate 0-point QSO (minimum is 1 pt for a
+        same-country contact on 10/15/20m), so the base loader's
+        ``dupe = 1 if pts == 0 else 0`` fallback is already correct here.
         """
         return
 
@@ -203,7 +178,7 @@ class CQWPXPlugin(ContestPlugin):
         Estimate how much the total score would jump for working ONE more
         QSO right now, by band.
 
-        WPX scores as::
+        WPX RTTY scores as::
 
             Score = TotalPoints × TotalPrefixes
 
@@ -213,9 +188,8 @@ class CQWPXPlugin(ContestPlugin):
 
         where ``P`` is the current total QSO points, ``M`` is the current
         prefix count, and ``dm`` is 0 (fill QSO — prefix already worked) or
-        1 (brand-new WPX prefix). Unlike CQWW there's no "two new mults on
-        one QSO" case — WPX has only one multiplier type — so only the
-        no-mult and one-mult scenarios are produced.
+        1 (brand-new WPX prefix). Only one multiplier type exists, so only
+        the no-mult and one-mult scenarios are produced.
 
         ``p`` is taken as the average QSO-point value already logged on that
         band, falling back to the overall average for bands with no QSOs yet.
@@ -268,18 +242,12 @@ class CQWPXPlugin(ContestPlugin):
     def multipliers(self, qsos: list) -> MultResult:
         """
         Primary mults: unique WPX prefixes worked, counted ONCE across the
-        whole log (not per band — see module docstring).
+        whole log (not per band). Collected directly from mult1 values on
+        non-dupe QSOs rather than relying on N1MM's IsMultiplier1 flag, so a
+        log where that flag was never populated still counts correctly.
 
-        We collect every distinct non-empty mult1 value from non-dupe QSOs
-        directly, rather than relying on N1MM's IsMultiplier1 flag. This is
-        deliberately more robust than flag-based counting: if IsMultiplier1
-        is missing/zero for an entire imported log (as has been observed for
-        other contest types in this database), a flag-based count would
-        silently come out as zero. Direct collection of mult1 values gives
-        the correct prefix count regardless of whether the flags were ever
-        populated.
-
-        secondary_mults is always empty — WPX has only one multiplier type.
+        secondary_mults is always empty — WPX RTTY has only one multiplier
+        type.
         """
         prefixes: set = set()
         for q in qsos:
@@ -299,11 +267,11 @@ class CQWPXPlugin(ContestPlugin):
 
     @property
     def preferred_exchange_columns(self):
-        # N1MM's WPX database schema stores the computed WPX prefix directly
-        # in WPXPrefix (e.g. "VK2", "W1", "JA3", "VP8"). We force that column
-        # first so mult1 holds the WPX prefix rather than the raw exchange
-        # (serial number), which the base loader's default heuristic would
-        # otherwise pick up via Exchange1.
+        # N1MM's WPX-family database schema stores the computed WPX prefix
+        # directly in WPXPrefix (e.g. "VK2", "W1", "JA3", "VP8") regardless of
+        # mode. We force that column first so mult1 holds the WPX prefix
+        # rather than the raw exchange (serial number), which the base
+        # loader's default heuristic would otherwise pick up via Exchange1.
         return ["WPXPrefix", "wpxprefix", "Mult1", "mult1",
                 "Exchange1", "exchange1"]
 
@@ -324,7 +292,7 @@ class CQWPXPlugin(ContestPlugin):
         Called by compute_snapshot() to inject WPX-correct display values.
 
         compute_snapshot() sets worked/band_mults from mult_list() (empty
-        for WPX) and pct from worked / len(mult_list), which divides by
+        for WPX RTTY) and pct from worked / len(mult_list), which divides by
         zero and is guarded to 0. We override:
 
           worked        → unique WPX prefix count (matches score()/multipliers())
@@ -335,8 +303,6 @@ class CQWPXPlugin(ContestPlugin):
           pts_per_qso   → total QSO points / valid QSOs (N1MM's "Pt/Q" column)
           qsos_per_mult → valid QSOs / prefixes (N1MM's "1 Mult = N Q's" line)
           peak_rate     → best 60-minute rolling QSO rate, in QSOs/hour
-                          (matches N1MM's "Max Rates" report for a 60-minute
-                          window — see _peak_rate_per_hour())
           peak_rate_max → gauge ceiling for peak_rate
         """
         mr        = self.multipliers(qsos)
@@ -368,15 +334,15 @@ class CQWPXPlugin(ContestPlugin):
                      tooltip=(
                          "TOTAL QSOs\n"
                          "Every logged contact including dupes.\n"
-                         "WPX has no 0-point contacts — minimum is 1 pt\n"
-                         "for a same-country QSO on any band."
+                         "WPX RTTY has no 0-point contacts — minimum is 1 pt\n"
+                         "for a same-country QSO on 10/15/20m."
                      )),
             GaugeDef("VALID QSOs",  "valid",           "qso_max",   GREEN(),   "{v}",
                      tooltip=(
                          "VALID QSOs\n"
                          "Non-dupe contacts that count toward your score.\n"
-                         "Unlike CQWW, every valid WPX QSO scores at\n"
-                         "least 1 point (same-country, 10/15/20m)."
+                         "Every valid WPX RTTY QSO scores at least 1 point\n"
+                         "(same-country, 10/15/20m)."
                      )),
             GaugeDef("TOTAL SCORE", "score",           "score_max", ACCENT3(), "{v:,}",
                      tooltip=(
@@ -399,9 +365,11 @@ class CQWPXPlugin(ContestPlugin):
                          "AVERAGE POINTS PER QSO\n"
                          "Total QSO points ÷ valid QSOs — matches N1MM's 'Pt/Q'.\n"
                          "Scoring: 6 pts (diff continent, 40/80/160m)\n"
+                         "         4 pts (same continent, 40/80/160m)\n"
                          "         3 pts (diff continent, 10/15/20m)\n"
-                         "         2 pts (same continent, 40/80/160m)\n"
-                         "         1 pt  (same continent or same country)\n"
+                         "         2 pts (same continent, 10/15/20m; or\n"
+                         "               same country, 40/80/160m)\n"
+                         "         1 pt  (same country, 10/15/20m)\n"
                          "From VK, targeting 40/80m EU/NA contacts maximises this."
                      )),
             GaugeDef("QSOs / MULT", "qsos_per_mult",   10.0,        MUTED(),   "{v:.1f}",
@@ -443,11 +411,11 @@ class CQWPXPlugin(ContestPlugin):
         return result
 
     def worked_secondary_band_mults(self, qsos: list) -> set:
-        """WPX has no secondary multiplier type."""
+        """WPX RTTY has no secondary multiplier type."""
         return set()
 
     def missing_primary_mults(self, qsos: list) -> list:
-        """Not applicable for WPX (open-ended prefix list)."""
+        """Not applicable for WPX RTTY (open-ended prefix list)."""
         return []
 
     def sparkline_mults(self, q: dict, seen: set) -> int:
@@ -516,3 +484,7 @@ class CQWPXPlugin(ContestPlugin):
                 "efficiency":    pn / qn if qn else 0,
             })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)
+
+
+def register() -> CQWPXRTTYPlugin:
+    return CQWPXRTTYPlugin()

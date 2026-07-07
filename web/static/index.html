@@ -17,6 +17,17 @@
 </head>
 <body>
 
+<!-- Frameless-window resize handles (desktop app only — hidden by default,
+     see style.css .pywebview-desktop and app.js wireResizeHandles). -->
+<div class="resize-handle resize-handle--n" data-edge="n"></div>
+<div class="resize-handle resize-handle--s" data-edge="s"></div>
+<div class="resize-handle resize-handle--e" data-edge="e"></div>
+<div class="resize-handle resize-handle--w" data-edge="w"></div>
+<div class="resize-handle resize-handle--ne" data-edge="ne"></div>
+<div class="resize-handle resize-handle--nw" data-edge="nw"></div>
+<div class="resize-handle resize-handle--se" data-edge="se"></div>
+<div class="resize-handle resize-handle--sw" data-edge="sw"></div>
+
 <!-- ── Title bar ─────────────────────────────────────────────────────────────
      Two-row layout:
        Row 1 (top): logo | title | status | [spacer] | Open Log
@@ -26,15 +37,22 @@
 
   <!-- Row 1: identity + primary action -->
   <div id="tb-row1">
-    <div id="titlebar-logo">⬡</div>
-    <div id="titlebar-title">VK CONTEST ANALYZER <span style="color:var(--muted);font-size:0.75em">v26.7.4</span></div>
-    <div id="titlebar-status">
+    <div id="titlebar-logo" class="pywebview-drag-region">⬡</div>
+    <div id="titlebar-title" class="pywebview-drag-region">VK CONTEST ANALYZER <span style="color:var(--muted);font-size:0.75em">v26.7.4</span></div>
+    <div id="titlebar-status" class="pywebview-drag-region">
       <span id="status-dot" class="dot dot--disconnected"></span>
       <span id="status-text">No log loaded</span>
     </div>
-    <div class="tb-spacer"></div>
+    <div class="tb-spacer pywebview-drag-region"></div>
     <button id="btn-switch-contest" class="tb-btn" style="display:none" title="Switch to a different contest in the current database">⇄ <span id="switch-contest-label">Switch</span></button>
     <button id="btn-load" class="tb-btn tb-btn--primary tb-btn--open">📂 Open Log</button>
+    <!-- Custom caption buttons for the frameless desktop window — hidden by
+         default, shown only inside pywebview (see app.js wireWindowControls). -->
+    <div id="window-controls" style="display:none">
+      <button id="btn-win-minimize" class="win-ctrl-btn" title="Minimize">─</button>
+      <button id="btn-win-maximize" class="win-ctrl-btn" title="Maximize / Restore">▢</button>
+      <button id="btn-win-close" class="win-ctrl-btn win-ctrl-btn--close" title="Close">✕</button>
+    </div>
   </div>
 
   <!-- Row 2: controls -->
@@ -94,6 +112,11 @@
 
     <!-- Report issue / request feature -->
     <button id="btn-report-issue" class="tb-btn" title="Report a bug or request a feature">🐛 Report Issue</button>
+
+    <!-- Trailing drag handle — row 2 is otherwise wall-to-wall interactive
+         controls (slider, selects, buttons), so without this the whole
+         bottom row of the titlebar is undraggable. -->
+    <div class="tb-spacer pywebview-drag-region"></div>
   </div>
 
 </div>
@@ -423,9 +446,9 @@
         <button id="cluster-connect-btn" class="btn btn--primary btn--sm">Connect</button>
         <button id="cluster-disconnect-btn" class="btn btn--ghost btn--sm" disabled>Disconnect</button>
         <div class="tb-sep"></div>
-        <label class="tb-label">SH/DX</label>
+        <label class="tb-label" title="Sends SH/DX &lt;n&gt; to the cluster to request its N most recent spots">Spots to fetch</label>
         <input id="cluster-shdx-input" class="tb-input" type="number" min="10" max="200" step="10" value="20" style="width:55px">
-        <button id="cluster-shdx-btn" class="btn btn--ghost btn--sm">Backfill</button>
+        <button id="cluster-shdx-btn" class="btn btn--ghost btn--sm" title="Requests the cluster's last N spots (SH/DX &lt;n&gt;)">Show Last 20 Spots</button>
       </div>
     </div>
 

@@ -185,13 +185,21 @@
     }
   });
 
-  // SH/DX backfill
-  shdxBtn?.addEventListener('click', () => {
-    if (!ws) return;
+  // SH/DX backfill — button label tracks the requested count.
+  function shdxCount() {
     let n = parseInt(shdxInput?.value || '20', 10);
     if (isNaN(n)) n = 20;
-    n = Math.max(10, Math.min(200, n));
-    const text = `SH/DX ${n}`;
+    return Math.max(10, Math.min(200, n));
+  }
+  function updateShdxLabel() {
+    if (shdxBtn) shdxBtn.textContent = `Show Last ${shdxCount()} Spots`;
+  }
+  shdxInput?.addEventListener('input', updateShdxLabel);
+  updateShdxLabel();
+
+  shdxBtn?.addEventListener('click', () => {
+    if (!ws) return;
+    const text = `SH/DX ${shdxCount()}`;
     ws.send(JSON.stringify({cmd:'send', text}));
     appendRaw('> '+text);
   });
