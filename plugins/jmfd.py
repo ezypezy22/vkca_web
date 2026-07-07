@@ -200,6 +200,13 @@ class JMFDPlugin(ContestPlugin):
     def has_missing_tab(self) -> bool:
         return False
 
+    def band_list(self) -> list:
+        # HF bands (no WARC — 30/17/12m excluded, see _WARC_BANDS) plus the
+        # most common VHF/UHF bands. JMFD legally goes up to 241 GHz, but
+        # this app doesn't otherwise model individual microwave bands, so
+        # the list stops at 70cm like the rest of the UI.
+        return ["160M", "80M", "40M", "20M", "15M", "10M", "6M", "2M", "70CM"]
+
     def has_region_heat(self) -> bool:
         return False
 

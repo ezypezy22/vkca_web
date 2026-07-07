@@ -181,7 +181,7 @@
   }
 
   // ══ PLUGIN-DRIVEN GAUGES ═══════════════════════════════════════════════════
-  let _gaugeDefs=[], _gaugeState={}, _snap=null, _fs=15, _metaLoaded=false, _usesCqZoneScoring=false;
+  let _gaugeDefs=[], _gaugeState={}, _snap=null, _fs=15, _metaLoaded=false, _usesCqZoneScoring=false, _whatifBands=[];
 
   const _tip = document.createElement('div');
   _tip.style.cssText=`position:fixed;display:none;pointer-events:none;z-index:9999;
@@ -199,7 +199,21 @@
       const res=await fetch('/api/plugin_meta'); const meta=await res.json();
       if (!meta.loaded) return;
       _metaLoaded=true; _gaugeDefs=meta.gauge_defs||[]; _usesCqZoneScoring=!!meta.uses_cq_zone_scoring;
+      _whatifBands = meta.bands || [];
       setTabVisible('missing', meta.has_missing_tab!==false);
+      // "What if?" simulates working a MISSING mult, so it's only meaningful
+      // for contests with a fixed, enumerable mult list (has_missing_tab) —
+      // for open-ended ones (e.g. WPX prefixes) there's nothing to list, so
+      // the mult dropdown would come back empty while the band dropdown
+      // still looked populated, a dead-end control. Hide it entirely.
+      const whatifSupported = meta.has_missing_tab!==false;
+      if (whatifToggleBtn) whatifToggleBtn.style.display = whatifSupported ? '' : 'none';
+      // Every (re)load of plugin meta means a contest was just loaded/switched
+      // — the bar's mult/band options and last result belong to whatever was
+      // loaded before, so always reset and close it rather than leaving stale
+      // choices (e.g. another contest's shire codes) sitting in the dropdowns.
+      resetWhatif();
+      closeWhatif();
       const br=document.getElementById('bars-row');
       if (br) br.style.display=meta.has_state_bars?'':'none';
       buildGaugeRow(_gaugeDefs);
@@ -1083,11 +1097,19 @@
       whatifMultSel.innerHTML = '<option value="">— missing mult —</option>' +
         rows.map(r=>`<option value="${r.mult}">${r.mult} (${r.region})</option>`).join('');
     } catch(e){ console.warn('missing mults load failed:',e); }
-    const WHATIF_BANDS = ["160M","80M","60M","40M","30M","20M","17M","15M","12M","10M","6M","2M","70CM"];
+    // Band choices come from the plugin's band_list() (see /api/plugin_meta),
+    // so a contest that excludes e.g. WARC bands doesn't offer a band its
+    // own rules don't allow.
     whatifBandSel.innerHTML = '<option value="">— band —</option>' +
-      WHATIF_BANDS.map(b=>`<option value="${b}">${b.toLowerCase()}</option>`).join('');
+      _whatifBands.map(b=>`<option value="${b}">${b.toLowerCase()}</option>`).join('');
   }
   function closeWhatif(){ if (whatifBar) whatifBar.style.display='none'; }
+  function resetWhatif(){
+    if (whatifMultSel)  whatifMultSel.innerHTML  = '<option value="">— missing mult —</option>';
+    if (whatifBandSel)  whatifBandSel.innerHTML  = '<option value="">— band —</option>';
+    if (whatifZoneInp)  whatifZoneInp.value      = '';
+    if (whatifResultEl) whatifResultEl.textContent = '';
+  }
 
   whatifToggleBtn?.addEventListener('click',()=>{
     const open = whatifBar && whatifBar.style.display!=='none';

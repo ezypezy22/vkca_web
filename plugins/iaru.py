@@ -489,6 +489,10 @@ class IARUPlugin(ContestPlugin):
     def has_missing_tab(self) -> bool:
         return True   # ITU zones are a fixed, enumerable list (1-75)
 
+    def band_list(self) -> list:
+        # IARU HF Championship is 160-10m — no WARC bands (30/17/12m).
+        return list(_IARU_BAND_ORDER)
+
     def has_region_heat(self) -> bool:
         return True    # continents make a sensible heat breakdown
 

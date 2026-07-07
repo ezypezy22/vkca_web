@@ -9,13 +9,15 @@ values for same-continent and same-country contacts — see wpx.py's identify(),
 which deliberately excludes "RTTY" so the two plugins never both claim a log.
 
 Scoring (per rules at http://cqwpxrtty.com/rules.htm):
+  • Bands: "Only the 3.5, 7, 14, 21, and 28 MHz bands may be used" — i.e.
+    80/40/20/15/10m ONLY. Unlike CW/SSB WPX, 160m is NOT a contest band.
   • QSO points:
-      – Different continent          → 3 pts on 10/15/20m, 6 pts on 40/80/160m
+      – Different continent          → 3 pts on 10/15/20m, 6 pts on 40/80m
         (same as CW/SSB)
-      – Same continent, diff country → 2 pts on 10/15/20m, 4 pts on 40/80/160m
+      – Same continent, diff country → 2 pts on 10/15/20m, 4 pts on 40/80m
         (CW/SSB is only 1 pt / 2 pts here — this is the main RTTY difference)
-      – Same country                 → 1 pt  on 10/15/20m, 2 pts on 40/80/160m
-        (CW/SSB is a flat 1 pt on any band — RTTY doubles it on 40/80/160m)
+      – Same country                 → 1 pt  on 10/15/20m, 2 pts on 40/80m
+        (CW/SSB is a flat 1 pt on any band — RTTY doubles it on 40/80m)
   • Multiplier: WPX prefix (callsign prefix, e.g. "VK2", "W1", "JA3").
       Each prefix counts ONCE for the whole contest — NOT per band, same as
       CW/SSB WPX and unlike CQWW's country/zone mults.
@@ -53,8 +55,9 @@ from plugins.base import (
 )
 
 
-# ── Standard WPX band set (display order, low → high) ─────────────────────────
-_WPX_BAND_ORDER: list[str] = ["160M", "80M", "40M", "20M", "15M", "10M"]
+# ── WPX RTTY band set (display order, low → high) ──────────────────────────────
+# No 160m (unlike CW/SSB WPX) — see the module docstring's "Bands" note.
+_WPX_BAND_ORDER: list[str] = ["80M", "40M", "20M", "15M", "10M"]
 
 
 def _peak_rate_per_hour(times: list, window_minutes: int = 60) -> int:
@@ -281,6 +284,10 @@ class CQWPXRTTYPlugin(ContestPlugin):
         # No fixed mult list — "missing prefixes" tab doesn't make sense
         return False
 
+    def band_list(self) -> list:
+        # WPX RTTY is 80/40/20/15/10m only — no 160m, no WARC bands.
+        return list(_WPX_BAND_ORDER)
+
     def has_region_heat(self) -> bool:
         return False
 
@@ -364,11 +371,11 @@ class CQWPXRTTYPlugin(ContestPlugin):
                      tooltip=(
                          "AVERAGE POINTS PER QSO\n"
                          "Total QSO points ÷ valid QSOs — matches N1MM's 'Pt/Q'.\n"
-                         "Scoring: 6 pts (diff continent, 40/80/160m)\n"
-                         "         4 pts (same continent, 40/80/160m)\n"
+                         "Scoring: 6 pts (diff continent, 40/80m)\n"
+                         "         4 pts (same continent, 40/80m)\n"
                          "         3 pts (diff continent, 10/15/20m)\n"
                          "         2 pts (same continent, 10/15/20m; or\n"
-                         "               same country, 40/80/160m)\n"
+                         "               same country, 40/80m)\n"
                          "         1 pt  (same country, 10/15/20m)\n"
                          "From VK, targeting 40/80m EU/NA contacts maximises this."
                      )),

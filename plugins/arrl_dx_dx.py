@@ -295,6 +295,10 @@ class ARRLDXDXPlugin(ContestPlugin):
     def has_missing_tab(self) -> bool:
         return True   # 64 defined mults — missing tab is very useful
 
+    def band_list(self) -> list:
+        # ARRL DX is 160-10m — no WARC bands (30/17/12m).
+        return ["160M", "80M", "40M", "20M", "15M", "10M"]
+
     # ── Region heat map ───────────────────────────────────────────────────────
 
     def mults_by_region(self, qsos: list) -> dict:

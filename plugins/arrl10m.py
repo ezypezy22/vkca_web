@@ -510,6 +510,10 @@ class ARRL10MPlugin(ContestPlugin):
     def has_missing_tab(self) -> bool:
         return True   # fixed-list portion (US/VE/XE/ITU) supports this
 
+    def band_list(self) -> list:
+        # 28 MHz (10m) ONLY — this is a single-band contest (rule 2.3).
+        return ["10M"]
+
     def has_region_heat(self) -> bool:
         return False
 

@@ -422,6 +422,10 @@ class JIDXPlugin(ContestPlugin):
     def has_missing_tab(self) -> bool:
         return True     # Fixed list of 50 prefectures — missing tab is useful
 
+    def band_list(self) -> list:
+        # JIDX is 160-10m — no WARC bands (30/17/12m).
+        return list(_JIDX_BAND_ORDER)
+
     def has_region_heat(self) -> bool:
         return True     # Call-area breakdown is meaningful for JIDX
 

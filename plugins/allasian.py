@@ -574,6 +574,10 @@ class AllAsianPlugin(ContestPlugin):
         # (open-ended, same as CQWW's country list).
         return False
 
+    def band_list(self) -> list:
+        # All Asian DX is 160-10m — no WARC bands (30/17/12m).
+        return list(_AADX_BAND_ORDER)
+
     def has_region_heat(self) -> bool:
         return False
 

@@ -162,6 +162,13 @@ class VKRDPlugin(ContestPlugin):
     def has_missing_tab(self) -> bool:
         return False
 
+    def band_list(self) -> list:
+        # WARC bands (30/17/12m, i.e. 10/18/24 MHz) are excluded entirely —
+        # see _WARC_BANDS. RD also scores 23cm-and-above, but this app
+        # doesn't otherwise model individual microwave bands, so the list
+        # stops at 70cm like the rest of the UI.
+        return ["160M", "80M", "40M", "20M", "15M", "10M", "6M", "2M", "70CM"]
+
     def has_region_heat(self) -> bool:
         return False
 

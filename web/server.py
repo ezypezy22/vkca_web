@@ -1694,6 +1694,8 @@ async def api_plugin_meta():
     - has_state_bars: whether Region Completion bars should be shown
     - mult_label: label for the multiplier column
     - display_name: plugin display name
+    - bands: ordered list of bands this contest's rules allow, for the
+      "What if?" band dropdown (see ContestPlugin.band_list())
     """
     if not STATE.contest_log:
         return {"loaded": False}
@@ -1733,6 +1735,7 @@ async def api_plugin_meta():
         "mult_label":       getattr(p, "mult_label",      lambda: "Mult")(),
         "uses_cq_zone_scoring": getattr(p, "uses_cq_zone_scoring", lambda: False)(),
         "gauge_defs":       gauge_list,
+        "bands":            getattr(p, "band_list", lambda: [])(),
     }
 
 

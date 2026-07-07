@@ -156,6 +156,19 @@ class ContestPlugin(ABC):
 
     # ── UI hints ──────────────────────────────────────────────────────────────
 
+    def band_list(self) -> list:
+        """
+        Ordered list of bands legal for this contest (low → high), used by
+        the frontend's "What if?" band dropdown so it doesn't offer a band
+        the contest's own rules exclude (e.g. WARC bands in a CQWW-style
+        DX contest). Default is the full band plan this app otherwise knows
+        about — override with a narrower list once a plugin's rules have
+        been checked for an explicit band restriction; leave unoverridden
+        if that hasn't been verified yet.
+        """
+        return ["160M", "80M", "60M", "40M", "30M", "20M", "17M", "15M",
+                "12M", "10M", "6M", "2M", "70CM"]
+
     def gauge_defs(self, data: dict, total_mults: int) -> list:
         ml = self.mult_label()
         return [

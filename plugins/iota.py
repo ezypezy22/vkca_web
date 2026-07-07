@@ -418,6 +418,10 @@ class IOTAPlugin(ContestPlugin):
     def has_missing_tab(self) -> bool:
         return False   # open-ended mult list — any ref can be activated
 
+    def band_list(self) -> list:
+        # IOTA is 160-10m — no WARC bands (30/17/12m).
+        return ["160M", "80M", "40M", "20M", "15M", "10M"]
+
     def gauge_defs(self, data: dict, total_mults: int) -> list:
         # Max values — use live data when available, sensible defaults otherwise
         island_max = max(data.get("iota_island_qsos", 0), 10)

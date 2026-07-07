@@ -278,6 +278,10 @@ class ARRLDXWVEPlugin(ContestPlugin):
     def has_missing_tab(self) -> bool:
         return False   # DXCC list is open — any entity could be activated
 
+    def band_list(self) -> list:
+        # ARRL DX is 160-10m — no WARC bands (30/17/12m).
+        return ["160M", "80M", "40M", "20M", "15M", "10M"]
+
     def gauge_defs(self, data: dict, total_mults: int) -> list:
         return [
             GaugeDef("TOTAL QSOs",     "total",     "qso_max",   "#00d4aa", "{v}"),

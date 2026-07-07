@@ -313,6 +313,10 @@ class CQWPXPlugin(ContestPlugin):
         # No fixed mult list — "missing prefixes" tab doesn't make sense
         return False
 
+    def band_list(self) -> list:
+        # WPX CW/SSB is 160-10m — no WARC bands (30/17/12m).
+        return list(_WPX_BAND_ORDER)
+
     def has_region_heat(self) -> bool:
         return False
 

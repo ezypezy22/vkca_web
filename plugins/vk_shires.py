@@ -264,6 +264,11 @@ class VKShiresPlugin(ContestPlugin):
     def region_list(self) -> list:
         return _SHIRE_STATES_ORDERED
 
+    def band_list(self) -> list:
+        # Rules III.A: "Bands: 160 Metres, 80 Metres, 40 Metres, 20 Metres
+        # 15 Metres, 10 Metres." — no WARC bands, no 60m, no VHF/UHF.
+        return ["160M", "80M", "40M", "20M", "15M", "10M"]
+
     def has_region_heat(self) -> bool:
         return True
 
