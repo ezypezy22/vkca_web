@@ -419,8 +419,8 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
                 overflow:hidden; margin:4px 0; }
 .ct-prog-bar  { height:100%; border-radius:3px; transition:width 1s linear; }
 
-/* ── Info panels — now 6 panels ─────────────────────────────────────────── */
-.info-panels-row { grid-template-columns: repeat(6, 1fr); }
+/* ── Info panels — now 8 panels (added Fatigue + Live Ranking) ──────────── */
+.info-panels-row { grid-template-columns: repeat(8, 1fr); }
 
 /* Titlebar row 2 control sizing */
 .tb-select--narrow { width:58px !important; }

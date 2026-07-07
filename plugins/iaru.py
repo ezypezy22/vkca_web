@@ -42,6 +42,18 @@ guess the operator's zone from the log's own station-info callsign when
 available, defaulting to 59 (the most common VK zone) otherwise. The
 op-zone only affects the 1-pt "own zone" / 3-pt "same continent" QSO-point
 split — it has no effect on multiplier counting, which is symmetric.
+
+WRTC note: The World Radio Team Championship is held concurrently with
+this contest, but WRTC competitors log using N1MM's ordinary IARU HF
+module — there is no separate ContestName, exchange field, or any other
+.s3db signal marking a station as a WRTC entrant. That means a dedicated
+WRTC plugin can't be auto-detected the way e.g. plugins/arrl_dx_dx.py vs.
+plugins/arrl_dx_wve.py are (nominally) split by station role; there's
+nothing in the log data to key identify() off of. This plugin is used
+for WRTC logs as-is. If WRTC's own scoring rules ever need to diverge
+from the IARU formula above, that would need a manually-toggled mode
+here rather than a separate auto-detected plugin — this hasn't been
+verified against WRTC's official rules, only assumed to match IARU.
 """
 
 from __future__ import annotations
@@ -175,7 +187,8 @@ def _is_hq_or_official(mult1_val) -> bool:
 
 class IARUPlugin(ContestPlugin):
     """
-    IARU HF World Championship.
+    IARU HF World Championship. Also used for WRTC entries — see the WRTC
+    note in the module docstring above.
 
     Primary multiplier  : ITU Zone, per band
     Secondary multiplier: IARU HQ stations + AC/R1/R2/R3 officials, per band
@@ -186,7 +199,11 @@ class IARUPlugin(ContestPlugin):
 
     def identify(self, contest_name: str) -> bool:
         cn = contest_name.upper().replace(" ", "").replace("_", "").replace("-", "")
-        keywords = ("IARUHF", "IARU", "IARUHQ", "IARUCHAMPIONSHIP")
+        # WRTC (World Radio Team Championship) runs concurrently with IARU HF
+        # and has no distinct N1MM contest module — see the WRTC note above.
+        # "WRTC" is matched here only in case some N1MM setup ever labels it
+        # that way; in practice WRTC logs show up as plain IARU ContestNames.
+        keywords = ("IARUHF", "IARU", "IARUHQ", "IARUCHAMPIONSHIP", "WRTC")
         return any(kw in cn for kw in keywords)
 
     @property

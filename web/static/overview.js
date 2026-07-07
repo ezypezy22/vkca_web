@@ -568,6 +568,7 @@
         : 'Not currently posting to Contest Online ScoreBoard.';
       el.innerHTML=hdr('[ # ]',T.red,'LIVE RANKING')+
         `<div style="color:${T.muted};font-size:0.85em;padding:8px 0">${msg}</div>`;
+      addPopoutButton(el);
       return;
     }
     el.innerHTML=hdr('[ # ]',T.red,'LIVE RANKING')+`
@@ -580,6 +581,7 @@
           ${data.contest_name||''}${data.profile_url?` — <a href="${data.profile_url}" target="_blank" style="color:${T.accent}">View on COSB &rarr;</a>`:''}
         </td></tr>
       </table>`;
+    addPopoutButton(el);
   }
 
   async function fetchLiveRank(){
@@ -1123,6 +1125,10 @@
     updateInsightBar(snap);
     updateExtraAnalytics(snap);
     updateContestOverPanel(snap);
+    // Each panel above replaces its own innerHTML on every refresh, which
+    // wipes out the pop-out button appended as a child — re-add it (addPopoutButton
+    // no-ops if one's already present).
+    document.querySelectorAll('.info-panel').forEach(addPopoutButton);
   }
 
   let _firstSnap=true;
