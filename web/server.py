@@ -2535,6 +2535,30 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 vert  = FixPoint.SOUTH if 'n' in edge else FixPoint.NORTH
                 window.resize(width, height, horiz | vert)
 
+            def get_position(self):
+                # Same one-shot-snapshot pattern as get_size(): the frontend
+                # reads this once at the start of a titlebar drag (see
+                # wireDragRegions in app.js) and computes the rest of the
+                # drag itself from mouse deltas (screenX/screenY), sending
+                # incremental move_to() calls on its own throttle.
+                #
+                # This bypasses pywebview's own built-in drag-region handling
+                # (the 'pywebview-drag-region' class + easy_drag machinery)
+                # entirely. That built-in path is unreliable on the Linux
+                # GTK/WebKit2 backend: with easy_drag=False (required here so
+                # dragging doesn't fight the zoom slider / tile reordering),
+                # window movement falls back to a bridge that derives the
+                # new position from MouseEvent.screenX/screenY combined with
+                # platforms/gtk.py's move() re-adding the screen origin,
+                # which snaps the window toward the top-left the instant a
+                # drag starts.
+                return {'x': window.x, 'y': window.y}
+
+            def move_to(self, x, y):
+                nonlocal _maximized
+                _maximized = False
+                window.move(int(x), int(y))
+
         window = webview.create_window(
             title="VK Contest Analyzer",
             url=url,

@@ -1,5 +1,10 @@
 /* VK Contest Analyzer v8 — all sizes in em so zoom works everywhere */
 :root {
+  /* Hints the engine to use its dark native form-control rendering (select
+     dropdown popups, scrollbars, etc.) instead of always defaulting to
+     light — those are OS/engine chrome that page CSS can't restyle
+     directly. app.js's applyTheme() flips this to 'light' for light themes. */
+  color-scheme: dark;
   --bg:#0d1117; --bg2:#161b22; --bg3:#21262d;
   --accent:#00d4aa; --accent2:#ff6b35; --accent3:#f0c040;
   --red:#ff4757; --green:#2ed573; --muted:#8b949e; --fg:#e6edf3;
@@ -42,7 +47,11 @@ body{height:100%;background:var(--bg);color:var(--fg);
 #titlebar-status{display:flex;align-items:center;gap:5px;margin-left:8px;
                  font-family:var(--font-mono);font-size:0.69em;color:var(--muted);
                  -webkit-app-region:no-drag;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.tb-spacer{flex:1;-webkit-app-region:drag;}
+/* align-self:stretch is required — the parent rows use align-items:center,
+   so this otherwise-empty div (no content of its own to give it height)
+   collapses to 0px tall despite having correct width, making its entire
+   width unclickable/undraggable (clicks fall through to the row itself). */
+.tb-spacer{flex:1;align-self:stretch;-webkit-app-region:drag;}
 
 .dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0;}
 .dot--connected{background:var(--green);box-shadow:0 0 6px var(--green);}

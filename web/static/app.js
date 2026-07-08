@@ -206,6 +206,85 @@ Users are responsible for verifying all information against N1MM before making d
       });
     }
 
+    // pywebview's own '.pywebview-drag-region' handling is unreliable on the
+    // Linux GTK/WebKit2 backend (see get_position()'s docstring in
+    // server.py's _WindowApi for why) — this replaces it with the same
+    // get-snapshot-then-compute-deltas-ourselves pattern already used by
+    // wireResizeHandles above. stopPropagation keeps pywebview's own built-in
+    // listener (still injected regardless) from also firing and fighting us.
+    //
+    // Deltas MUST be accumulated incrementally frame-to-frame (last clientX
+    // vs. current clientX), not as a running "total since mousedown" offset.
+    // clientX/Y are measured relative to the window itself, and this handler
+    // is what's moving that window — computing a fresh delta from a fixed
+    // mousedown-time reading every frame turns the window's own movement
+    // into feedback into the next frame's measurement (the reference frame
+    // it's measured against keeps shifting), which converges to roughly
+    // half-speed, stuttering motion instead of tracking the cursor.
+    // Incremental deltas only ever compare two readings taken while the
+    // window was stationary between them, so this feedback loop can't occur.
+    // Each move_to() ends up as glib.idle_add(_move) on the GTK main loop
+    // (see move() in webview/platforms/gtk.py) — it schedules the real move
+    // and returns immediately, it does NOT wait for the window to actually
+    // move. So gating the next call on the previous call's promise doesn't
+    // give real backpressure: that promise resolves as soon as Python's
+    // function returns (near-instantly), not when GTK has caught up, so we
+    // were still enqueueing a move for nearly every mousemove event — same
+    // problem as requestAnimationFrame pacing, just hidden behind a fake
+    // ack. If the GTK main loop (busy with its own WebView rendering/event
+    // handling) can only actually process window-moves at a fraction of
+    // that rate, the window lags at roughly that fraction of the cursor's
+    // speed — matching the ~30-50%-speed tracking actually observed.
+    // Fix: throttle to a fixed, modest wall-clock interval instead of firing
+    // on every mousemove/every promise resolution. Fewer, larger coalesced
+    // updates means fewer glib.idle_add round trips competing with
+    // WebView rendering, so GTK can actually keep up. Deltas still
+    // accumulate every real mousemove regardless of the interval, so
+    // nothing is lost — just batched.
+    const DRAG_SEND_INTERVAL_MS = 33; // ~30 updates/sec
+    function wireDragRegions(api) {
+      document.querySelectorAll('.pywebview-drag-region').forEach(el => {
+        el.addEventListener('mousedown', (e) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          e.stopPropagation();
+          // screenX/screenY (desktop-absolute) rather than clientX/clientY
+          // (window-relative): clientX is measured against the window's own
+          // position, which move_to() is itself changing mid-drag, so the
+          // very next mousemove after each move_to() takes effect reads a
+          // clientX shifted by however much the window just moved — not
+          // because the mouse moved, injecting a periodic error every
+          // throttle tick. screenX doesn't change when the window moves, so
+          // it can't feed back on itself this way.
+          let lastX = e.screenX, lastY = e.screenY;
+          api.get_position().then(({x, y}) => {
+            let curX = x, curY = y;
+            let pendingDx = 0, pendingDy = 0;
+            let timer = setInterval(apply, DRAG_SEND_INTERVAL_MS);
+            function apply() {
+              if (pendingDx === 0 && pendingDy === 0) return;
+              curX += pendingDx; curY += pendingDy;
+              pendingDx = 0; pendingDy = 0;
+              api.move_to(curX, curY);
+            }
+            function onMove(ev) {
+              pendingDx += ev.screenX - lastX;
+              pendingDy += ev.screenY - lastY;
+              lastX = ev.screenX; lastY = ev.screenY;
+            }
+            function onUp() {
+              clearInterval(timer);
+              apply(); // flush any final movement since the last tick
+              window.removeEventListener('mousemove', onMove);
+              window.removeEventListener('mouseup', onUp);
+            }
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+          });
+        });
+      });
+    }
+
     function wireWindowControls() {
       const api = window.pywebview && window.pywebview.api;
       if (!api || !api.minimize) return;
@@ -215,6 +294,7 @@ Users are responsible for verifying all information against N1MM before making d
       document.getElementById('btn-win-maximize')?.addEventListener('click', () => api.toggle_maximize());
       document.getElementById('btn-win-close')?.addEventListener('click', () => api.close());
       wireResizeHandles(api);
+      wireDragRegions(api);
     }
     if (window.pywebview) wireWindowControls();
     else window.addEventListener('pywebviewready', wireWindowControls);
@@ -846,6 +926,12 @@ Users are responsible for verifying all information against N1MM before making d
         // Special: light theme needs dark text on inputs etc.
         const isLight = palette.bg && (palette.bg.startsWith('#f') || palette.bg.startsWith('#e'));
         root.style.setProperty('--input-bg', isLight ? palette.bg3 : palette.bg3);
+
+        // Tells the engine to render native form controls (select dropdown
+        // popups, scrollbars) in their dark variant instead of always
+        // defaulting to light — page CSS can't restyle that OS/engine chrome
+        // directly.
+        root.style.setProperty('color-scheme', isLight ? 'light' : 'dark');
 
         // Notify canvas modules
         if (window.VKA?.onTheme) window.VKA.onTheme(palette);
