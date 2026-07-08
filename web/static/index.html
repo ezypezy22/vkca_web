@@ -117,6 +117,7 @@
 
     <!-- QRZ.com lookup settings -->
     <button id="btn-qrz-settings" class="tb-btn" title="QRZ.com lookup settings">🔍 QRZ Lookup</button>
+    <span id="qrz-progress-badge" class="badge qrz-progress-badge hidden" title="QRZ lookups in progress"></span>
 
     <!-- Trailing drag handle — row 2 is otherwise wall-to-wall interactive
          controls (slider, selects, buttons), so without this the whole
@@ -1069,6 +1070,9 @@
 
       <div class="dialog-section-label" style="margin-top:14px">Batch enrich</div>
       <div class="dialog-hint" id="qrz-enrich-status">Fills in Name/Grid/State for every worked call not already looked up.</div>
+      <div id="qrz-progress-wrap" class="qrz-progress-wrap hidden">
+        <div id="qrz-progress-bar" class="qrz-progress-bar"></div>
+      </div>
     </div>
     <div class="dialog-footer">
       <button id="btn-qrz-remove" class="btn btn--ghost">Remove Credentials</button>

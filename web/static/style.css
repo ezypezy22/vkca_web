@@ -286,6 +286,8 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
 .panel-dot{font-size:0.77em;}
 .badge{background:var(--bg3);color:var(--muted);font-family:var(--font-mono);
   font-size:0.69em;padding:1px 7px;border-radius:10px;margin-left:4px;}
+.qrz-progress-badge{color:var(--accent);border:1px solid var(--accent);
+  background:rgba(0,212,170,.12);animation:livepulse 2s ease-in-out infinite;}
 .region-canvas-wrap{position:relative;height:110px;}
 .region-canvas-wrap canvas{position:absolute;inset:0;width:100%!important;height:100%!important;}
 
@@ -381,6 +383,10 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .dialog-section-label{font-family:var(--font-mono);font-size:0.75em;font-weight:bold;
   color:var(--accent3);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 4px;}
 .dialog-hint{font-size:0.78em;color:var(--muted);margin-bottom:8px;}
+.qrz-progress-wrap{height:8px;background:var(--bg3);border-radius:4px;margin-top:4px;overflow:hidden;}
+.qrz-progress-wrap.hidden{display:none;}
+.qrz-progress-bar{height:100%;width:0%;background:var(--accent);border-radius:4px;
+  transition:width 0.3s ease;}
 .missing-region-strip{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 10px;}
 .missing-region-chip{font-family:var(--font-mono);font-size:0.77em;padding:3px 9px;
   border-radius:12px;border:1px solid;cursor:pointer;background:transparent;

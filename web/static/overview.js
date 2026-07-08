@@ -518,19 +518,47 @@
       </table>`;
   }
 
+  // QRZ.com lookup enrichment (see qrz_settings.js/server.py) tags each QSO
+  // with qrz_status ("none"|"pending"|"found"|"not_found") — last_worked
+  // entries are the same dicts as ContestLog.qsos (not copies), so these
+  // fields are already present with no extra fetch needed. Returns null
+  // (no tooltip at all) when QRZ lookup was never attempted for this call.
+  function qrzTipText(q){
+    if (q.qrz_status==='pending')   return `${q.call}\nQRZ.com: looking up…`;
+    if (q.qrz_status==='not_found') return `${q.call}\nNot found on QRZ.com`;
+    if (q.qrz_status!=='found')     return null;
+    const lines=[q.call];
+    if (q.qrz_name)  lines.push(`Name:  ${q.qrz_name}`);
+    if (q.qrz_grid)  lines.push(`Grid:  ${q.qrz_grid}`);
+    if (q.qrz_state) lines.push(`State: ${q.qrz_state}`);
+    if (lines.length===1) lines.push('No QRZ.com details on file');
+    return lines.join('\n');
+  }
+
   function updateLastWorked(snap){
     const lw=snap?.last_worked; const el=ip('panel-last-worked'); if(!el||!lw?.length) return;
+    const rows=lw.slice(0,5);
     el.innerHTML=hdr('[ » ]',T.green,'LAST WORKED')+`
       <table class="ip-tbl">
         <tr><th>Call</th><th>Band/Mode</th><th>Mult</th></tr>
-        ${lw.slice(0,5).map(q=>{const band=(q.band||'').toUpperCase(),col=BAND_COLS[band]||T.muted;
-          return `<tr>
+        ${rows.map(q=>{const band=(q.band||'').toUpperCase(),col=BAND_COLS[band]||T.muted;
+          return `<tr class="lw-row">
             <td><div style="color:${T.accent};font-weight:bold">${q.call||'—'}</div>
                 <div style="color:${T.muted};font-size:0.85em">${String(q.time||'').substring(11,16)}</div></td>
             <td style="color:${col}">${band.toLowerCase()} ${q.mode||'—'}</td>
             <td style="color:${T.muted}">${q.mult1||q.prefix||'—'}</td></tr>`;
         }).join('')}
       </table>`;
+
+    // Hover a row for QRZ.com Name/Grid/State, when available — same
+    // showTip/hideTip popup the gauge cards above use.
+    el.querySelectorAll('tr.lw-row').forEach((tr,i)=>{
+      const tip=qrzTipText(rows[i]);
+      if (!tip) return;
+      tr.style.cursor='help';
+      tr.addEventListener('mousemove',e=>showTip(tip,e.clientX,e.clientY));
+      tr.addEventListener('mouseleave',hideTip);
+    });
   }
 
   function updateOperatorTimes(snap){

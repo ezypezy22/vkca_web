@@ -186,6 +186,15 @@ class AppState:
         self._qrz_inflight: set                   = set()   # calls queued/being looked up — dedup
         self._qrz_last_broadcast: float           = 0.0
         self._main_loop                           = None    # set in lifespan(); used by the QRZ worker to broadcast
+        # Enrich All batch progress — reset by _qrz_enrich_all() to the size
+        # of that batch, then _qrz_batch_remaining counts down as the worker
+        # finishes each item (see _qrz_worker_loop). The same worker/queue
+        # also processes calls queued by ordinary live enrichment, so if new
+        # QSOs trickle in mid-batch this undercounts slightly (remaining can
+        # plateau briefly) — fine for a progress indicator, not used for
+        # anything correctness-sensitive. Guarded by _qrz_cache_lock.
+        self._qrz_batch_total:     int             = 0
+        self._qrz_batch_remaining: int             = 0
 
     # ── Path validation (no DB open) ─────────────────────────────────────────
 
@@ -389,13 +398,26 @@ def _qrz_maybe_broadcast():
     """Debounced so a big Enrich All batch doesn't flood the WebSocket with
     a broadcast per callsign — coalesces bursts into ~1 update/1.5s, but
     still fires promptly once the queue drains so the last few results
-    aren't left waiting for the next poll cycle."""
+    aren't left waiting for the next poll cycle.
+
+    Recomputes last_snapshot instead of reusing STATE.snapshot()'s cached
+    copy: compute_snapshot()'s output (last_worked, etc.) is deep-copied
+    into JSON-safe values via _json_safe(), so the cached last_snapshot
+    holds no live references back into STATE.contest_log.qsos — patching
+    a QSO dict in place (_apply_qrz_result, just above this call in
+    _qrz_worker_loop) doesn't retroactively update it. Without this, a
+    result the worker just resolved wouldn't reach any client's Overview
+    tab (last_worked comes only from this broadcast) until an unrelated
+    new QSO happened to trigger poll_once()'s own recompute."""
     now = time.time()
     if now - STATE._qrz_last_broadcast < 1.5 and not STATE._qrz_queue.empty():
         return
     STATE._qrz_last_broadcast = now
     if STATE._main_loop is not None:
-        asyncio.run_coroutine_threadsafe(_broadcast(STATE.snapshot()), STATE._main_loop)
+        with STATE._lock:
+            STATE.last_snapshot = STATE._safe_snapshot()
+            snap = dict(STATE.last_snapshot)
+        asyncio.run_coroutine_threadsafe(_broadcast(snap), STATE._main_loop)
 
 
 def _qrz_worker_loop():
@@ -426,6 +448,8 @@ def _qrz_worker_loop():
         finally:
             with STATE._qrz_cache_lock:
                 STATE._qrz_inflight.discard(call)
+                if STATE._qrz_batch_remaining > 0:
+                    STATE._qrz_batch_remaining -= 1
             STATE._qrz_queue.task_done()
             time.sleep(1.0)  # politeness delay between requests
 
@@ -652,6 +676,14 @@ def _qrz_test_and_save(username: str, password: str) -> dict:
 async def api_qrz_credentials_post(body: dict):
     username = (body.get("username") or "").strip()
     password = body.get("password") or ""
+    if not password:
+        # Blank password with credentials already saved means "keep the
+        # existing one" — GET /api/qrz/credentials never sends the real
+        # password back to the frontend for it to resubmit, so this is the
+        # only way to e.g. re-test the connection or change just the
+        # username without retyping a password the user may not have handy.
+        existing = _load_settings().get("qrz_credentials") or {}
+        password = existing.get("password") or ""
     if not username or not password:
         return JSONResponse({"error": "Username and password required"}, status_code=400)
     result = await asyncio.get_event_loop().run_in_executor(
@@ -683,6 +715,9 @@ def _qrz_enrich_all() -> dict:
             continue
         STATE._qrz_enqueue(call)
         queued += 1
+    with STATE._qrz_cache_lock:
+        STATE._qrz_batch_total = queued
+        STATE._qrz_batch_remaining = queued
     return {"queued": queued, "already_cached": cached_n, "total_calls": len(calls)}
 
 
@@ -696,13 +731,20 @@ async def api_qrz_enrich_all():
 @app.get("/api/qrz/status")
 async def api_qrz_status():
     with STATE._qrz_cache_lock:
-        cache_size = len(STATE._qrz_cache)
-        in_flight = len(STATE._qrz_inflight)
+        cache_size      = len(STATE._qrz_cache)
+        in_flight       = len(STATE._qrz_inflight)
+        batch_total     = STATE._qrz_batch_total
+        batch_remaining = STATE._qrz_batch_remaining
     return {
         "configured": STATE._qrz_client.has_credentials(),
         "queue_depth": STATE._qrz_queue.qsize(),
         "in_flight": in_flight,
         "cache_size": cache_size,
+        # Enrich All batch progress (0/0 if no batch has run this session).
+        # The worker throttles to ~1 lookup/sec (see _qrz_worker_loop), so
+        # batch_remaining also doubles as a rough ETA in seconds.
+        "batch_total": batch_total,
+        "batch_remaining": batch_remaining,
     }
 
 
