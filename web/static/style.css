@@ -68,7 +68,16 @@ body{height:100%;background:var(--bg);color:var(--fg);
   border-radius:50%;background:var(--accent);cursor:pointer;}
 .tb-select,.tb-input{background:var(--bg3);color:var(--fg);border:1px solid #30363d;
   border-radius:var(--radius);padding:3px 7px;font-family:var(--font-mono);
-  font-size:0.77em;cursor:pointer;outline:none;}
+  font-size:0.77em;cursor:pointer;outline:none;box-sizing:border-box;flex-shrink:0;
+  /* Native <select> widget chrome (WebKitGTK draws it per the OS/GTK light or
+     dark theme) has different intrinsic sizing per color-scheme — inside
+     #tb-row2's fixed height:28px + overflow:hidden, a taller native box gets
+     visibly cropped in one theme but not the other. appearance:none hands
+     the whole box to our own CSS so its height can't vary by theme. */
+  -webkit-appearance:none;appearance:none;}
+.tb-select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%238b949e'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 6px center;background-size:8px 5px;
+  padding-right:18px;}
 .tb-select:focus,.tb-input:focus{border-color:var(--accent);}
 .tb-input{cursor:text;}
 .tb-btn{background:var(--bg3);color:var(--fg);border:1px solid #30363d;
@@ -116,7 +125,7 @@ body{height:100%;background:var(--bg);color:var(--fg);
 @keyframes livepulse{50%{opacity:.6;}}
 
 /* Countdown timer */
-.countdown-wrap{position:relative;width:28px;height:28px;cursor:default;}
+.countdown-wrap{position:relative;width:28px;height:28px;cursor:default;flex-shrink:0;}
 .countdown-svg{width:28px;height:28px;transform:rotate(-90deg);}
 .countdown-track{fill:none;stroke:var(--bg3);stroke-width:3;}
 .countdown-arc{fill:none;stroke:var(--accent);stroke-width:3;
@@ -408,8 +417,14 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .contest-row-body{flex:1;padding:9px 12px;min-width:0;}
 .contest-row-name{font-family:var(--font-mono);font-size:0.85em;font-weight:bold;
   color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* .selected's background is a fixed dark navy regardless of theme (it
+   doubles as an accent, not a plain highlight), so its text must stay
+   fixed light too — inheriting var(--fg)/var(--muted) went near-black on
+   the same dark navy under the Light theme and disappeared entirely. */
+.contest-row.selected .contest-row-name{color:#e6edf3;}
 .contest-row-meta{display:flex;align-items:center;gap:10px;margin-top:3px;
   font-family:var(--font-mono);font-size:0.69em;color:var(--muted);}
+.contest-row.selected .contest-row-meta{color:#9aa4b2;}
 .contest-row-arrow{padding:0 12px;color:var(--muted);font-size:1.38em;flex-shrink:0;}
 .contest-row.selected .contest-row-arrow{color:var(--accent);}
 
@@ -475,7 +490,7 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .tb-btn--open      { padding:3px 14px !important; font-size:0.77em !important; }
 #tb-row2 .tb-btn   { padding:2px 9px; font-size:0.69em; }
 #tb-row2 .tb-label { font-size:0.62em; }
-#tb-row2 .tb-select{ font-size:0.69em; padding:2px 4px; }
+#tb-row2 .tb-select{ font-size:0.69em; padding:2px 16px 2px 4px; }
 #tb-row2 .live-badge{ font-size:0.62em; padding:2px 7px; }
 #tb-row2 .countdown-wrap { width:24px; height:24px; }
 #tb-row2 .countdown-svg  { width:24px; height:24px; }

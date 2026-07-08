@@ -185,9 +185,9 @@
 
   const _tip = document.createElement('div');
   _tip.style.cssText=`position:fixed;display:none;pointer-events:none;z-index:9999;
-    background:#161b22;border:1px solid #00d4aa;border-radius:6px;padding:10px 14px;
-    font-family:Consolas,monospace;font-size:11px;color:#e6edf3;max-width:300px;
-    line-height:1.7;white-space:pre-wrap;box-shadow:0 8px 32px rgba(0,0,0,.7);`;
+    background:var(--bg2);border:1px solid var(--accent);border-radius:6px;padding:10px 14px;
+    font-family:Consolas,monospace;font-size:11px;color:var(--fg);max-width:300px;
+    line-height:1.7;white-space:pre-wrap;box-shadow:0 8px 24px rgba(0,0,0,.35);`;
   document.body.appendChild(_tip);
   function showTip(t,x,y){_tip.textContent=t;_tip.style.display='block';
     const tw=_tip.offsetWidth,th=_tip.offsetHeight,vw=window.innerWidth,vh=window.innerHeight;

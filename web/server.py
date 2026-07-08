@@ -175,9 +175,12 @@ class AppState:
         # re-scraping on every request — see /api/live_rank.
         self._live_rank_cache: dict               = {}
         self._live_rank_ttl:   float               = 120.0
-        # QRZ.com lookup enrichment (see web/qrz.py) — _qrz_client is only
-        # ever touched from the single QRZ worker thread (_qrz_worker_loop),
-        # everything else here is shared with the main/poll threads and
+        # QRZ.com lookup enrichment (see web/qrz.py) — _qrz_client.lookup_one()
+        # only ever runs on the single QRZ worker thread (_qrz_worker_loop);
+        # set_credentials()/has_credentials() are also called from the main/
+        # poll threads (credential endpoints, _enrich_qsos), which is safe
+        # since they're plain attribute reads/writes under the GIL, not a
+        # network call. Everything else here is shared with those threads and
         # guarded by _qrz_cache_lock.
         self._qrz_client                          = qrz.QRZClient()
         self._qrz_cache:    dict                  = _load_qrz_cache()
@@ -320,7 +323,7 @@ class AppState:
             if cached:
                 self._apply_qrz_result(cl, call, cached)
             stale = not cached or (now - cached.get("fetched_at", 0)) > _QRZ_CACHE_TTL_SECS
-            if stale:
+            if stale and self._qrz_client.has_credentials():
                 if not cached:
                     self._set_qrz_status(cl, call, "pending")
                 self._qrz_enqueue(call)
@@ -347,6 +350,24 @@ class AppState:
                 return
             self._qrz_inflight.add(call)
         self._qrz_queue.put(call)
+
+    def _qrz_clear_queue(self):
+        """Drops every pending lookup — called when credentials are removed
+        so the titlebar's 'N left' badge doesn't keep ticking down for
+        several more minutes as the worker drains a now-pointless backlog
+        (has_credentials() is false, so it would skip every one of them
+        anyway — see _qrz_worker_loop). Leaves in-flight network calls (if
+        any) to finish naturally; those are already out of the queue."""
+        with self._qrz_cache_lock:
+            try:
+                while True:
+                    self._qrz_queue.get_nowait()
+                    self._qrz_queue.task_done()
+            except queue.Empty:
+                pass
+            self._qrz_inflight.clear()
+            self._qrz_batch_total = 0
+            self._qrz_batch_remaining = 0
 
 
 # ── JSON serialiser ───────────────────────────────────────────────────────────
@@ -699,6 +720,7 @@ async def api_qrz_credentials_delete():
     settings.pop("qrz_credentials", None)
     _save_settings(settings)
     STATE._qrz_client.set_credentials(None, None)
+    STATE._qrz_clear_queue()
     return {"ok": True}
 
 
@@ -2793,6 +2815,71 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
         _maximized     = False   # starts windowed regardless of _initial_maximized — see _on_loaded below
         _pre_max_geom  = None    # (x, y, width, height) to restore back to
 
+        def _save_window_geometry():
+            """Shared by the native 'closing' event and the custom titlebar's
+            close button (_WindowApi.close(), which bypasses window.destroy()
+            entirely — see its docstring) — both need this written before the
+            process exits."""
+            try:
+                settings = _load_settings()
+                if _maximized and _pre_max_geom:
+                    x, y, w, h = _pre_max_geom
+                    settings["window_geometry"] = {"x": x, "y": y, "width": w, "height": h, "maximized": True}
+                else:
+                    settings["window_geometry"] = {
+                        "x": window.x, "y": window.y,
+                        "width": window.width, "height": window.height,
+                        "maximized": False,
+                    }
+                _save_settings(settings)
+            except Exception:
+                log.exception("Failed to save window geometry")
+
+        def _start_shutdown():
+            """Closes WebSocket clients, stops uvicorn, hard-exits. Runs in a
+            background thread since this is called directly from the GUI
+            thread (either as window.events.closed or from _WindowApi.close())
+            and the actual work below — notably server_thread.join() — must
+            never block that thread's event loop."""
+            log.info("Window closed — shutting down")
+
+            def _shutdown():
+                # Redirect stderr to suppress the noisy WebView2/Chromium window-class
+                # unregister error that Windows logs during teardown:
+                #   "Failed to unregister class Chrome_WidgetWin_0. Error = 1411"
+                # This is benign (the class was already unregistered by the time the
+                # renderer tries again) but confusing in logs.
+                _devnull = open(os.devnull, "w")
+                os.dup2(_devnull.fileno(), 2)   # redirect fd 2 (stderr) to /dev/null
+
+                # Close WebSocket clients gracefully — STATE._main_loop (the
+                # actual running uvicorn event loop, set in lifespan()) is
+                # required here: asyncio.get_event_loop() from this thread
+                # would hand back a fresh, never-running loop, silently
+                # dropping every ws.close() onto a loop nothing ever drives.
+                try:
+                    if STATE._main_loop:
+                        for ws in list(STATE._clients):
+                            try:
+                                asyncio.run_coroutine_threadsafe(ws.close(), STATE._main_loop)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                STATE._clients.clear()
+
+                # Signal uvicorn to stop
+                server.should_exit = True
+
+                # Give uvicorn up to 2 seconds to finish in-flight requests
+                server_thread.join(timeout=2.0)
+
+                # Hard exit — releases port binding and removes from Task Manager.
+                # os._exit skips atexit/finally blocks that can hang on Windows.
+                os._exit(0)
+
+            threading.Thread(target=_shutdown, daemon=True, name="shutdown").start()
+
         class _WindowApi:
             def minimize(self):
                 window.minimize()
@@ -2820,7 +2907,19 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 return _maximized
 
             def close(self):
-                window.destroy()
+                # Deliberately does NOT call window.destroy(): on this
+                # (frameless, custom-titlebar) window that call goes through
+                # pywebview's GTK glib.idle_add(...)/close_window() path,
+                # which was observed to hang indefinitely — the native
+                # 'closing'/'closed' events never even fired (checked via
+                # the window_geometry save's mtime never updating), so
+                # whatever's stuck is inside that native teardown, before
+                # our own code runs at all. Since the process hard-exits
+                # via os._exit() either way, there's nothing gained by
+                # routing through GTK's WebView-destroy machinery for this
+                # button — save geometry and shut down directly instead.
+                _save_window_geometry()
+                _start_shutdown()
 
             def get_size(self):
                 # One-shot snapshot the frontend reads at the start of an
@@ -2892,63 +2991,14 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
             if _initial_maximized:
                 _window_api.toggle_maximize()
 
-        def _on_closing():
-            """Called on the GUI thread just before the window is destroyed —
-            geometry is still valid here (unlike 'closed', which can fire
-            after teardown on some platforms)."""
-            try:
-                settings = _load_settings()
-                if _maximized and _pre_max_geom:
-                    x, y, w, h = _pre_max_geom
-                    settings["window_geometry"] = {"x": x, "y": y, "width": w, "height": h, "maximized": True}
-                else:
-                    settings["window_geometry"] = {
-                        "x": window.x, "y": window.y,
-                        "width": window.width, "height": window.height,
-                        "maximized": False,
-                    }
-                _save_settings(settings)
-            except Exception:
-                log.exception("Failed to save window geometry")
-
-        window.events.closing += _on_closing
-
-        def _on_closed():
-            """Called by pywebview on the GUI thread when the window is destroyed."""
-            log.info("Window closed — shutting down")
-
-            # Redirect stderr to suppress the noisy WebView2/Chromium window-class
-            # unregister error that Windows logs during teardown:
-            #   "Failed to unregister class Chrome_WidgetWin_0. Error = 1411"
-            # This is benign (the class was already unregistered by the time the
-            # renderer tries again) but confusing in logs.
-            _devnull = open(os.devnull, "w")
-            os.dup2(_devnull.fileno(), 2)   # redirect fd 2 (stderr) to /dev/null
-
-            # Close WebSocket clients gracefully
-            try:
-                loop = asyncio.get_event_loop()
-                for ws in list(STATE._clients):
-                    try:
-                        asyncio.run_coroutine_threadsafe(ws.close(), loop)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-            STATE._clients.clear()
-
-            # Signal uvicorn to stop
-            server.should_exit = True
-
-            # Give uvicorn up to 2 seconds to finish in-flight requests
-            server_thread.join(timeout=2.0)
-
-            # Hard exit — releases port binding and removes from Task Manager.
-            # os._exit skips atexit/finally blocks that can hang on Windows.
-            os._exit(0)
-
-        # Register the closing callback BEFORE webview.start()
-        window.events.closed += _on_closed
+        # These native events are the fallback path for any close route that
+        # isn't our custom titlebar button — e.g. a window manager/taskbar
+        # close, Alt+F4, or 'q' via some accessibility tool. The button
+        # itself calls _save_window_geometry()/_start_shutdown() directly
+        # (see _WindowApi.close()) without going through window.destroy(),
+        # since that path was observed to hang indefinitely on Linux/GTK.
+        window.events.closing += _save_window_geometry
+        window.events.closed  += _start_shutdown
 
         # webview.start() blocks here until the window closes.
         # _on_closed will call os._exit(0) so execution never returns here
