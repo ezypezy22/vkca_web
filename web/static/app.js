@@ -765,12 +765,19 @@ Users are responsible for verifying all information against N1MM before making d
     if (mins < 1440) return `${Math.round(mins/60)}h ago`;
     return `${Math.round(mins/1440)}d ago`;
   }
+  function dirOf(p) {
+    const idx = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+    return idx >= 0 ? p.slice(0, idx) : '';
+  }
 
   async function scanKnownLocations() {
     if (!detectedWrap || !detectedList) return;
     try {
       const res  = await fetch('/api/scan_known_locations');
       const data = await res.json();
+      // The default placeholder is a Windows-style N1MM path, which is
+      // meaningless (and confusing) on Linux/Mac — clear it there.
+      if (pathInput && data.os && data.os !== 'win32') pathInput.placeholder = '';
       const dbs  = data.databases || [];
       if (!dbs.length) {
         detectedWrap.classList.add('hidden');
@@ -785,6 +792,7 @@ Users are responsible for verifying all information against N1MM before making d
         row.innerHTML = `<div class="contest-row-accent" style="background:var(--accent)"></div>
           <div class="contest-row-body">
             <div class="contest-row-name">${db.name}</div>
+            <div class="contest-row-path" title="${dirOf(db.path)}">${dirOf(db.path)}</div>
             <div class="contest-row-meta">
               <span>${fmtAgo(db.mtime)}</span>
               <span>${fmtBytes(db.size)}</span>

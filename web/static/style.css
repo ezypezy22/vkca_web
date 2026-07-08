@@ -422,6 +422,9 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
    fixed light too — inheriting var(--fg)/var(--muted) went near-black on
    the same dark navy under the Light theme and disappeared entirely. */
 .contest-row.selected .contest-row-name{color:#e6edf3;}
+.contest-row-path{font-family:var(--font-mono);font-size:0.68em;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+.contest-row.selected .contest-row-path{color:#9aa4b2;}
 .contest-row-meta{display:flex;align-items:center;gap:10px;margin-top:3px;
   font-family:var(--font-mono);font-size:0.69em;color:var(--muted);}
 .contest-row.selected .contest-row-meta{color:#9aa4b2;}

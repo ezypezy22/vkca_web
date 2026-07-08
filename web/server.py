@@ -810,7 +810,7 @@ async def api_scan_known_locations():
                     "mtime": st.st_mtime,
                 })
     found.sort(key=lambda r: r["mtime"], reverse=True)
-    return {"databases": found}
+    return {"databases": found, "os": sys.platform}
 
 
 # ── Pop-out tile window (pywebview) ───────────────────────────────────────────
