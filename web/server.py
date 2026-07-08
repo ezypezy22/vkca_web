@@ -607,14 +607,28 @@ def _default_log_dir() -> Path:
     return Path.home() / "Documents" / "N1MM Logger+" / "Databases"
 
 
+def _not1mm_default_log_dir() -> Optional[Path]:
+    """not1mm (the Linux-native N1MM-alike) keeps ham.db under the XDG data
+    dir — same XDG_DATA_HOME convention as _app_data_dir() above."""
+    if not sys.platform.startswith("linux"):
+        return None
+    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base) / "not1mm"
+
+
 def _custom_log_dirs() -> list:
     return list(_load_settings().get("log_dirs", []))
 
 
 def _known_log_dirs() -> list:
-    """Default N1MM folder plus every user-added folder, de-duplicated."""
+    """Default N1MM folder, default not1mm folder (Linux only), plus every
+    user-added folder, de-duplicated."""
+    defaults = [str(_default_log_dir())]
+    not1mm_dir = _not1mm_default_log_dir()
+    if not1mm_dir is not None:
+        defaults.append(str(not1mm_dir))
     seen, dirs = set(), []
-    for raw in [str(_default_log_dir())] + _custom_log_dirs():
+    for raw in defaults + _custom_log_dirs():
         key = os.path.normcase(os.path.normpath(raw))
         if key in seen:
             continue
@@ -627,8 +641,10 @@ def _known_log_dirs() -> list:
 async def api_get_log_dirs():
     """List user-added folders to search for contest databases, plus whether
     each still exists on disk (shown greyed-out/removable in the UI if not)."""
+    not1mm_dir = _not1mm_default_log_dir()
     return {
         "default_dir": str(_default_log_dir()),
+        "not1mm_default_dir": str(not1mm_dir) if not1mm_dir is not None else None,
         "dirs": [{"path": d, "exists": Path(d).is_dir()} for d in _custom_log_dirs()],
     }
 

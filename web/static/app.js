@@ -677,6 +677,8 @@ Users are responsible for verifying all information against N1MM before making d
   const btnFoldersBack  = document.getElementById('btn-folders-back');
   const logDirsList     = document.getElementById('log-dirs-list');
   const defaultLogDirEl = document.getElementById('default-log-dir');
+  const not1mmDirRow    = document.getElementById('not1mm-log-dir-row');
+  const not1mmDirEl     = document.getElementById('not1mm-log-dir');
   const addFolderInput  = document.getElementById('add-folder-input');
   const btnBrowseFolder = document.getElementById('btn-browse-folder');
   const btnAddFolder    = document.getElementById('btn-add-folder');
@@ -690,6 +692,8 @@ Users are responsible for verifying all information against N1MM before making d
       const res  = await fetch('/api/settings/log_dirs');
       const data = await res.json();
       if (defaultLogDirEl) defaultLogDirEl.textContent = data.default_dir || '';
+      if (not1mmDirRow) not1mmDirRow.classList.toggle('hidden', !data.not1mm_default_dir);
+      if (not1mmDirEl) not1mmDirEl.textContent = data.not1mm_default_dir || '';
       const dirs = data.dirs || [];
       logDirsList.innerHTML = '';
       if (!dirs.length) {
