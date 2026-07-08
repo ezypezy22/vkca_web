@@ -13,6 +13,7 @@ import json
 import logging
 import math
 import os
+import queue
 import re
 import sys
 import threading
@@ -62,6 +63,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from contest_log import ContestLog
 from plugins.loader import plugin_for, get_all_plugins
 import cosb
+import qrz
 
 log = logging.getLogger(__name__)
 
@@ -120,6 +122,32 @@ def _save_settings(settings: dict):
         json.dump(settings, f, indent=2)
 
 
+# ── QRZ.com lookup cache ──────────────────────────────────────────────────────
+# Separate small JSON store (not folded into vkca_web_settings.json) since it
+# can grow to one entry per unique callsign ever looked up — keeping it out of
+# the settings file means a corrupt/huge cache can't also take down settings
+# load/save. Callsign bio data (name/grid/state) rarely changes, so entries
+# are cached for a long time (_QRZ_CACHE_TTL_SECS) rather than re-fetched
+# every session.
+
+_QRZ_CACHE_PATH = _app_data_dir() / "vkca_qrz_cache.json"
+_QRZ_CACHE_TTL_SECS = 30 * 24 * 3600  # 30 days
+
+
+def _load_qrz_cache() -> dict:
+    try:
+        with open(_QRZ_CACHE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_qrz_cache(cache: dict):
+    _QRZ_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(_QRZ_CACHE_PATH, "w", encoding="utf-8") as f:
+        json.dump(cache, f, indent=2)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ── App state ─────────────────────────────────────────────────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -147,6 +175,17 @@ class AppState:
         # re-scraping on every request — see /api/live_rank.
         self._live_rank_cache: dict               = {}
         self._live_rank_ttl:   float               = 120.0
+        # QRZ.com lookup enrichment (see web/qrz.py) — _qrz_client is only
+        # ever touched from the single QRZ worker thread (_qrz_worker_loop),
+        # everything else here is shared with the main/poll threads and
+        # guarded by _qrz_cache_lock.
+        self._qrz_client                          = qrz.QRZClient()
+        self._qrz_cache:    dict                  = _load_qrz_cache()
+        self._qrz_cache_lock                      = threading.Lock()
+        self._qrz_queue                           = queue.Queue()
+        self._qrz_inflight: set                   = set()   # calls queued/being looked up — dedup
+        self._qrz_last_broadcast: float           = 0.0
+        self._main_loop                           = None    # set in lifespan(); used by the QRZ worker to broadcast
 
     # ── Path validation (no DB open) ─────────────────────────────────────────
 
@@ -209,6 +248,7 @@ class AppState:
                 self.contest_nr   = contest_nr
                 self.plugin       = plugin
                 self.contest_log  = cl
+                self._enrich_qsos(cl)
                 self.last_mtime   = os.path.getmtime(path)
                 self.last_snapshot = self._safe_snapshot()
             return {"ok": True, "path": path}
@@ -241,6 +281,7 @@ class AppState:
                             plugin=self.plugin)
             with self._lock:
                 self.contest_log   = cl
+                self._enrich_qsos(cl)
                 self.last_mtime    = mtime
                 self.last_snapshot = self._safe_snapshot()
             return True
@@ -251,6 +292,52 @@ class AppState:
     def snapshot(self) -> dict:
         with self._lock:
             return dict(self.last_snapshot)
+
+    # ── QRZ.com lookup enrichment ─────────────────────────────────────────────
+    # Called with self._lock already held (see load_db()/poll_once() above) —
+    # ContestLog is rebuilt from scratch on every reload, so every QSO here
+    # starts blank and needs its qrz_* fields re-filled from the cache each
+    # time, even for calls looked up in a previous cycle.
+
+    def _enrich_qsos(self, cl: ContestLog):
+        now = time.time()
+        seen_calls = set()
+        for call in {(q.get("call") or "").upper() for q in cl.qsos}:
+            if not call or call in seen_calls:
+                continue
+            seen_calls.add(call)
+            with self._qrz_cache_lock:
+                cached = self._qrz_cache.get(call)
+            if cached:
+                self._apply_qrz_result(cl, call, cached)
+            stale = not cached or (now - cached.get("fetched_at", 0)) > _QRZ_CACHE_TTL_SECS
+            if stale:
+                if not cached:
+                    self._set_qrz_status(cl, call, "pending")
+                self._qrz_enqueue(call)
+
+    @staticmethod
+    def _apply_qrz_result(cl: ContestLog, call: str, entry: dict):
+        status = "found" if entry.get("found") else "not_found"
+        for q in cl.qsos:
+            if (q.get("call") or "").upper() == call:
+                q["qrz_name"]  = entry.get("name", "")
+                q["qrz_grid"]  = entry.get("grid", "")
+                q["qrz_state"] = entry.get("state", "")
+                q["qrz_status"] = status
+
+    @staticmethod
+    def _set_qrz_status(cl: ContestLog, call: str, status: str):
+        for q in cl.qsos:
+            if (q.get("call") or "").upper() == call:
+                q["qrz_status"] = status
+
+    def _qrz_enqueue(self, call: str):
+        with self._qrz_cache_lock:
+            if call in self._qrz_inflight:
+                return
+            self._qrz_inflight.add(call)
+        self._qrz_queue.put(call)
 
 
 # ── JSON serialiser ───────────────────────────────────────────────────────────
@@ -280,8 +367,76 @@ def _json_safe(obj):
 STATE = AppState()
 
 
+# ── QRZ.com lookup: cache accessors + background worker ──────────────────────
+# See web/qrz.py for the API client itself. Everything here runs off the
+# asyncio event loop — the worker is a plain daemon thread — except
+# _qrz_maybe_broadcast(), which hops back onto the event loop via
+# run_coroutine_threadsafe() since _broadcast() is a coroutine.
+
+def _qrz_cache_get(call: str) -> Optional[dict]:
+    with STATE._qrz_cache_lock:
+        return STATE._qrz_cache.get(call.upper())
+
+
+def _qrz_cache_put(call: str, entry: dict):
+    with STATE._qrz_cache_lock:
+        STATE._qrz_cache[call.upper()] = entry
+        snapshot = dict(STATE._qrz_cache)
+    _save_qrz_cache(snapshot)  # file I/O outside the lock
+
+
+def _qrz_maybe_broadcast():
+    """Debounced so a big Enrich All batch doesn't flood the WebSocket with
+    a broadcast per callsign — coalesces bursts into ~1 update/1.5s, but
+    still fires promptly once the queue drains so the last few results
+    aren't left waiting for the next poll cycle."""
+    now = time.time()
+    if now - STATE._qrz_last_broadcast < 1.5 and not STATE._qrz_queue.empty():
+        return
+    STATE._qrz_last_broadcast = now
+    if STATE._main_loop is not None:
+        asyncio.run_coroutine_threadsafe(_broadcast(STATE.snapshot()), STATE._main_loop)
+
+
+def _qrz_worker_loop():
+    """Single background worker — processes one callsign at a time so a
+    pileup with many new unique calls at once doesn't hammer QRZ's servers
+    (they throttle abusive usage). Runs for the lifetime of the process; the
+    app has no graceful-shutdown path (os._exit on window close, see
+    _on_closed() in launch_webview()), so this daemon thread needs no
+    explicit stop signal."""
+    while True:
+        call = STATE._qrz_queue.get()
+        try:
+            if not STATE._qrz_client.has_credentials():
+                continue
+            result = STATE._qrz_client.lookup_one(call)  # blocking network call
+            if result is None:
+                # Transient failure — leave uncached so the next poll
+                # cycle's _enrich_qsos() naturally re-queues it.
+                continue
+            entry = {**result, "fetched_at": time.time()}
+            _qrz_cache_put(call, entry)
+            with STATE._lock:
+                if STATE.contest_log:
+                    STATE._apply_qrz_result(STATE.contest_log, call, entry)
+            _qrz_maybe_broadcast()
+        except Exception:
+            log.exception("QRZ worker failed processing %s", call)
+        finally:
+            with STATE._qrz_cache_lock:
+                STATE._qrz_inflight.discard(call)
+            STATE._qrz_queue.task_done()
+            time.sleep(1.0)  # politeness delay between requests
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
+    STATE._main_loop = asyncio.get_running_loop()
+    creds = _load_settings().get("qrz_credentials")
+    if creds:
+        STATE._qrz_client.set_credentials(creds.get("username"), creds.get("password"))
+    threading.Thread(target=_qrz_worker_loop, daemon=True, name="qrz-worker").start()
     asyncio.create_task(_poll_loop())
     yield
 
@@ -462,6 +617,93 @@ async def api_remove_log_dir(body: dict):
     dirs[:] = [d for d in dirs if os.path.normcase(os.path.normpath(d)) != key]
     _save_settings(settings)
     return {"ok": True, "dirs": dirs}
+
+
+# ── QRZ.com lookup settings ───────────────────────────────────────────────────
+# See web/qrz.py for the API client and the _qrz_* helpers/worker above STATE
+# for the enrichment pipeline itself. Credentials live in the same plaintext
+# settings store as everything else here (log_dirs, window_geometry) — same
+# trust model as N1MM's own unencrypted database.
+
+@app.get("/api/qrz/credentials")
+async def api_qrz_credentials_get():
+    creds = _load_settings().get("qrz_credentials")
+    return {"configured": bool(creds), "username": (creds or {}).get("username")}
+
+
+def _qrz_test_and_save(username: str, password: str) -> dict:
+    """Runs in a thread executor — attempts a real QRZ login before saving,
+    so a typo'd password fails loudly in the settings dialog instead of
+    silently failing later in the background worker."""
+    try:
+        qrz.login(username, password)
+    except qrz.QRZAuthError as e:
+        return {"error": str(e) or "Invalid QRZ username/password."}
+    except qrz.QRZError as e:
+        return {"error": f"Could not reach QRZ.com: {e}"}
+    settings = _load_settings()
+    settings["qrz_credentials"] = {"username": username, "password": password}
+    _save_settings(settings)
+    STATE._qrz_client.set_credentials(username, password)
+    return {"ok": True, "username": username}
+
+
+@app.post("/api/qrz/credentials")
+async def api_qrz_credentials_post(body: dict):
+    username = (body.get("username") or "").strip()
+    password = body.get("password") or ""
+    if not username or not password:
+        return JSONResponse({"error": "Username and password required"}, status_code=400)
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, _qrz_test_and_save, username, password)
+    if "error" in result:
+        return JSONResponse(result, status_code=400)
+    return result
+
+
+@app.delete("/api/qrz/credentials")
+async def api_qrz_credentials_delete():
+    settings = _load_settings()
+    settings.pop("qrz_credentials", None)
+    _save_settings(settings)
+    STATE._qrz_client.set_credentials(None, None)
+    return {"ok": True}
+
+
+def _qrz_enrich_all() -> dict:
+    with STATE._lock:
+        cl = STATE.contest_log
+        if not cl:
+            return {"queued": 0, "already_cached": 0, "total_calls": 0, "error": "No log loaded"}
+        calls = {(q.get("call") or "").upper() for q in cl.qsos if q.get("call")}
+    queued = cached_n = 0
+    for call in calls:
+        if _qrz_cache_get(call) is not None:
+            cached_n += 1
+            continue
+        STATE._qrz_enqueue(call)
+        queued += 1
+    return {"queued": queued, "already_cached": cached_n, "total_calls": len(calls)}
+
+
+@app.post("/api/qrz/enrich_all")
+async def api_qrz_enrich_all():
+    if not STATE._qrz_client.has_credentials():
+        return JSONResponse({"error": "QRZ credentials not configured"}, status_code=400)
+    return await asyncio.get_event_loop().run_in_executor(None, _qrz_enrich_all)
+
+
+@app.get("/api/qrz/status")
+async def api_qrz_status():
+    with STATE._qrz_cache_lock:
+        cache_size = len(STATE._qrz_cache)
+        in_flight = len(STATE._qrz_inflight)
+    return {
+        "configured": STATE._qrz_client.has_credentials(),
+        "queue_depth": STATE._qrz_queue.qsize(),
+        "in_flight": in_flight,
+        "cache_size": cache_size,
+    }
 
 
 @app.get("/api/scan_known_locations")
@@ -2486,13 +2728,35 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
         # window .resize()/.move() to the real work-area rect ourselves.
         from webview.window import FixPoint
 
-        _maximized     = False   # starts windowed — see create_window() below
-        _pre_max_geom  = None    # (x, y, width, height) to restore back to
         _MIN_W, _MIN_H = 900, 600   # keep in sync with min_size below
+
+        # ── Restore window geometry from the previous session ────────────────
+        # Saved by _on_closing() below into the same small JSON store used for
+        # log-folder settings. Anything missing or out of sane bounds (e.g. a
+        # position from a monitor that's no longer connected) is discarded in
+        # favor of pywebview's own default placement/size, rather than risking
+        # an off-screen or too-small window the user can't get back from.
+        _saved_geom = _load_settings().get("window_geometry") or {}
+
+        def _valid_dim(v, lo, hi):
+            return isinstance(v, (int, float)) and lo <= v <= hi
+
+        _init_w = int(_saved_geom["width"]) if _valid_dim(_saved_geom.get("width"), _MIN_W, 10000) else 1400
+        _init_h = int(_saved_geom["height"]) if _valid_dim(_saved_geom.get("height"), _MIN_H, 10000) else 860
+        _init_x = _saved_geom.get("x")
+        _init_y = _saved_geom.get("y")
+        _has_init_pos = _valid_dim(_init_x, -100, 10000) and _valid_dim(_init_y, -100, 10000)
+        _initial_maximized = bool(_saved_geom.get("maximized"))
+
+        _maximized     = False   # starts windowed regardless of _initial_maximized — see _on_loaded below
+        _pre_max_geom  = None    # (x, y, width, height) to restore back to
 
         class _WindowApi:
             def minimize(self):
                 window.minimize()
+
+            def is_maximized(self):
+                return _maximized
 
             def toggle_maximize(self):
                 nonlocal _maximized, _pre_max_geom
@@ -2511,6 +2775,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                     window.move(x, y)
                     window.resize(w, h)
                 _maximized = not _maximized
+                return _maximized
 
             def close(self):
                 window.destroy()
@@ -2559,20 +2824,52 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 _maximized = False
                 window.move(int(x), int(y))
 
-        window = webview.create_window(
+        _window_api = _WindowApi()
+        _create_kwargs = dict(
             title="VK Contest Analyzer",
             url=url,
-            width=1400,
-            height=860,
+            width=_init_w,
+            height=_init_h,
             min_size=(900, 600),
             background_color="#0d1117",
             frameless=True,
             easy_drag=False,
-            js_api=_WindowApi(),
+            js_api=_window_api,
         )
+        if _has_init_pos:
+            _create_kwargs['x'] = int(_init_x)
+            _create_kwargs['y'] = int(_init_y)
+        window = webview.create_window(**_create_kwargs)
 
         def _on_loaded():
             STATE._webview_window = window
+            # Applied here rather than passed to create_window(): maximizing
+            # is manual work-area math (see toggle_maximize() above, re the
+            # WinForms taskbar quirk) that needs the window's real geometry
+            # to already exist, which isn't settled until after creation.
+            if _initial_maximized:
+                _window_api.toggle_maximize()
+
+        def _on_closing():
+            """Called on the GUI thread just before the window is destroyed —
+            geometry is still valid here (unlike 'closed', which can fire
+            after teardown on some platforms)."""
+            try:
+                settings = _load_settings()
+                if _maximized and _pre_max_geom:
+                    x, y, w, h = _pre_max_geom
+                    settings["window_geometry"] = {"x": x, "y": y, "width": w, "height": h, "maximized": True}
+                else:
+                    settings["window_geometry"] = {
+                        "x": window.x, "y": window.y,
+                        "width": window.width, "height": window.height,
+                        "maximized": False,
+                    }
+                _save_settings(settings)
+            except Exception:
+                log.exception("Failed to save window geometry")
+
+        window.events.closing += _on_closing
 
         def _on_closed():
             """Called by pywebview on the GUI thread when the window is destroyed."""

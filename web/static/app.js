@@ -93,7 +93,7 @@ Users are responsible for verifying all information against N1MM before making d
   ctx.fillStyle='#8b949e'; ctx.font='13px Consolas,monospace';
   ctx.fillText('by VK2YI', W/2, 178);
   ctx.fillStyle='#00d4aa'; ctx.font='bold 13px Consolas,monospace';
-  ctx.fillText('v26.7.5', W/2, 202);
+  ctx.fillText('v26.7.6', W/2, 202);
 
   // ── Progress bar animation ─────────────────────────────────────────────────
   const bar = document.getElementById('splash-bar');
@@ -170,6 +170,18 @@ Users are responsible for verifying all information against N1MM before making d
     // edge grows the window leftward instead of the default top-left-anchored
     // growth. Throttled to one call per animation frame so a fast mouse
     // doesn't flood the js_api bridge.
+    // Reflects the window's maximized/restored state on the caption button
+    // (icon glyph + tooltip). Backend is the source of truth for _maximized
+    // (see toggle_maximize()/is_maximized() in server.py) — this only ever
+    // mirrors a value the backend already computed or is about to force,
+    // it never decides maximized state on its own.
+    const maximizeBtn = document.getElementById('btn-win-maximize');
+    function setMaximizeIcon(isMax) {
+      if (!maximizeBtn) return;
+      maximizeBtn.textContent = isMax ? '❐' : '▢';
+      maximizeBtn.title = isMax ? 'Restore' : 'Maximize';
+    }
+
     function wireResizeHandles(api) {
       document.body.classList.add('pywebview-desktop');
       const MIN_W = 900, MIN_H = 600;
@@ -182,6 +194,11 @@ Users are responsible for verifying all information against N1MM before making d
             let pending = null, raf = null;
             function apply() {
               raf = null;
+              // resize_to() always forces the backend out of the maximized
+              // state (see server.py) — only mirror that once a resize
+              // actually happens, not on mere mousedown, since a plain
+              // click-without-drag never calls resize_to() at all.
+              setMaximizeIcon(false);
               api.resize_to(pending.width, pending.height, edge);
             }
             function onMove(ev) {
@@ -244,6 +261,13 @@ Users are responsible for verifying all information against N1MM before making d
     const DRAG_SEND_INTERVAL_MS = 33; // ~30 updates/sec
     function wireDragRegions(api) {
       document.querySelectorAll('.pywebview-drag-region').forEach(el => {
+        // Standard titlebar convention: double-click toggles maximize.
+        // toggle_maximize() returns the new state so the icon stays in
+        // sync without a separate query round trip.
+        el.addEventListener('dblclick', (e) => {
+          if (e.button !== 0) return;
+          api.toggle_maximize().then(setMaximizeIcon);
+        });
         el.addEventListener('mousedown', (e) => {
           if (e.button !== 0) return;
           e.preventDefault();
@@ -265,6 +289,11 @@ Users are responsible for verifying all information against N1MM before making d
               if (pendingDx === 0 && pendingDy === 0) return;
               curX += pendingDx; curY += pendingDy;
               pendingDx = 0; pendingDy = 0;
+              // move_to() always forces the backend out of the maximized
+              // state (see server.py) — only mirror that once a move
+              // actually happens, not on mere mousedown, since a plain
+              // click-without-drag never calls move_to() at all.
+              setMaximizeIcon(false);
               api.move_to(curX, curY);
             }
             function onMove(ev) {
@@ -291,10 +320,14 @@ Users are responsible for verifying all information against N1MM before making d
       const wrap = document.getElementById('window-controls');
       if (wrap) wrap.style.display = 'flex';
       document.getElementById('btn-win-minimize')?.addEventListener('click', () => api.minimize());
-      document.getElementById('btn-win-maximize')?.addEventListener('click', () => api.toggle_maximize());
+      document.getElementById('btn-win-maximize')?.addEventListener('click', () => api.toggle_maximize().then(setMaximizeIcon));
       document.getElementById('btn-win-close')?.addEventListener('click', () => api.close());
       wireResizeHandles(api);
       wireDragRegions(api);
+      // The window may already be maximized at load (restored from the
+      // previous session — see launch_webview() in server.py), so sync the
+      // icon once up front instead of assuming the default "restored" glyph.
+      api.is_maximized?.().then(setMaximizeIcon);
     }
     if (window.pywebview) wireWindowControls();
     else window.addEventListener('pywebviewready', wireWindowControls);

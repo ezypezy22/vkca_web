@@ -505,6 +505,12 @@ class ContestLog:
                     "operator":    operator,
                     "continent":   continent,
                     "_table":      target,
+                    # Populated asynchronously by web/server.py's QRZ lookup
+                    # worker — never set here, ContestLog stays network-free.
+                    "qrz_name":    "",
+                    "qrz_grid":    "",
+                    "qrz_state":   "",
+                    "qrz_status":  "none",   # "none"|"pending"|"found"|"not_found"
                 })
 
         self.plugin.recalc_pts(self.qsos)

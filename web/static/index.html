@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VK Contest Analyzer v26.7.5</title>
+<title>VK Contest Analyzer v26.7.6</title>
 <link rel="stylesheet" href="/static/style.css">
 <script>
   // Applied synchronously, before paint, so a popped-out tile/HUD window
@@ -38,7 +38,7 @@
   <!-- Row 1: identity + primary action -->
   <div id="tb-row1">
     <div id="titlebar-logo" class="pywebview-drag-region">⬡</div>
-    <div id="titlebar-title" class="pywebview-drag-region">VK CONTEST ANALYZER <span style="color:var(--muted);font-size:0.75em">v26.7.5</span></div>
+    <div id="titlebar-title" class="pywebview-drag-region">VK CONTEST ANALYZER <span style="color:var(--muted);font-size:0.75em">v26.7.6</span></div>
     <div id="titlebar-status" class="pywebview-drag-region">
       <span id="status-dot" class="dot dot--disconnected"></span>
       <span id="status-text">No log loaded</span>
@@ -112,6 +112,11 @@
 
     <!-- Report issue / request feature -->
     <button id="btn-report-issue" class="tb-btn" title="Report a bug or request a feature">🐛 Report Issue</button>
+
+    <div class="tb-sep"></div>
+
+    <!-- QRZ.com lookup settings -->
+    <button id="btn-qrz-settings" class="tb-btn" title="QRZ.com lookup settings">🔍 QRZ Lookup</button>
 
     <!-- Trailing drag handle — row 2 is otherwise wall-to-wall interactive
          controls (slider, selects, buttons), so without this the whole
@@ -869,7 +874,9 @@
       <table class="data-table">
         <thead><tr>
           <th><input id="worked-select-all" type="checkbox"></th>
-          <th>Call</th><th>Band</th><th>Mode</th><th>Mult</th><th>Pts</th><th>Time (UTC)</th>
+          <th>Call</th><th>Band</th><th>Mode</th><th>Mult</th><th>Pts</th>
+          <th>Name</th><th>Grid</th><th>State</th>
+          <th>Time (UTC)</th>
           <th>Block</th><th>Next Block In</th><th>Dupe</th>
         </tr></thead>
         <tbody id="worked-tbody"></tbody>
@@ -1046,6 +1053,32 @@
   </div>
 </div>
 
+<!-- ── QRZ.com Lookup settings dialog ──────────────────────────────────────── -->
+<div id="qrz-settings-dialog" class="dialog-overlay hidden">
+  <div class="dialog">
+    <div class="dialog-title">🔍 QRZ.com Lookup</div>
+    <div class="dialog-body">
+      <div class="dialog-hint">Looks up Name / Grid / State for worked calls via the QRZ.com XML API. Requires a QRZ.com XML subscription.</div>
+      <div id="qrz-status-line" class="dialog-hint">Not configured.</div>
+
+      <label class="dialog-label">QRZ.com username</label>
+      <input id="qrz-username" class="dialog-input" type="text" autocomplete="off">
+      <label class="dialog-label">QRZ.com password</label>
+      <input id="qrz-password" class="dialog-input" type="password" autocomplete="off">
+      <div id="qrz-cred-error" class="dialog-error hidden"></div>
+
+      <div class="dialog-section-label" style="margin-top:14px">Batch enrich</div>
+      <div class="dialog-hint" id="qrz-enrich-status">Fills in Name/Grid/State for every worked call not already looked up.</div>
+    </div>
+    <div class="dialog-footer">
+      <button id="btn-qrz-remove" class="btn btn--ghost">Remove Credentials</button>
+      <button id="btn-qrz-enrich-all" class="btn btn--ghost">Enrich All</button>
+      <button id="btn-qrz-save" class="btn btn--primary">Save &amp; Test</button>
+      <button id="btn-qrz-close" class="btn btn--ghost">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Scripts ─────────────────────────────────────────────────────────────── -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -1066,6 +1099,7 @@
 <script src="/static/worked.js"></script>
 <script src="/static/report.js"></script>
 <script src="/static/report-issue.js"></script>
+<script src="/static/qrz_settings.js"></script>
 <script src="/static/worldmap.js"></script>
 </body>
 </html>

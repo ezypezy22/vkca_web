@@ -70,7 +70,7 @@
       _page     = 0;
       applyFilter();
     } catch(e) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="color:var(--red);padding:12px">Failed: ${e.message}</td></tr>`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="13" style="color:var(--red);padding:12px">Failed: ${e.message}</td></tr>`;
     }
   }
 
@@ -89,6 +89,13 @@
 
   function updateDeleteBtn() {
     if (deleteBtn) deleteBtn.disabled = _selected.size === 0;
+  }
+
+  function renderQrzCell(val, status) {
+    if (status === 'pending')   return `<span style="color:var(--muted);font-style:italic" title="Looking up on QRZ.com…">…</span>`;
+    if (status === 'not_found') return `<span style="color:var(--muted)" title="Not found on QRZ.com">✗</span>`;
+    if (status === 'found')     return val ? window.VKA.escapeHtml(val) : `<span style="color:var(--muted)" title="No data on QRZ.com">—</span>`;
+    return `<span style="color:var(--muted)">—</span>`;   // "none" — QRZ lookup not configured/never attempted
   }
 
   function render() {
@@ -121,6 +128,9 @@
         <td>${q.mode||'—'}</td>
         <td style="color:${col}">${q.mult1||'—'}</td>
         <td>${q.pts||0}</td>
+        <td>${renderQrzCell(q.qrz_name,  q.qrz_status)}</td>
+        <td>${renderQrzCell(q.qrz_grid,  q.qrz_status)}</td>
+        <td>${renderQrzCell(q.qrz_state, q.qrz_status)}</td>
         <td style="color:var(--muted);font-size:0.85em">${fmt(q.time)}</td>
         <td style="color:var(--accent3)">${bi ? bi.label : '—'}</td>
         <td class="worked-countdown" data-block-end="${bi ? bi.blockEnd.toISOString() : ''}" style="font-size:0.85em">${bi ? fmtRemaining(bi.blockEnd - new Date()) : '—'}</td>
