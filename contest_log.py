@@ -112,8 +112,8 @@ class ContestLog:
     @staticmethod
     def available_contests(db_path):
         """
-        Return a list of dicts for every contest instance that has QSOs,
-        sorted by most recent first.
+        Return a list of dicts for every contest instance in the database,
+        including ones with zero QSOs logged yet, sorted by most recent first.
         Each dict: {contest_nr, contest_name, display_name, start_date, qso_count}
 
         FIX (load delay): creates a covering index on DXLOG(ContestNR) the first
@@ -147,7 +147,6 @@ class ContestLog:
                 LEFT JOIN DXLOG   d  ON d.ContestNR = ci.ContestNR
                 WHERE   ci.ContestNR >= 0
                 GROUP BY ci.ContestNR
-                HAVING COUNT(d.ID) > 0
                 ORDER BY ci.StartDate DESC
             """).fetchall()
             return [dict(r) for r in rows]

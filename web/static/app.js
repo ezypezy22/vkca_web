@@ -642,7 +642,8 @@ Users are responsible for verifying all information against N1MM before making d
       row.style.cssText = `padding:8px 14px;cursor:pointer;transition:background .1s;
         ${idx < _scannedContests.length-1 ? 'border-bottom:1px solid var(--bg3)' : ''}`;
       row.innerHTML = `<div style="color:var(--fg);font-weight:bold">${ct.display_name||ct.contest_name}</div>
-        <div style="color:var(--muted);font-size:0.85em">${ct.qso_count||0} QSOs · ${(ct.start_date||'').substring(0,10)}</div>`;
+        <div style="color:var(--muted);font-size:0.85em">${ct.qso_count||0} QSOs · ${(ct.start_date||'').substring(0,10)}
+        ${!ct.qso_count ? '<span class="badge" style="color:#f0c040">Empty</span>' : ''}</div>`;
       row.addEventListener('mouseover', ()=>row.style.background='var(--bg3)');
       row.addEventListener('mouseout',  ()=>row.style.background='');
       row.addEventListener('click', async () => {
@@ -898,6 +899,7 @@ Users are responsible for verifying all information against N1MM before making d
             <span style="color:${col};font-weight:bold">${ct.plugin}</span>
             <span>${ct.start_date}</span>
             <span>${ct.qso_count.toLocaleString()} QSOs</span>
+            ${ct.qso_count===0 ? '<span class="badge" style="color:#f0c040">Empty</span>' : ''}
           </div>
         </div>
         <div class="contest-row-arrow">›</div>`;
