@@ -277,15 +277,16 @@ class AppState:
             log.exception("compute_snapshot failed")
             return {"error": str(exc)}
 
-    def poll_once(self) -> bool:
-        """Check mtime; reload ContestLog if changed. Returns True if updated."""
+    def poll_once(self, force: bool = False) -> bool:
+        """Check mtime; reload ContestLog if changed (or always, if force).
+        Returns True if updated."""
         if not self.db_path or not os.path.isfile(self.db_path):
             return False
         try:
             mtime = os.path.getmtime(self.db_path)
         except OSError:
             return False
-        if mtime <= self.last_mtime:
+        if not force and mtime <= self.last_mtime:
             return False
         try:
             cl = ContestLog(self.db_path,
@@ -946,6 +947,8 @@ async def api_load(body: dict):
 
 @app.get("/api/snapshot")
 async def api_snapshot():
+    if STATE.db_path:
+        await asyncio.get_event_loop().run_in_executor(None, STATE.poll_once, True)
     return STATE.snapshot()
 
 
