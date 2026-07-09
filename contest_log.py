@@ -251,11 +251,27 @@ class ContestLog:
             "srx","SRX","rcvexch","RcvExch","RCVEXCH",
         ])
         # Use plugin-declared column preference when available; otherwise heuristic.
+        # When the plugin declares a preference list, keep EVERY candidate
+        # that actually exists as a column (not just the first) — some
+        # loggers (e.g. not1mm's ARRL 10M plugin) leave the higher-priority
+        # column (Exchange1) present in the schema but always blank, and
+        # only populate a lower-priority one (NR). A single up-front pick
+        # would permanently lock onto the always-blank column since col()
+        # only checks column existence, not whether it's ever populated;
+        # sect_pref_cols below is consulted per-row instead, using the
+        # first candidate with a non-blank value for that row.
         _pref = self.plugin.preferred_exchange_columns
         if _pref:
-            sect_col = col(_pref)
+            _seen_pref = set()
+            sect_pref_cols = []
+            for name in _pref:
+                if name.lower() in cols_lower and name.lower() not in _seen_pref:
+                    _seen_pref.add(name.lower())
+                    sect_pref_cols.append(name)
+            sect_col = sect_pref_cols[0] if sect_pref_cols else None
         else:
             sect_col = col(["Sect","sect","SECT","Section","section","SECTION"])
+            sect_pref_cols = [sect_col] if sect_col else []
         dupe_col  = col(["IsDupe","isDupe","isdupe","ISDUPE",
                           "Dupe","dupe","DUPE",
                           "ContactType","contacttype","CONTACTTYPE",
@@ -278,8 +294,9 @@ class ContestLog:
         )
 
         sel_cols = [call_col, band_col, freq_col, mode_col, time_col,
-                    mult_col, sect_col, zone_col, m1_col, m2_col,
+                    mult_col, zone_col, m1_col, m2_col,
                     dupe_col, pts_col, id_col, op_col, continent_col]
+        sel_cols += sect_pref_cols
         sel_cols = [cn for cn in sel_cols if cn]
         seen = set(); sel_cols_dedup = []
         for c_ in sel_cols:
@@ -319,7 +336,16 @@ class ContestLog:
             operator = str(d.get(op_col) or "").strip().upper() if op_col else ""
 
             # ── Raw exchange / section ────────────────────────────────────────
-            raw_sect = str(d.get(sect_col) or "").strip().upper() if sect_col else ""
+            # Walk the plugin's preferred columns in priority order and use
+            # the first one that's actually non-blank for THIS row — some
+            # loggers leave a higher-priority column present but always
+            # empty (see sect_pref_cols comment above).
+            raw_sect = ""
+            for _pc in sect_pref_cols:
+                _v = str(d.get(_pc) or "").strip().upper()
+                if _v:
+                    raw_sect = _v
+                    break
             raw_exch = str(d.get(mult_col) or "").strip().upper() if mult_col else ""
             if raw_sect and len(raw_sect) <= 10 and not raw_sect.isdigit():
                 raw_mult = raw_sect
@@ -399,6 +425,15 @@ class ContestLog:
                 raw_dupe_str = str(raw_dupe or "").strip().upper()
                 if raw_dupe_str:
                     dupe = 1 if raw_dupe_str == "D" else 0
+                elif isinstance(self.plugin, GenericPlugin):
+                    # GenericPlugin has no recalc_pts() override to repair
+                    # false positives (unlike e.g. CQWW's same-country 0-pt
+                    # handling), and un-scored/non-contest logging (e.g.
+                    # not1mm's "General-Logging" catch-all) legitimately has
+                    # Points==0 on every row — so the pts==0 fallback below
+                    # would flag every single QSO as a dupe. Stay conservative
+                    # here and only trust an explicit "D".
+                    dupe = 0
                 else:
                     # not1mm's DXLOG has a ContactType column but never
                     # writes "D" into it — it zeroes Points on a dupe
@@ -457,13 +492,27 @@ class ContestLog:
             # ── CQ Zone ──────────────────────────────────────────────────────
             raw_zone = str(d.get(zone_col) or "").strip() if zone_col else ""
             cqz = None
+            zone_is_non_numeric = False
             if raw_zone:
                 try:
                     cqz = int(float(raw_zone))
                 except (ValueError, TypeError):
-                    pass
+                    zone_is_non_numeric = True
             if not cqz:
                 cqz = cqz_from_call(call)
+
+            # ── Non-numeric zone fallback ────────────────────────────────────
+            # not1mm's IARU HF plugin stuffs BOTH the ITU zone number and the
+            # HQ/official society abbreviation into the same Zone column
+            # (Exchange1/Mult1 are never written at all), unlike real N1MM
+            # which keeps the abbreviation in Exchange1/Mult1. When the zone
+            # column holds letters (not a plain number) and we haven't
+            # resolved any other multiplier value, treat it as the mult
+            # identity — this is exactly what IARU's _is_hq_or_official()
+            # needs to tell an HQ/official contact apart from a zone contact.
+            if zone_is_non_numeric and not mult:
+                mult = raw_zone.upper()
+                mult_source = mult_source or "ZONE_COL_NON_NUMERIC"
 
             # ── N1MM multiplier flags ─────────────────────────────────────────
             try:
@@ -522,6 +571,24 @@ class ContestLog:
                     "qrz_state":   "",
                     "qrz_status":  "none",   # "none"|"pending"|"found"|"not_found"
                 })
+
+        # ── Multiplier-flag sanity check ────────────────────────────────────
+        # Some loggers (e.g. not1mm's IARU HF and ARRL 10M plugins) declare
+        # IsMultiplier1/IsMultiplier2 columns but never actually write a 1
+        # into them — every plugin's multiplier-counting code treats "column
+        # present" (is_mult1 is not None) as "trust this flag", only falling
+        # back to counting every distinct worked key/band pair when the
+        # column is entirely absent. A column that exists but is always 0
+        # would otherwise make every band-mult / HQ-mult / secondary-mult
+        # count come out permanently zero for those logs. If the flag is
+        # never 1 anywhere in the whole log, treat it as unset so plugins
+        # fall back to their own distinct-pair counting instead.
+        if self.qsos and not any(q["is_mult1"] == 1 for q in self.qsos):
+            for q in self.qsos:
+                q["is_mult1"] = None
+        if self.qsos and not any(q["is_mult2"] == 1 for q in self.qsos):
+            for q in self.qsos:
+                q["is_mult2"] = None
 
         self.plugin.recalc_pts(self.qsos)
         logging.info("Loaded %d QSOs (plugin: %s)", len(self.qsos), self.plugin.display_name)

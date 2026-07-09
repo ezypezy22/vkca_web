@@ -445,7 +445,12 @@ class ARRL10MPlugin(ContestPlugin):
     def preferred_exchange_columns(self):
         # The received exchange (state/province/serial/ITU-region) lives
         # in Exchange1 in N1MM's standard schema for this contest.
-        return ["Exchange1", "exchange1", "RcvExch", "rcvexch"]
+        # not1mm's ARRL 10M plugin (plugins/arrl_10m.py's set_contact_vars())
+        # writes the received exchange into the NR column instead and never
+        # touches Exchange1 at all — leaving mult1 permanently blank (and
+        # every US/VE/XE multiplier permanently "missing") for not1mm logs
+        # unless NR is tried as a last-resort fallback here.
+        return ["Exchange1", "exchange1", "RcvExch", "rcvexch", "NR", "nr"]
 
     # ── Scoring ───────────────────────────────────────────────────────────────
 
