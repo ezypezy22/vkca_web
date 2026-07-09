@@ -429,6 +429,21 @@ Users are responsible for verifying all information against N1MM before making d
     return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   };
 
+  // Open an external (http/https) URL. window.open() from inside pywebview's
+  // embedded WebView is unreliable — notably on the Linux GTK/WebKit2 backend
+  // it silently no-ops instead of launching a browser — so route through the
+  // pywebview js_api bridge (_WindowApi.open_external in server.py, which
+  // shells out via Python's webbrowser module) when running inside the
+  // desktop app. Falls back to window.open() when running in a plain
+  // browser tab (e.g. during development), where it works fine.
+  window.VKA.openExternal = function (url) {
+    if (window.pywebview?.api?.open_external) {
+      window.pywebview.api.open_external(url);
+    } else {
+      window.open(url, '_blank', 'noopener');
+    }
+  };
+
   // Shared pace-comparison lookup: cumulative QSOs a reference trajectory had
   // reached at a given elapsed-hours point. Used by both the Pace tab and the
   // Report tab's "ahead/behind pace" KPI so they always agree on the number.

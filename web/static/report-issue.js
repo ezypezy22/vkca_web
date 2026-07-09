@@ -187,7 +187,7 @@
 
     const label  = currentKind() === 'feature' ? 'enhancement' : 'bug';
     const params = new URLSearchParams({ title, body, labels: label });
-    window.open(`https://github.com/${GITHUB_REPO}/issues/new?${params.toString()}`, '_blank', 'noopener');
+    window.VKA.openExternal(`https://github.com/${GITHUB_REPO}/issues/new?${params.toString()}`);
   }
 
   // ── Open / close ─────────────────────────────────────────────────────────
@@ -207,7 +207,7 @@
   document.getElementById('btn-report-submit')?.addEventListener('click', submitGithubIssue);
   document.getElementById('btn-report-copy-prompt')?.addEventListener('click', copyAiPrompt);
   document.getElementById('btn-report-open-claude')?.addEventListener('click',
-    () => window.open('https://claude.ai/new', '_blank', 'noopener'));
+    () => window.VKA.openExternal('https://claude.ai/new'));
   document.getElementById('btn-report-open-chatgpt')?.addEventListener('click',
-    () => window.open('https://chat.openai.com/', '_blank', 'noopener'));
+    () => window.VKA.openExternal('https://chat.openai.com/'));
 })();

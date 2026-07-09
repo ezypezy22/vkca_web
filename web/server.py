@@ -2984,6 +2984,22 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 _maximized = False
                 window.move(int(x), int(y))
 
+            def open_external(self, url):
+                # window.open() from inside pywebview's embedded WebView is
+                # unreliable — notably on the Linux GTK/WebKit2 backend it
+                # silently no-ops instead of launching a browser (same class
+                # of native-shell fragility as the drag handling above), so
+                # buttons meant to open an external URL (Report Issue submit,
+                # AI-assist links) appear to do nothing. webbrowser.open()
+                # shells out to the OS (xdg-open/open/start) instead, which
+                # works the same way the app's own restart-into-browser path
+                # (see webbrowser.open(url) elsewhere in this file) already
+                # relies on.
+                if not (isinstance(url, str) and url.startswith(("http://", "https://"))):
+                    return
+                import webbrowser
+                webbrowser.open(url)
+
         _window_api = _WindowApi()
         _create_kwargs = dict(
             title="VK Contest Analyzer",
