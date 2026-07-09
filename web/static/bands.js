@@ -146,7 +146,16 @@
     tbody.appendChild(frag);
   }
 
+  function reset() {
+    _be = [];
+    if (bandChart) { bandChart.destroy(); bandChart = null; }
+    const tbody = document.getElementById('bands-tbody');
+    if (tbody) tbody.innerHTML = '';
+    _bandeffLoaded = false;
+  }
+
   window.addEventListener('vka:snapshot', e => update(e.detail));
+  window.addEventListener('vka:loaded', reset);
   window.addEventListener('vka:tabchange', e => {
     if (e.detail.tab === 'bands') {
       const snap = window.VKA.lastSnap();
