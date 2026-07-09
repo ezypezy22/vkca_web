@@ -328,7 +328,7 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
   position:sticky;top:0;z-index:1;}
 .data-table tbody tr{border-bottom:1px solid var(--bg3);}
 .data-table tbody tr:nth-child(odd){background:var(--bg2);}
-.data-table tbody tr:nth-child(even){background:#1a1f26;}
+.data-table tbody tr:nth-child(even){background:var(--bg3);}
 .data-table tbody tr:hover{background:var(--bg3);}
 .data-table tbody td{padding:5px 10px;color:var(--fg);}
 .data-table tbody td:first-child{color:var(--accent);font-weight:bold;}
