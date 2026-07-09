@@ -396,7 +396,18 @@ class ContestLog:
                 # 0 points is legitimately non-scoring (vs. a real dupe)
                 # is left for plugin.recalc_pts() to decide per-contest;
                 # this column only tells us dupe-or-not, not score validity.
-                dupe = 1 if str(raw_dupe or "").strip().upper() == "D" else 0
+                raw_dupe_str = str(raw_dupe or "").strip().upper()
+                if raw_dupe_str:
+                    dupe = 1 if raw_dupe_str == "D" else 0
+                else:
+                    # not1mm's DXLOG has a ContactType column but never
+                    # writes "D" into it — it zeroes Points on a dupe
+                    # instead (see plugins/*.py points() implementations
+                    # upstream in not1mm), so an always-blank ContactType
+                    # would otherwise permanently hide every dupe from the
+                    # Dupe Checker page. Fall back to the same pts==0
+                    # heuristic used when no dupe column exists at all.
+                    dupe = 1 if pts == 0 else 0
             else:
                 # Last-resort fallback: 0-pt QSOs are dupes.
                 # NOTE: this is overridden by plugin.recalc_pts() for contests
