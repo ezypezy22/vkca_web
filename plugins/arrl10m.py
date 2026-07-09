@@ -218,6 +218,24 @@ def _entity_prefix_from_call(call: str) -> Optional[str]:
     return base or None
 
 
+def _extract_code(raw_ex: str, code_set: frozenset) -> Optional[str]:
+    """
+    Resolve a fixed-list exchange code (US state, VE province, XE state)
+    from the received-exchange text. Tries an exact match first (N1MM's
+    Exchange1 holding just the bare code), then falls back to scanning
+    alphabetic tokens split on whitespace/digits — covers exchanges
+    logged with the RST or serial number glued on in the same field
+    (e.g. "5NN TX", "059 TX", "TX599"), which real-world N1MM logs
+    commonly produce for this contest's single free-text exchange box.
+    """
+    if raw_ex in code_set:
+        return raw_ex
+    for token in re.findall(r"[A-Z]+", raw_ex):
+        if token in code_set:
+            return token
+    return None
+
+
 def _is_maritime_mobile(call: str) -> bool:
     c = (call or "").upper().strip()
     return c.endswith("/MM") or "/MM/" in c
@@ -326,23 +344,26 @@ def _classify_exchange(q: dict, own_entity: Optional[str] = None) -> Optional[st
     # since the rules define the multiplier by what was exchanged.
     if entity_prefix in ("K", "W", "N", "AA", "AB", "AC", "AD", "AE", "AF",
                           "AG", "AI", "AJ", "AK", "AL", "KH6", "KL7"):
-        if raw_ex in _US_SET:
-            return f"US:{raw_ex}"
+        code = _extract_code(raw_ex, _US_SET)
+        if code:
+            return f"US:{code}"
         return None   # US station but exchange didn't parse to a known state
 
     # Canada
     if entity_prefix in ("VE", "VA", "VO", "VY", "CY", "CF", "CG", "CH",
                           "CI", "CJ", "CK", "CZ", "XJ", "XK", "XL", "XM",
                           "XN", "XO"):
-        if raw_ex in _VE_SET:
-            return f"VE:{raw_ex}"
+        code = _extract_code(raw_ex, _VE_SET)
+        if code:
+            return f"VE:{code}"
         return None
 
     # Mexico
     if entity_prefix in ("XE", "XF", "XA", "XB", "XC", "4A", "4B", "6D",
                           "6E", "6F", "6G", "6H", "6I", "6J"):
-        if raw_ex in _XE_SET:
-            return f"XE:{raw_ex}"
+        code = _extract_code(raw_ex, _XE_SET)
+        if code:
+            return f"XE:{code}"
         return None
 
     # Everyone else: DXCC entity multiplier.
