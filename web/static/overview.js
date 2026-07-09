@@ -411,6 +411,16 @@
         <div class="ct-sub" style="color:${col}">${rem}m remaining · ${pct}%</div>
         <div class="ct-score" style="color:${T.accent}">${(sc||0).toLocaleString('en-AU')}</div>
         <div class="ct-sub">${snap?.valid||0} Q × ${snap?.band_mults||snap?.worked||0} mults</div>`;
+    } else if (state==='pre') {
+      // Log is loaded and may already have test/early QSOs, but the
+      // contest's scheduled start (per the plugin's start_hour) hasn't
+      // arrived yet — show a countdown instead of implying nothing's loaded.
+      const mins=Math.round(ss.mins_to_start??0);
+      const h=Math.floor(mins/60), m=mins%60;
+      body=`<div class="ct-label" style="color:${T.accent3}">${ss.session_label||'Pre-Contest'}</div>
+        <div class="ct-sub" style="color:${T.accent3}">Starts in ${h}h ${String(m).padStart(2,'0')}m</div>
+        <div class="ct-info" style="color:${T.muted}">${ss.start_dt?String(ss.start_dt).substring(0,16)+' UTC':''}</div>
+        ${snap?.total ? `<div class="ct-info" style="color:${T.muted}">${snap.total} test QSO${snap.total===1?'':'s'} logged so far</div>` : ''}`;
     } else {
       body=`<div class="ct-sub" style="color:${T.muted}">No contest loaded</div>`;
     }
