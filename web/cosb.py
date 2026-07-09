@@ -3,23 +3,36 @@ web/cosb.py — Contest Online ScoreBoard (contestonlinescore.com) live-rank
 lookup, used by the Overview tab's "Live Ranking" panel.
 
 COSB has no public read API (only a documented XML spec for the *posting*
-side that loggers like N1MM+ already use) — this scrapes the per-callsign
-lookup page instead. Researched directly against the live site:
+side that loggers like N1MM+ already use) — this scrapes site pages
+instead. Researched directly against the live site:
 
   GET https://contestonlinescore.com/tools/rate/?call={CALLSIGN}
-    - 302s to the generic /scoreboard/ landing page when the callsign has
-      no live data right now.
-    - Otherwise lands on that callsign's actual contest scoreboard.
+    ALWAYS 302s to the single generic /scoreboard/ landing page — verified
+    directly (call with live data vs. call with none both redirect to the
+    exact same bare URL). It is NOT a per-callsign search: /scoreboard/
+    only ever shows whichever ONE contest COSB currently has flagged
+    "selected" in its <select name="contest_id"> dropdown. Since COSB
+    tracks dozens of contests concurrently (mini-contests, sprints, DX
+    tests, etc. — each with its own contest_id) and a VK contest op is
+    essentially never running whatever COSB happens to be featuring at
+    that exact moment, relying on this redirect alone means the live-rank
+    lookup silently reports "not posting" almost all the time even when
+    genuinely live elsewhere on the site — this was the root cause of a
+    reported false-negative (GitHub issue #5).
 
-Landed scoreboard pages are one big <table> with category sections marked
-by <tr class="title5"> header rows (category text inside <a> tags, e.g.
+    GET https://contestonlinescore.com/scoreboard/?contest_id={N}
+    switches to that specific contest's table (verified) — used below to
+    scan the other concurrently-active contests when the featured one
+    isn't a match.
+
+Scoreboard pages are one big <table> with category sections marked by
+<tr class="title5"> header rows (category text inside <a> tags, e.g.
 "SO-ALL HP CW"), followed by data rows alternating <tr class="tbl1"> /
 <tr class="tbl2">. Each data row's cells in order: rank, callsign (inside
-an <a href="/tools/rate/?call=XXX">), score, QSO count.
+an <a href="/tools/rate/?call=XXX">), score, QSO count, ...
 
-Whatever page COSB actually returns gets walked the same way below, so this
-is robust to either path. If no row matches the target callsign anywhere on
-the page, that means "no live data right now" — not an error.
+If no row matches the target callsign on any contest checked, that means
+"no live data right now" — not an error.
 
 This must never be able to break the rest of the app: every failure mode
 (network error, COSB redesigning their HTML) is caught and logged, never
@@ -43,10 +56,55 @@ SCOREBOARD_URL = "https://contestonlinescore.com/scoreboard/?contest_id={cid}"
 TIMEOUT_SECS = 8
 USER_AGENT = "VKContestAnalyzer/26.6 (+https://github.com/ezypezy22/vkca_web)"
 
+# Upper bound on how many *other* concurrently-active contests get scanned
+# when the featured one isn't a match — keeps a single (cached, background-
+# thread) lookup from turning into dozens of requests against COSB.
+MAX_CONTESTS_SCANNED = 12
+
+
+def _get(url: str):
+    resp = requests.get(
+        url, headers={"User-Agent": USER_AGENT},
+        timeout=TIMEOUT_SECS, allow_redirects=True,
+    )
+    resp.raise_for_status()
+    return resp
+
+
+def _other_contest_ids(html: str, skip_id: Optional[str]) -> list[str]:
+    """
+    Contest ids from the <select name="contest_id"> dropdown, excluding
+    `skip_id` (the one already checked) and anything marked "Coming:"
+    (not started yet — can't have live data). Order follows the
+    dropdown's own order, which puts the most contextually-relevant
+    contests near the featured one.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    sel = soup.select_one("select[name='contest_id']")
+    if not sel:
+        return []
+    ids = []
+    for opt in sel.find_all("option"):
+        val = opt.get("value")
+        if not val or val == skip_id:
+            continue
+        label = opt.get_text(strip=True)
+        if label.startswith("Coming:"):
+            continue
+        ids.append(val)
+    return ids[:MAX_CONTESTS_SCANNED]
+
 
 def fetch_live_rank(callsign: str) -> Optional[dict]:
     """
     Look up `callsign`'s current live rank on Contest Online ScoreBoard.
+
+    COSB's /tools/rate/?call= redirect always lands on whichever single
+    contest it currently has "featured" (see module docstring) — it is
+    not a real per-callsign search. So this checks the featured contest
+    first (the common/cheap case), then falls back to scanning the other
+    concurrently-active contests from the site's own contest picker until
+    a match is found or the list is exhausted.
 
     Returns a dict {rank, total_in_category, category, score, qsos,
     contest_name, profile_url} on success, or None if there's no live data
@@ -57,21 +115,30 @@ def fetch_live_rank(callsign: str) -> Optional[dict]:
     if not callsign:
         return None
 
-    url = RATE_URL.format(call=quote(callsign))
     try:
-        resp = requests.get(
-            url,
-            headers={"User-Agent": USER_AGENT},
-            timeout=TIMEOUT_SECS,
-            allow_redirects=True,
-        )
-        resp.raise_for_status()
+        resp = _get(RATE_URL.format(call=quote(callsign)))
     except Exception as e:
         log.info("COSB live-rank request failed for %s: %s", callsign, e)
         return None
 
     try:
-        return _parse_scoreboard(resp.text, callsign, resp.url)
+        result = _parse_scoreboard(resp.text, callsign, resp.url)
+        if result:
+            return result
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        featured_id = soup.select_one("select[name='contest_id'] option[selected]")
+        featured_id = featured_id.get("value") if featured_id else None
+        for cid in _other_contest_ids(resp.text, featured_id):
+            try:
+                cresp = _get(SCOREBOARD_URL.format(cid=cid))
+                result = _parse_scoreboard(cresp.text, callsign, cresp.url)
+                if result:
+                    return result
+            except Exception as e:
+                log.info("COSB scan of contest_id=%s failed for %s: %s", cid, callsign, e)
+                continue
+        return None
     except Exception as e:
         # Most likely COSB changed their page markup — log it so this is
         # discoverable, but never let a scrape failure affect the rest of
@@ -117,12 +184,14 @@ def _parse_scoreboard(html: str, callsign: str, page_url: str) -> Optional[dict]
 
     # The contest-picker <select> marks the currently-viewed contest with the
     # `selected` attribute, e.g. <option value='2' selected>Closed: ARRL Field
-    # Day</option> — strip the "Closed: "/"Coming: " status prefix it adds.
+    # Day</option> — keep the "Closed: "/"Coming: " status prefix as-is so
+    # the Live Ranking tile shows it (helps make sense of a match found via
+    # the multi-contest scan above, which can land on a just-ended session).
     contest_name = "Contest Online ScoreBoard"
     selected_opt = soup.select_one("select[name='contest_id'] option[selected]")
     if selected_opt:
         text = selected_opt.get_text(strip=True)
-        contest_name = re.sub(r"^(Closed|Coming):\s*", "", text).strip() or contest_name
+        contest_name = text or contest_name
 
     return {
         "rank": rank,
