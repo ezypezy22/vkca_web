@@ -690,6 +690,26 @@ class ContestLog:
                 buckets[h] += 1
         return sorted(buckets.items())
 
+    def mults_by_hour(self):
+        """New multipliers per absolute hour — same plugin.sparkline_mults()
+        delegation as sparkline_data()/rate_by_session() (see issue #9),
+        rather than a hand-rolled is_mult1/is_mult2 check, so this counts
+        correctly for contests whose flags the not1mm sanity check above
+        nulls out (e.g. ARRL 10M) as well as flag-based ones. Requires
+        chronological order (unlike rate_by_hour()'s plain per-hour count)
+        since "new" is relative to everything already seen."""
+        if not self.qsos:
+            return []
+        buckets = defaultdict(int)
+        seen: set = set()
+        valid = sorted([q for q in self.qsos if not q["dupe"]], key=lambda q: q["time"])
+        for q in valid:
+            new_mults = self.plugin.sparkline_mults(q, seen)
+            if new_mults:
+                h = q["time"].replace(minute=0, second=0, microsecond=0)
+                buckets[h] += new_mults
+        return sorted(buckets.items())
+
     def band_breakdown(self):
         ml_set = set(self.plugin.mult_list())
         result = defaultdict(lambda: {"valid": 0, "dupe": 0, "mults": set()})

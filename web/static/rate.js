@@ -7,6 +7,7 @@
                muted:'#8b949e', bg3:'#21262d', fg:'#e6edf3', green:'#2ed573' };
 
   let rateChart = null;
+  let multsChart = null;
 
   async function load() {
     const [rateRes, sessRes] = await Promise.all([
@@ -15,6 +16,7 @@
     const rateData = await rateRes.json();
     const sessData = await sessRes.json();
     renderRateChart(rateData);
+    renderMultsChart(rateData);
     renderSessionTable(sessData);
   }
 
@@ -64,6 +66,51 @@
           y: { ticks:{color:C.muted,font:{size:9}},
                grid:{color:C.bg3+'80'}, beginAtZero:true,
                title:{display:true,text:'QSOs / hour',color:C.muted,font:{size:9}} },
+        },
+      },
+    });
+  }
+
+  function renderMultsChart(data) {
+    if (!data.length) return;
+    const labels = data.map(r => {
+      const d = new Date(r.hour);
+      return `${String(d.getUTCHours()).padStart(2,'0')}:00`;
+    });
+    const values = data.map(r => r.mults || 0);
+
+    const canvas = document.getElementById('chart-rate-mults');
+    if (!canvas) return;
+    if (multsChart) { multsChart.destroy(); multsChart = null; }
+
+    multsChart = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'New mults',
+          data: values,
+          backgroundColor: C.accent3,
+          borderRadius: 3,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: 500, easing: 'easeOutQuart' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: C.bg3, bodyColor: C.fg,
+            titleColor: C.accent3, borderColor: C.bg3, borderWidth: 1,
+            callbacks: { title: i => `Hour ${i[0].label}`, label: i => ` ${i.raw} new mults` }
+          },
+        },
+        scales: {
+          x: { ticks:{color:C.muted,font:{size:9},maxRotation:45},
+               grid:{color:C.bg3+'80'} },
+          y: { ticks:{color:C.muted,font:{size:9},precision:0},
+               grid:{color:C.bg3+'80'}, beginAtZero:true,
+               title:{display:true,text:'New mults / hour',color:C.muted,font:{size:9}} },
         },
       },
     });

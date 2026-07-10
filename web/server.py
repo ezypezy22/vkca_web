@@ -1162,8 +1162,13 @@ async def api_rate():
         if not STATE.contest_log:
             return []
         try:
-            raw = STATE.contest_log.rate_by_hour()
-            return [{"hour": h.isoformat(), "qsos": n} for h, n in raw]
+            qsos_by_hour  = dict(STATE.contest_log.rate_by_hour())
+            mults_by_hour = dict(STATE.contest_log.mults_by_hour())
+            hours = sorted(set(qsos_by_hour) | set(mults_by_hour))
+            return [
+                {"hour": h.isoformat(), "qsos": qsos_by_hour.get(h, 0), "mults": mults_by_hour.get(h, 0)}
+                for h in hours
+            ]
         except Exception:
             return []
 
