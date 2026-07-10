@@ -1,5 +1,20 @@
 # Changelog
 
+## 26.7.8
+
+### Enhancements
+
+899648d Add a Mults per hour chart to the Rate tab
+22484f1 Style Mults per hour chart as a glowing sparkline, matching Overview
+
+### Bugfixes
+
+c2ad9ee Fix stale v26.7.6 hardcoded in index.html title/titlebar
+94e5da2 Fix Linux maximize/restore across monitors (stuck full-screen, wrong position on restore, occasional freeze)
+c8bc99c Fix ARRL 10M dupe/scoring blind spot for mode-scoped rework (issue #8)
+eb28798 Fix Rate tab always showing 0 new/cum mults and score (issue #9)
+5fa1df8 Stop Rate tab charts flashing/redrawing on unrelated snapshot pushes
+
 ## 26.7.7
 
 ### Enhancements
