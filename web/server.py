@@ -2998,13 +2998,28 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                         w -= 1
                         h -= 1
                     log.info("toggle_maximize: maximizing — pre_geom=%s target=%s", _pre_max_geom, (x, y, w, h))
-                    _move_window(x, y)
+                    # resize() BEFORE move(): resize_to() (edge/corner drag
+                    # resizing, above) sets the GTK window's gravity to
+                    # whatever corner is opposite the dragged edge (e.g.
+                    # SOUTH_EAST for a north-west corner drag) and that
+                    # gravity persists on the window afterward — it's not
+                    # reset until the next resize() call. window.resize()
+                    # here uses the default NORTH_WEST fix point, which DOES
+                    # reset it. Calling move() first would target x,y under
+                    # whatever gravity was last left set, positioning some
+                    # OTHER corner of the window there instead of the
+                    # top-left — often landing far off (frequently clamped
+                    # to 0,0), which is what "restore homes to top-left"
+                    # was. Resizing first resets gravity to NORTH_WEST so
+                    # the following move() is correctly interpreted as a
+                    # top-left-corner target.
                     window.resize(w, h)
+                    _move_window(x, y)
                 elif _pre_max_geom:
                     x, y, w, h = _pre_max_geom
                     log.info("toggle_maximize: restoring — target=%s", (x, y, w, h))
-                    _move_window(x, y)
                     window.resize(w, h)
+                    _move_window(x, y)
                 _maximized = not _maximized
                 return _maximized
 
