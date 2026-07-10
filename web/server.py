@@ -2938,7 +2938,6 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
 
             def toggle_maximize(self):
                 nonlocal _maximized, _pre_max_geom
-                _is_linux = sys.platform.startswith("linux") and getattr(window, "native", None) is not None
                 if not _maximized:
                     _pre_max_geom = (window.x, window.y, window.width, window.height)
                     screen = _current_screen()
@@ -2947,66 +2946,38 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                         x, y, w, h = work.X, work.Y, work.Width, work.Height
                     else:
                         x, y, w, h = screen.x, screen.y, screen.width, screen.height
+                    if sys.platform.startswith("linux"):
+                        # Confirmed via vkca_errors.log on Cinnamon/Muffin:
+                        # gtk_window_is_maximized() stayed False the entire
+                        # time (before AND after calling native.unmaximize()),
+                        # so this was never a GTK/EWMH-tracked maximize state
+                        # to begin with — that ruled out the WM-auto-maximize
+                        # theory an earlier version of this code chased.
+                        # What actually happened: the window got permanently
+                        # wedged at the full-monitor size — every subsequent
+                        # "maximize" logged the *previous* maximize's size as
+                        # its pre_geom, meaning the resize-back never took
+                        # visual effect even once. That matches Muffin's
+                        # edge-tiling/snap-assist, which silently latches a
+                        # window once its edges exactly coincide with a
+                        # monitor's bounds on all four sides — a state
+                        # outside GTK's own maximize tracking entirely, so
+                        # nothing on the GTK side can detect or clear it.
+                        # Undershooting the target by a pixel keeps the
+                        # window from ever exactly touching the monitor
+                        # edges, avoiding that WM heuristic in the first
+                        # place — imperceptible on screen, but the window
+                        # stays a normal, freely resizable one.
+                        w -= 1
+                        h -= 1
                     log.info("toggle_maximize: maximizing — pre_geom=%s target=%s", _pre_max_geom, (x, y, w, h))
                     _move_window(x, y)
                     window.resize(w, h)
                 elif _pre_max_geom:
                     x, y, w, h = _pre_max_geom
-                    log.info("toggle_maximize: restoring — target=%s is_linux_native=%s", (x, y, w, h), _is_linux)
-                    # On GNOME/Mutter (and some other Linux WMs), resizing a
-                    # frameless window to exactly fill a monitor's bounds
-                    # gets auto-detected as a WM-level maximize, separate
-                    # from the _maximized flag this app tracks itself. A
-                    # plain move()/resize() back to the pre-maximize rect is
-                    # then ignored by the compositor until that WM-level
-                    # maximized state is explicitly cleared — hence the
-                    # window appearing stuck "full screen" with no way back
-                    # to windowed. window.native.unmaximize() clears it.
-                    #
-                    # GTK is not thread-safe: pywebview's own maximize()/
-                    # minimize()/restore() wrappers all marshal onto the GTK
-                    # main thread via glib.idle_add() rather than calling the
-                    # native window directly (see webview/platforms/gtk.py) —
-                    # js_api methods run on a bridge thread, not the GTK main
-                    # thread. The previous version of this code called
-                    # window.native.unmaximize()/is_maximized() straight from
-                    # here, off-thread, which is exactly the class of bug
-                    # that froze the whole app. Everything that touches
-                    # window.native below must go through idle_add too.
-                    if _is_linux:
-                        try:
-                            from gi.repository import GLib
-
-                            def _do_restore(_x=x, _y=y, _w=w, _h=h):
-                                try:
-                                    window.native.unmaximize()
-                                except Exception:
-                                    log.exception("toggle_maximize: native.unmaximize() failed")
-
-                                def _restore_geometry():
-                                    _move_window(_x, _y)
-                                    window.resize(_w, _h)
-                                    return False
-
-                                # unmaximize() above only *requests* the
-                                # change — GDK doesn't clear its internal
-                                # maximized flag until the window manager
-                                # round-trips back, and gtk_window_resize()
-                                # is documented to silently no-op while that
-                                # flag is still set. Deferring the move/
-                                # resize a beat gives that round-trip time
-                                # to land first.
-                                GLib.timeout_add(60, _restore_geometry)
-                                return False
-
-                            GLib.idle_add(_do_restore)
-                        except Exception:
-                            log.exception("toggle_maximize: idle_add scheduling failed, restoring inline")
-                            _move_window(x, y)
-                            window.resize(w, h)
-                    else:
-                        _move_window(x, y)
-                        window.resize(w, h)
+                    log.info("toggle_maximize: restoring — target=%s", (x, y, w, h))
+                    _move_window(x, y)
+                    window.resize(w, h)
                 _maximized = not _maximized
                 return _maximized
 
