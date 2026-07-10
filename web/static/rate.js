@@ -9,15 +9,39 @@
   let rateChart = null;
   let multsChart = null;
 
-  async function load() {
+  // vka:snapshot fires on every WebSocket push — including the QRZ
+  // background-lookup worker's own broadcasts, which happen every ~1.5s
+  // while it drains a backlog of newly-loaded callsigns (e.g. right after
+  // loading a log full of calls not yet in the QRZ cache) and carry no
+  // QSO/points/mults data at all. Without this guard, every one of those
+  // unrelated broadcasts still destroyed and rebuilt both charts from
+  // scratch, which read as a constant flashing "redraw" that had nothing
+  // to do with the rate data actually changing.
+  let _lastRateJSON = null, _lastSessJSON = null;
+
+  // force=true (tab-switch) always re-renders even if the data matches the
+  // last render: the tab is `display:none` while inactive, so a chart
+  // created/left stale while hidden can end up sized against a collapsed
+  // canvas — the pre-existing behavior of always rebuilding on tabchange is
+  // what makes switching to Rate reliably show correctly-sized charts, and
+  // skipping that specifically would trade one bug for another.
+  async function load(force) {
     const [rateRes, sessRes] = await Promise.all([
       fetch('/api/rate'), fetch('/api/sessions')
     ]);
-    const rateData = await rateRes.json();
-    const sessData = await sessRes.json();
-    renderRateChart(rateData);
-    renderMultsChart(rateData);
-    renderSessionTable(sessData);
+    const rateJSON = await rateRes.text();
+    const sessJSON = await sessRes.text();
+
+    if (force || rateJSON !== _lastRateJSON) {
+      _lastRateJSON = rateJSON;
+      const rateData = JSON.parse(rateJSON);
+      renderRateChart(rateData);
+      renderMultsChart(rateData);
+    }
+    if (force || sessJSON !== _lastSessJSON) {
+      _lastSessJSON = sessJSON;
+      renderSessionTable(JSON.parse(sessJSON));
+    }
   }
 
   function renderRateChart(data) {
@@ -173,6 +197,6 @@
     tbody.appendChild(frag);
   }
 
-  window.addEventListener('vka:snapshot', load);
-  window.addEventListener('vka:tabchange', e => { if (e.detail.tab==='rate') load(); });
+  window.addEventListener('vka:snapshot', () => load(false));
+  window.addEventListener('vka:tabchange', e => { if (e.detail.tab==='rate') load(true); });
 })();
