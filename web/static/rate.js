@@ -83,34 +83,65 @@
     if (!canvas) return;
     if (multsChart) { multsChart.destroy(); multsChart = null; }
 
-    multsChart = new Chart(canvas.getContext('2d'), {
-      type: 'bar',
+    // Same glowing-sparkline technique as overview.js's makeSparkline():
+    // canvas drop-shadow filter + gradient fill under a monotone line,
+    // hidden y-axis, only the peak hour gets a visible point — just a
+    // larger panel than the Overview tab's compact 90px inline version.
+    canvas.style.filter = `drop-shadow(0 0 6px ${C.accent3}80)`;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height || 220);
+    grad.addColorStop(0,    C.accent3 + '59');
+    grad.addColorStop(0.65, C.accent3 + '14');
+    grad.addColorStop(1,    C.accent3 + '00');
+
+    const peak = Math.max(...values, 0);
+    const pi   = values.lastIndexOf(peak);
+    const pointRadius = values.map((_, i) => (i === pi && peak > 0) ? 5 : 0);
+    const pointColour = values.map((_, i) => (i === pi && peak > 0) ? C.accent3 : 'transparent');
+    const pointBorder  = values.map((_, i) => (i === pi && peak > 0) ? '#fff' : 'transparent');
+
+    multsChart = new Chart(ctx, {
+      type: 'line',
       data: {
         labels,
         datasets: [{
           label: 'New mults',
           data: values,
-          backgroundColor: C.accent3,
-          borderRadius: 3,
+          borderColor: C.accent3,
+          borderWidth: 3,
+          backgroundColor: grad,
+          fill: true,
+          tension: 0,
+          cubicInterpolationMode: 'monotone',
+          borderCapStyle: 'round',
+          borderJoinStyle: 'round',
+          pointRadius,
+          pointBackgroundColor: pointColour,
+          pointBorderColor: pointBorder,
+          pointBorderWidth: values.map((_, i) => (i === pi && peak > 0) ? 2 : 0),
+          pointHoverRadius: 6,
+          pointHoverBackgroundColor: C.accent3,
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2,
         }],
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         animation: { duration: 500, easing: 'easeOutQuart' },
+        interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {
             backgroundColor: C.bg3, bodyColor: C.fg,
-            titleColor: C.accent3, borderColor: C.bg3, borderWidth: 1,
+            titleColor: C.accent3, borderColor: C.accent3, borderWidth: 1,
+            displayColors: false,
             callbacks: { title: i => `Hour ${i[0].label}`, label: i => ` ${i.raw} new mults` }
           },
         },
         scales: {
           x: { ticks:{color:C.muted,font:{size:9},maxRotation:45},
-               grid:{color:C.bg3+'80'} },
-          y: { ticks:{color:C.muted,font:{size:9},precision:0},
-               grid:{color:C.bg3+'80'}, beginAtZero:true,
-               title:{display:true,text:'New mults / hour',color:C.muted,font:{size:9}} },
+               grid:{display:false}, border:{display:false} },
+          y: { display:false, beginAtZero:true },
         },
       },
     });
