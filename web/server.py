@@ -2899,6 +2899,36 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
 
             threading.Thread(target=_shutdown, daemon=True, name="shutdown").start()
 
+        def _current_screen():
+            """The monitor the window is actually on, not always screens[0] —
+            on a multi-monitor Linux setup, maximizing a window sitting on
+            monitor 2 previously moved/resized it onto monitor 1's bounds
+            instead, since it always used screens[0]."""
+            try:
+                cx = window.x + window.width // 2
+                cy = window.y + window.height // 2
+                for s in webview.screens:
+                    if s.x <= cx < s.x + s.width and s.y <= cy < s.y + s.height:
+                        return s
+            except Exception:
+                pass
+            return webview.screens[0]
+
+        def _move_window(x, y):
+            """pywebview's GTK backend (webview/platforms/gtk.py) captures
+            monitor 0's origin once at window-creation time and adds it to
+            every move() call, regardless of which monitor the window is
+            currently on or being moved to. That silently mis-places the
+            window on any multi-monitor Linux setup where monitor 0 isn't at
+            (0, 0) — go through the real GTK window directly (window.native,
+            set by pywebview once the window is shown) to bypass it, since
+            Gtk.Window.move() already takes absolute root-window coordinates
+            with no extra offset needed."""
+            if sys.platform.startswith("linux") and getattr(window, "native", None) is not None:
+                window.native.move(int(x), int(y))
+            else:
+                window.move(int(x), int(y))
+
         class _WindowApi:
             def minimize(self):
                 window.minimize()
@@ -2910,17 +2940,31 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 nonlocal _maximized, _pre_max_geom
                 if not _maximized:
                     _pre_max_geom = (window.x, window.y, window.width, window.height)
-                    screen = webview.screens[0]
+                    screen = _current_screen()
                     work = getattr(screen, 'frame', None)
                     if work is not None and hasattr(work, 'Width'):
                         x, y, w, h = work.X, work.Y, work.Width, work.Height
                     else:
                         x, y, w, h = screen.x, screen.y, screen.width, screen.height
-                    window.move(x, y)
+                    _move_window(x, y)
                     window.resize(w, h)
                 elif _pre_max_geom:
+                    # On GNOME/Mutter (and some other Linux WMs), resizing a
+                    # frameless window to exactly fill a monitor's bounds
+                    # gets auto-detected as a WM-level maximize, separate
+                    # from the _maximized flag this app tracks itself. A
+                    # plain move()/resize() back to the pre-maximize rect is
+                    # then ignored by the compositor until that WM-level
+                    # maximized state is explicitly cleared — hence the
+                    # window appearing stuck "full screen" with no way back
+                    # to windowed. window.native.unmaximize() clears it.
+                    if sys.platform.startswith("linux") and getattr(window, "native", None) is not None:
+                        try:
+                            window.native.unmaximize()
+                        except Exception:
+                            pass
                     x, y, w, h = _pre_max_geom
-                    window.move(x, y)
+                    _move_window(x, y)
                     window.resize(w, h)
                 _maximized = not _maximized
                 return _maximized
@@ -2982,7 +3026,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
             def move_to(self, x, y):
                 nonlocal _maximized
                 _maximized = False
-                window.move(int(x), int(y))
+                _move_window(x, y)
 
             def open_external(self, url):
                 # window.open() from inside pywebview's embedded WebView is
