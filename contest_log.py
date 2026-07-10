@@ -325,6 +325,11 @@ class ContestLog:
         regex_short2 = _SHORT2_RE
 
         self.qsos = []
+        # Parallel to self.qsos — True where "dupe" below came from the
+        # ambiguous pts==0 fallback rather than an explicit source signal
+        # (IsDupe/Dupe column, or ContactType=="D"). Consumed by the
+        # mode_scoped_dupes correction pass after this loop.
+        _dupe_is_heuristic = []
         # Hoist mult list/set and regexes outside the per-QSO loop (fixes per-row recompute)
         _plugin_mult_list = self.plugin.mult_list()
         _plugin_mult_set  = set(_plugin_mult_list) if _plugin_mult_list else set()
@@ -409,6 +414,7 @@ class ContestLog:
 
             raw_dupe = d.get(dupe_col) if dupe_col else None
             dupe_col_name = (dupe_col or "").lower()
+            dupe_is_heuristic = False
             if dupe_col_name in ("isdupe", "dupe"):
                 try:
                     dupe = int(raw_dupe or 0)
@@ -443,11 +449,13 @@ class ContestLog:
                     # Dupe Checker page. Fall back to the same pts==0
                     # heuristic used when no dupe column exists at all.
                     dupe = 1 if pts == 0 else 0
+                    dupe_is_heuristic = True
             else:
                 # Last-resort fallback: 0-pt QSOs are dupes.
                 # NOTE: this is overridden by plugin.recalc_pts() for contests
                 # where 0 pts is valid (e.g. CQWW same-country contacts).
                 dupe = 1 if pts == 0 else 0
+                dupe_is_heuristic = True
 
             if pts == 0 and not dupe:
                 pts = 1
@@ -544,6 +552,7 @@ class ContestLog:
                 if continent_col else ""
 
             if call and t:
+                _dupe_is_heuristic.append(dupe_is_heuristic)
                 self.qsos.append({
                     "call":        call,
                     "band":        band,
@@ -589,6 +598,27 @@ class ContestLog:
         if self.qsos and not any(q["is_mult2"] == 1 for q in self.qsos):
             for q in self.qsos:
                 q["is_mult2"] = None
+
+        # ── Mode-scoped dupe correction (issue #8) ──────────────────────────
+        # For contests where a station may be worked once per band PER MODE
+        # (plugin.mode_scoped_dupes — e.g. ARRL 10M rule 5.2.1), the pts==0
+        # heuristic above can't distinguish "genuinely reworked on the same
+        # mode" from "reworked on a different mode, but the source's own
+        # dupe-checking didn't separate modes and zeroed Points anyway" (seen
+        # with not1mm-sourced ARRL 10M logs). Only the ambiguous heuristic-
+        # derived dupes are reconsidered here — an explicit IsDupe/Dupe/
+        # ContactType="D" signal from the source is always trusted as-is.
+        # First occurrence of a given (call, band, mode-bucket) is un-flagged
+        # so recalc_pts() below can fill in its correct point value; a
+        # genuine repeat on the *same* mode-bucket stays flagged.
+        if getattr(self.plugin, "mode_scoped_dupes", False) and self.qsos:
+            _seen_non_dupe = set()
+            for q, is_heuristic in zip(self.qsos, _dupe_is_heuristic):
+                key = (q["call"], q["band"], self.plugin.dupe_mode_key(q))
+                if is_heuristic and q["dupe"] and key not in _seen_non_dupe:
+                    q["dupe"] = 0
+                if not q["dupe"]:
+                    _seen_non_dupe.add(key)
 
         self.plugin.recalc_pts(self.qsos)
         logging.info("Loaded %d QSOs (plugin: %s)", len(self.qsos), self.plugin.display_name)

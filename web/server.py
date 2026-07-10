@@ -1188,6 +1188,7 @@ async def api_dupes():
                 "by_band": dict(by_band),
                 "by_call": dict(sorted(by_call.items(),
                                        key=lambda x: x[1], reverse=True)[:50]),
+                "rule_text": STATE.contest_log.plugin.dupe_rule_text,
             }
         except Exception:
             return {"by_band": {}, "by_call": {}}

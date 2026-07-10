@@ -22,6 +22,12 @@
       const el = document.getElementById('dupe-total');
       if (el) el.textContent = total;
 
+      // Per-contest dupe rule description (e.g. ARRL 10M's "once per band
+      // per mode" vs. the WPX-style "once per band" default) — see issue #8,
+      // this used to be hardcoded to WPX's wording regardless of contest.
+      const ruleEl = document.getElementById('dupe-rule-text');
+      if (ruleEl && data.rule_text) ruleEl.textContent = data.rule_text;
+
       if (total === 0) {
         // Clean log — show positive message
         renderCleanLog(byBand, byCall);

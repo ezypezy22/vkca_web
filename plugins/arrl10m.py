@@ -166,8 +166,7 @@ def _pts_for_mode(mode: str, call: str = "") -> int:
       Exception: CW QSO with a US Novice/Technician station signing /N or /T
       on 28.1–28.3 MHz = 8 pts (rule 5.1 bonus).
     """
-    m = (mode or "").upper()
-    if m == "CW":
+    if _is_cw(mode):
         # /N or /T suffix indicates Novice/Tech station (8-pt bonus)
         c = (call or "").upper()
         if c.endswith("/N") or c.endswith("/T"):
@@ -177,7 +176,12 @@ def _pts_for_mode(mode: str, call: str = "") -> int:
 
 
 def _is_cw(mode: str) -> bool:
-    return (mode or "").upper() == "CW"
+    # Prefix match, not equality: not1mm logs CW contacts as "CW-L"/"CW-U"
+    # (sideband-tagged submode) rather than plain "CW". An equality check
+    # silently priced every not1mm CW QSO as Phone (2 pts instead of 4) and
+    # bucketed it under the "PHONE" mode key for multiplier/dupe purposes —
+    # see issue #8.
+    return (mode or "").upper().startswith("CW")
 
 
 # WAE/DXCC-prefix-style callsign parser — reused pattern from other
@@ -438,6 +442,23 @@ class ARRL10MPlugin(ContestPlugin):
         already resolved, so they're unaffected.
         """
         return _classify_exchange(q)
+
+    # ── Dupe scope ──────────────────────────────────────────────────────────────
+    # Rule 5.2.1: a station may be worked once per band per MODE (once on
+    # Phone, once on CW) — not once per band overall. See issue #8: not1mm's
+    # own dupe-checking doesn't appear to make this distinction and zeroes
+    # Points for a legitimate different-mode rework the same way it would
+    # for a genuine same-mode dupe, so ContestLog.load() needs this to
+    # un-flag the false positives before recalc_pts() runs.
+    mode_scoped_dupes = True
+
+    def dupe_mode_key(self, qso: dict) -> str:
+        return "CW" if _is_cw(qso.get("mode")) else "PHONE"
+
+    @property
+    def dupe_rule_text(self) -> str:
+        return ("Per rule 5.2.1: a station may be worked once per band PER MODE "
+                "(once on Phone, once on CW). Dupes score 0 pts and are not penalised.")
 
     # ── Exchange column hint ──────────────────────────────────────────────────
 

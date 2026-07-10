@@ -140,6 +140,36 @@ class ContestPlugin(ABC):
     def recalc_pts(self, qsos: list) -> None:
         pass
 
+    # True for contests where a station may legitimately be worked once per
+    # band PER MODE (e.g. ARRL 10M rule 5.2.1: once per phone, once per CW)
+    # rather than once per band overall (the WPX-style default every other
+    # plugin here assumes). When True, ContestLog.load() cross-checks the
+    # source log's own zero-points-implies-dupe signal against per-
+    # (call, band, dupe_mode_key) history before trusting it — needed
+    # because not1mm's own dupe-checking is not known to make this
+    # distinction, and will zero out Points for a legitimate different-mode
+    # rework just as it would for a genuine same-mode dupe.
+    mode_scoped_dupes: bool = False
+
+    def dupe_mode_key(self, qso: dict) -> str:
+        """Mode bucket used for the mode_scoped_dupes check above. Only
+        consulted when mode_scoped_dupes is True — override to reuse
+        whatever CW/Phone/Digital classifier the plugin already has for
+        scoring/multipliers, so dupe-scoping agrees with them (e.g. so
+        "CW", "CW-L", "CW-U" all land in the same bucket rather than being
+        treated as different modes)."""
+        return str(qso.get("mode") or "").strip().upper()
+
+    @property
+    def dupe_rule_text(self) -> str:
+        """One-line rule description shown on the Dupes tab. Generic
+        default rather than any specific contest's name — this used to be
+        hardcoded to WPX's wording regardless of the active contest (see
+        issue #8), which read as flatly wrong for anything else. Override
+        per-plugin where the actual rule differs (e.g. mode_scoped_dupes
+        contests like ARRL 10M)."""
+        return "A station may be worked once per band. Dupes score 0 pts and are not penalised."
+
     def post_snapshot(self, snap: dict, qsos: list) -> None:
         """
         Called by ContestLog.compute_snapshot() after the standard calculation.
