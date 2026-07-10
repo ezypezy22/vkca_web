@@ -2824,6 +2824,32 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
         def _valid_dim(v, lo, hi):
             return isinstance(v, (int, float)) and lo <= v <= hi
 
+        def _matches_monitor_bounds(w, h):
+            """A saved "windowed" size that's within a few pixels of some
+            connected monitor's full width AND height is corrupt, not a
+            real user-resized window: seen in practice after an earlier
+            build let a Linux window get latched at full-monitor size by
+            the WM's edge-tiling/snap-assist (see toggle_maximize()) while
+            this app's own _maximized flag still read False, so
+            _save_window_geometry() saved that stuck full-monitor size as
+            the plain windowed geometry on close. Every subsequent
+            "restore" then correctly returned to that already-fullscreen-
+            looking size, forever, which is indistinguishable from the
+            original bug to the user even once the toggle itself works."""
+            try:
+                for s in webview.screens:
+                    if w >= s.width - 5 and h >= s.height - 5:
+                        return True
+            except Exception:
+                pass
+            return False
+
+        _saved_w, _saved_h = _saved_geom.get("width"), _saved_geom.get("height")
+        if (_valid_dim(_saved_w, _MIN_W, 10000) and _valid_dim(_saved_h, _MIN_H, 10000)
+                and _matches_monitor_bounds(_saved_w, _saved_h)):
+            log.info("Discarding saved window geometry %sx%s — matches a monitor's full bounds", _saved_w, _saved_h)
+            _saved_geom = {k: v for k, v in _saved_geom.items() if k not in ("width", "height")}
+
         _init_w = int(_saved_geom["width"]) if _valid_dim(_saved_geom.get("width"), _MIN_W, 10000) else 1400
         _init_h = int(_saved_geom["height"]) if _valid_dim(_saved_geom.get("height"), _MIN_H, 10000) else 860
         _init_x = _saved_geom.get("x")
