@@ -2986,6 +2986,34 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 except Exception:
                     log.exception("_reset_gravity: set_gravity() failed")
 
+        def _move_resize_window(x, y, w, h):
+            """vkca_errors.log from a real repro showed why doing this as two
+            sequential calls (either order) can't work: moving to the
+            *target* (x, y) BEFORE resizing means the window is still its
+            OLD, much larger size at that moment — e.g. moving a still-
+            fullscreen-sized window to a small windowed position would hang
+            most of it off the right/bottom edge of the monitor, and Muffin
+            was observed silently refusing that move outright, leaving the
+            window sitting at its old (on-screen) position instead. The
+            other order (resize before move) has the opposite problem: the
+            window transiently has the NEW size at its OLD position, which
+            can overlap a monitor edge and retrigger Muffin's edge-tiling/
+            snap-assist (see toggle_maximize() below) before the move ever
+            runs. Gdk.Window.move_resize() sets both in a single request —
+            the WM never sees an intermediate wrong-size/wrong-position
+            state at all, avoiding both failure modes. Falls back to the
+            separate move()+resize() calls if unavailable/non-Linux."""
+            if sys.platform.startswith("linux") and getattr(window, "native", None) is not None:
+                try:
+                    gdk_win = window.native.get_window()
+                    if gdk_win is not None:
+                        gdk_win.move_resize(int(x), int(y), int(w), int(h))
+                        return
+                except Exception:
+                    log.exception("_move_resize_window: Gdk move_resize failed, falling back")
+            _move_window(x, y)
+            window.resize(w, h)
+
         class _WindowApi:
             def minimize(self):
                 window.minimize()
@@ -3029,18 +3057,14 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                         h -= 1
                     log.info("toggle_maximize: maximizing — pre_geom=%s target=%s", _pre_max_geom, (x, y, w, h))
                     _reset_gravity()
-                    _move_window(x, y)
-                    log.info("toggle_maximize: after move — actual=%s", (window.x, window.y))
-                    window.resize(w, h)
-                    log.info("toggle_maximize: after resize — actual=%s", (window.x, window.y, window.width, window.height))
+                    _move_resize_window(x, y, w, h)
+                    log.info("toggle_maximize: after move_resize — actual=%s", (window.x, window.y, window.width, window.height))
                 elif _pre_max_geom:
                     x, y, w, h = _pre_max_geom
                     log.info("toggle_maximize: restoring — target=%s", (x, y, w, h))
                     _reset_gravity()
-                    _move_window(x, y)
-                    log.info("toggle_maximize: after move — actual=%s", (window.x, window.y))
-                    window.resize(w, h)
-                    log.info("toggle_maximize: after resize — actual=%s", (window.x, window.y, window.width, window.height))
+                    _move_resize_window(x, y, w, h)
+                    log.info("toggle_maximize: after move_resize — actual=%s", (window.x, window.y, window.width, window.height))
                 _maximized = not _maximized
                 return _maximized
 
