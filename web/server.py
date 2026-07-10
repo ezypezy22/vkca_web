@@ -2982,8 +2982,9 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 try:
                     from gi.repository import Gdk
                     window.native.set_gravity(Gdk.Gravity.NORTH_WEST)
+                    log.info("_reset_gravity: set_gravity(NORTH_WEST) succeeded")
                 except Exception:
-                    pass
+                    log.exception("_reset_gravity: set_gravity() failed")
 
         class _WindowApi:
             def minimize(self):
@@ -3029,13 +3030,17 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                     log.info("toggle_maximize: maximizing — pre_geom=%s target=%s", _pre_max_geom, (x, y, w, h))
                     _reset_gravity()
                     _move_window(x, y)
+                    log.info("toggle_maximize: after move — actual=%s", (window.x, window.y))
                     window.resize(w, h)
+                    log.info("toggle_maximize: after resize — actual=%s", (window.x, window.y, window.width, window.height))
                 elif _pre_max_geom:
                     x, y, w, h = _pre_max_geom
                     log.info("toggle_maximize: restoring — target=%s", (x, y, w, h))
                     _reset_gravity()
                     _move_window(x, y)
+                    log.info("toggle_maximize: after move — actual=%s", (window.x, window.y))
                     window.resize(w, h)
+                    log.info("toggle_maximize: after resize — actual=%s", (window.x, window.y, window.width, window.height))
                 _maximized = not _maximized
                 return _maximized
 
