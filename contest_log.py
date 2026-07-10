@@ -788,9 +788,18 @@ class ContestLog:
                 sessions[sn].append(q)
 
         num_sessions = max(sessions.keys()) + 1 if sessions else 1
-        cum_primary   = set()
-        cum_secondary = set()
+        # Cross-session running set + accumulated QSO list — same contract
+        # sparkline_data() below already uses via plugin.sparkline_mults()/
+        # running_score_for_sparkline(). This function used to reimplement
+        # multiplier counting inline instead of calling the plugin at all
+        # (hardcoded to the is_mult1/is_mult2-flag shape), which silently
+        # went permanently to zero for any contest whose flags get nulled
+        # out by the not1mm sanity check above (e.g. ARRL 10M — issue #9)
+        # since it had no equivalent fallback to _classify_exchange()-based
+        # counting the way ARRL10MPlugin.sparkline_mults() does.
+        seen_mults = set()
         running_cum_pts = 0   # accumulated to avoid O(n²) re-sum each session
+        qsos_so_far: list = []
         result = []
 
         for sn in range(num_sessions):
@@ -807,33 +816,21 @@ class ContestLog:
                 h = q["time"].replace(minute=0, second=0, microsecond=0)
                 hour_buckets[h] = hour_buckets.get(h, 0) + 1
 
-            new_primary = set()
-            new_secondary = set()
-            for q in qs:
-                if q.get("is_mult1") == 1 and q["mult1"]:
-                    key = (q["mult1"], q["band"], q["mode"])
-                    if key not in cum_primary:
-                        new_primary.add(key)
-                if q.get("is_mult2") == 1 and q.get("cqz"):
-                    key = (q["cqz"], q["band"], q["mode"])
-                    if key not in cum_secondary:
-                        new_secondary.add(key)
-            cum_primary   |= new_primary
-            cum_secondary |= new_secondary
-            total_cum_mults = len(cum_primary) + len(cum_secondary)
+            new_mults_count = sum(self.plugin.sparkline_mults(q, seen_mults) for q in qs)
+            total_cum_mults = len(seen_mults)
 
             session_pts      = sum(q["pts"] for q in qs)
             running_cum_pts += session_pts   # O(1) accumulation replaces O(n²) re-sum
-            cum_pts          = running_cum_pts
+            qsos_so_far.extend(qs)
 
             result.append({
                 "label":         self.session_label(sn, cs),
                 "session":       sn + 1,
                 "qsos":          len(qs),
                 "pts":           session_pts,
-                "new_mults":     len(new_primary) + len(new_secondary),
+                "new_mults":     new_mults_count,
                 "cum_mults":     total_cum_mults,
-                "running_score": cum_pts * total_cum_mults,
+                "running_score": self.plugin.running_score_for_sparkline(qsos_so_far),
                 "by_hour":       sorted(hour_buckets.items()),
                 "start":         sess_start,
                 "end":           sess_end,
