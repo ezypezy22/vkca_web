@@ -13,5 +13,7 @@
 bc3c63e Fix ARRL10M multiplier parsing to handle RST/serial glued onto exchange (issue #7)
 e2fa128 Fix Bands tab showing stale data from the previous contest (issue #7)
 a701e42 Fix Report Issue dialog not submitting under pywebview (issue #7)
+df89a8c Fix dupe detection blind spot for not1mm-sourced logs (issue #7)
+f02a90a Fix ITU/HQ/multiplier-by-mode data loss for not1mm-sourced logs (issue #7)
 68aa4f1 Fix live-rank lookup only ever checking one COSB contest (fixes #5)
 7eb232d Show pre-contest countdown instead of "No contest loaded"
