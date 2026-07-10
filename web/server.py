@@ -2949,6 +2949,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                     _move_window(x, y)
                     window.resize(w, h)
                 elif _pre_max_geom:
+                    x, y, w, h = _pre_max_geom
                     # On GNOME/Mutter (and some other Linux WMs), resizing a
                     # frameless window to exactly fill a monitor's bounds
                     # gets auto-detected as a WM-level maximize, separate
@@ -2963,9 +2964,32 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                             window.native.unmaximize()
                         except Exception:
                             pass
-                    x, y, w, h = _pre_max_geom
-                    _move_window(x, y)
-                    window.resize(w, h)
+                        try:
+                            # unmaximize() above only *requests* the change —
+                            # GDK doesn't clear its internal maximized flag
+                            # until the window manager round-trips back, and
+                            # gtk_window_resize() is documented to silently
+                            # no-op while that flag is still set. Calling
+                            # resize() inline here (no delay) hits exactly
+                            # that: the window visibly loses its maximized
+                            # decorations/state but stays at the maximized
+                            # size. Deferring the move/resize a beat through
+                            # the GLib main loop gives the round-trip time to
+                            # land first.
+                            from gi.repository import GLib
+
+                            def _restore_geometry(_x=x, _y=y, _w=w, _h=h):
+                                _move_window(_x, _y)
+                                window.resize(_w, _h)
+                                return False
+
+                            GLib.timeout_add(60, _restore_geometry)
+                        except Exception:
+                            _move_window(x, y)
+                            window.resize(w, h)
+                    else:
+                        _move_window(x, y)
+                        window.resize(w, h)
                 _maximized = not _maximized
                 return _maximized
 
