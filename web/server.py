@@ -2938,6 +2938,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
 
             def toggle_maximize(self):
                 nonlocal _maximized, _pre_max_geom
+                _is_linux = sys.platform.startswith("linux") and getattr(window, "native", None) is not None
                 if not _maximized:
                     _pre_max_geom = (window.x, window.y, window.width, window.height)
                     screen = _current_screen()
@@ -2946,10 +2947,19 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                         x, y, w, h = work.X, work.Y, work.Width, work.Height
                     else:
                         x, y, w, h = screen.x, screen.y, screen.width, screen.height
+                    log.info(
+                        "toggle_maximize: maximizing — pre_geom=%s target=%s screen=%s is_linux_native=%s",
+                        _pre_max_geom, (x, y, w, h), screen, _is_linux,
+                    )
                     _move_window(x, y)
                     window.resize(w, h)
                 elif _pre_max_geom:
                     x, y, w, h = _pre_max_geom
+                    log.info(
+                        "toggle_maximize: restoring — target=%s is_linux_native=%s gtk_is_maximized=%s",
+                        (x, y, w, h), _is_linux,
+                        (window.native.is_maximized() if _is_linux else None),
+                    )
                     # On GNOME/Mutter (and some other Linux WMs), resizing a
                     # frameless window to exactly fill a monitor's bounds
                     # gets auto-detected as a WM-level maximize, separate
@@ -2959,11 +2969,13 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                     # maximized state is explicitly cleared — hence the
                     # window appearing stuck "full screen" with no way back
                     # to windowed. window.native.unmaximize() clears it.
-                    if sys.platform.startswith("linux") and getattr(window, "native", None) is not None:
+                    if _is_linux:
                         try:
                             window.native.unmaximize()
+                            log.info("toggle_maximize: unmaximize() called, gtk_is_maximized now=%s",
+                                      window.native.is_maximized())
                         except Exception:
-                            pass
+                            log.exception("toggle_maximize: native.unmaximize() failed")
                         try:
                             # unmaximize() above only *requests* the change —
                             # GDK doesn't clear its internal maximized flag
@@ -2979,12 +2991,24 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                             from gi.repository import GLib
 
                             def _restore_geometry(_x=x, _y=y, _w=w, _h=h):
+                                log.info(
+                                    "toggle_maximize: deferred restore firing — gtk_is_maximized=%s "
+                                    "before=%s target=%s",
+                                    window.native.is_maximized(),
+                                    (window.x, window.y, window.width, window.height),
+                                    (_x, _y, _w, _h),
+                                )
                                 _move_window(_x, _y)
                                 window.resize(_w, _h)
+                                log.info(
+                                    "toggle_maximize: deferred restore done — after=%s",
+                                    (window.x, window.y, window.width, window.height),
+                                )
                                 return False
 
                             GLib.timeout_add(60, _restore_geometry)
                         except Exception:
+                            log.exception("toggle_maximize: deferred restore setup failed, restoring inline")
                             _move_window(x, y)
                             window.resize(w, h)
                     else:
