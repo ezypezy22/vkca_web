@@ -3210,7 +3210,15 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
         # webview.start() blocks here until the window closes.
         # _on_closed will call os._exit(0) so execution never returns here
         # under normal circumstances.
-        webview.start(_on_loaded, debug=False)
+        # private_mode defaults to True in pywebview — per its own docstring,
+        # "cookies and local storage are not preserved" — which silently
+        # wiped every localStorage-based preference (theme, tile layout,
+        # zoom, Pace tab's target score, etc.) on each app restart. storage_path
+        # points the persistent profile at the same per-user app-data folder
+        # already used for settings.json/logs (see _app_data_dir()), rather
+        # than pywebview's default location.
+        webview.start(_on_loaded, debug=False, private_mode=False,
+                       storage_path=str(_app_data_dir() / "webview_storage"))
 
         # Fallback for non-PyWebView / browser-direct mode
         server.should_exit = True
