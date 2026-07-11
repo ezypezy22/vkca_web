@@ -1065,6 +1065,17 @@ Users are responsible for verifying all information against N1MM before making d
 
     sel.addEventListener('change', () => applyTheme(sel.value));
 
+    // Cross-window sync: the 'storage' event fires in every other same-origin
+    // window/tab (never the one that made the change) — this is what keeps
+    // popped-out windows (HUD, popout tiles) in step when the theme is
+    // changed from the main window, since they don't share the same document.
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'vkca_theme' && e.newValue) {
+        sel.value = e.newValue;
+        applyTheme(e.newValue);
+      }
+    });
+
     // Restore saved theme (or default to Dark on first run)
     try {
       const saved = localStorage.getItem('vkca_theme') || 'Dark (Default)';
