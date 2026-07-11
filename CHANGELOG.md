@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.7.9
+
+### Enhancements
+
+8ceb29d Add WRTC 2026 worked-station tracking to the IARU plugin
+
 ## 26.7.8
 
 ### Enhancements
