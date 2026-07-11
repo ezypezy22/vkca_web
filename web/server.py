@@ -2822,9 +2822,21 @@ def _find_free_port() -> int:
     treats as a brand-new site with empty storage even with private_mode=False
     and a persistent storage_path (see launch_webview()). Falls back to a
     random free port only if the preferred one is actually taken (e.g. a
-    second instance already running), rather than failing outright."""
+    second instance already running), rather than failing outright.
+
+    SO_REUSEADDR matters here: this app hard-exits via os._exit() on close
+    (see _start_shutdown()), skipping the graceful connection teardown that
+    would normally let the OS release the port immediately. That leaves the
+    previous session's connections lingering in TIME_WAIT, which blocks a
+    plain bind() on the same port for up to a minute — exactly the
+    close-then-relaunch window a user is likely to hit. Without this, a
+    quick restart silently lands on a random fallback port instead, which
+    is a different origin to the embedded browser and starts with empty
+    localStorage — i.e. it looks like the theme/zoom/tile-layout prefs this
+    fixed port exists to preserve just got wiped."""
     with socket.socket() as s:
         try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind(("127.0.0.1", _PREFERRED_PORT))
             return _PREFERRED_PORT
         except OSError:
