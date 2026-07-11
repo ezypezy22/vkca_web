@@ -2774,7 +2774,23 @@ async def _poll_loop():
 # ── PyWebView launcher ────────────────────────────────────────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
 
+_PREFERRED_PORT = 58631   # arbitrary, in the dynamic/private range (49152-65535)
+
 def _find_free_port() -> int:
+    """Prefer a fixed port so the pywebview window's origin — and therefore
+    every localStorage-backed preference (theme, zoom, tile layout, the Pace
+    tab's target score, etc.) — stays the same across app restarts; a
+    different port each launch means a different origin, which WebView2
+    treats as a brand-new site with empty storage even with private_mode=False
+    and a persistent storage_path (see launch_webview()). Falls back to a
+    random free port only if the preferred one is actually taken (e.g. a
+    second instance already running), rather than failing outright."""
+    with socket.socket() as s:
+        try:
+            s.bind(("127.0.0.1", _PREFERRED_PORT))
+            return _PREFERRED_PORT
+        except OSError:
+            pass
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
