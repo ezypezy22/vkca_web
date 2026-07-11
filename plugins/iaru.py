@@ -54,6 +54,13 @@ for WRTC logs as-is. If WRTC's own scoring rules ever need to diverge
 from the IARU formula above, that would need a manually-toggled mode
 here rather than a separate auto-detected plugin — this hasn't been
 verified against WRTC's official rules, only assumed to match IARU.
+
+WRTC 2026 station tracking: WRTC 2026 (UK) issued 50 special 2x1
+competitor callsigns (MB1A-MB7W, see _WRTC_2026_CALLS below). These are
+ordinary UK stations for IARU scoring purposes — zone 27, ordinary QSO
+points, no HQ/official bonus — so no scoring logic keys off them. The
+"WRTC WORKED" gauge is a pure side-tracker (how many of the 50 teams has
+this log worked, any band/mode) with no effect on score or multipliers.
 """
 
 from __future__ import annotations
@@ -164,6 +171,30 @@ _ALL_ITU_ZONES: list[int] = list(range(1, 76))
 
 # ── Standard IARU/HF band set (display order, low → high) ───────────────────
 _IARU_BAND_ORDER: list[str] = ["160M", "80M", "40M", "20M", "15M", "10M"]
+
+# ── WRTC 2026 competitor callsigns (side-tracker only, see WRTC note above) ──
+_WRTC_2026_CALLS: frozenset[str] = frozenset({
+    "MB1A", "MB1I", "MB1N", "MB1S", "MB1T", "MB2A",
+    "MB2D", "MB2H", "MB2M", "MB2N", "MB2R", "MB2S",
+    "MB2U", "MB3B", "MB3D", "MB3F", "MB3G", "MB3H",
+    "MB3K", "MB3L", "MB3M", "MB3R", "MB3V", "MB3W",
+    "MB4C", "MB4F", "MB4G", "MB4L", "MB4O", "MB4P",
+    "MB4V", "MB4W", "MB4X", "MB4Z", "MB5C", "MB5J",
+    "MB5O", "MB5P", "MB5Q", "MB5X", "MB5Y", "MB5Z", "MB7D",
+    "MB7F", "MB7G", "MB7K", "MB7L", "MB7M", "MB7V", "MB7W",
+})
+
+
+def _worked_wrtc_calls(qsos: list) -> set:
+    """Unique WRTC 2026 callsigns worked, any band/mode. Dupes still count
+    as "worked" here — a repeat contact is still evidence the team was
+    reached, even though it wouldn't add a new band multiplier."""
+    result: set = set()
+    for q in qsos:
+        call = str(q.get("call") or "").strip().upper()
+        if call in _WRTC_2026_CALLS:
+            result.add(call)
+    return result
 
 
 def _is_hq_or_official(mult1_val) -> bool:
@@ -558,6 +589,7 @@ class IARUPlugin(ContestPlugin):
 
         snap["band_mults"] = zone_band_cnt
         snap["zone_cnt"]   = hq_band_cnt   # reused slot: HQ/official band-mults
+        snap["wrtc_worked"] = len(_worked_wrtc_calls(qsos))
 
         import math
         zone_max = max(int(math.ceil(zone_band_cnt * 1.25 / 50) * 50), 50)
@@ -618,6 +650,15 @@ class IARUPlugin(ContestPlugin):
                          "Unique ITU zones worked on any band, expressed\n"
                          "as a percentage of all 75 ITU zones.\n"
                          "100% = worked at least one station in every zone."
+                     )),
+            GaugeDef("WRTC WORKED", "wrtc_worked", len(_WRTC_2026_CALLS), ACCENT2(), "{v}",
+                     tooltip=(
+                         "WRTC 2026 STATIONS WORKED\n"
+                         "Unique WRTC 2026 competitor callsigns (MB1A-MB7W)\n"
+                         "worked, any band/mode, out of 50 total teams.\n"
+                         "Not an official IARU multiplier — WRTC entrants\n"
+                         "score as ordinary UK/zone-27 contacts. Side\n"
+                         "tracker only, no effect on score."
                      )),
         ]
 

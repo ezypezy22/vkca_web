@@ -4946,7 +4946,11 @@ class App(tk.Toplevel):
                 self._draw_float_panel(key)
             return
 
-        n_cols   = 7
+        # Most plugins expose exactly 7 gauges, but a plugin may add extra
+        # ones (e.g. IARU's WRTC-worked side tracker) — size the grid to
+        # whatever gauge_defs() actually returns so `gs[row, i]` never
+        # indexes past the gridspec's column count.
+        n_cols   = max(7, len(p.gauge_defs(d, total_mults)))
         n_rows   = len(vis_rows)
         ratios   = [r for _, r in vis_rows]
         row_keys = [k for k, _ in vis_rows]
