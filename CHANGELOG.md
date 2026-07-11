@@ -1,5 +1,16 @@
 # Changelog
 
+## 26.7.10
+
+### Enhancements
+
+96011a4 Add operator efficiency, live countdown, and frameless drag/close to the mini HUD (issue #10)
+8b78ced Sync theme changes live across popped-out windows
+
+### Bugfixes
+
+a23102e Fix persistent settings being wiped on every app restart
+
 ## 26.7.9
 
 ### Enhancements
