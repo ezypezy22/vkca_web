@@ -868,13 +868,37 @@ async def api_hud():
 
     def _open():
         import webview as _wv
+
+        # Minimal counterpart to launch_webview()'s _WindowApi — just enough
+        # to drag and close this one tiny bar (no minimize/maximize/resize,
+        # it's a fixed-size glanceable window). Kept separate from the main
+        # window's API/closure entirely: this is a different pywebview window
+        # with its own js_api, wired up client-side in app.js's HUD-frame IIFE.
+        class _HudApi:
+            def get_position(self):
+                return {"x": win.x, "y": win.y}
+
+            def move_to(self, x, y):
+                # Same Linux multi-monitor-offset bypass as the main window's
+                # _move_window() — see its docstring for why native.move() is
+                # needed there instead of window.move().
+                if sys.platform.startswith("linux") and getattr(win, "native", None) is not None:
+                    win.native.move(int(x), int(y))
+                else:
+                    win.move(int(x), int(y))
+
+            def close(self):
+                win.destroy()
+
         win = _wv.create_window(
             title="VK Contest Analyzer — HUD",
             url=f"{STATE._base_url}/hud",
-            width=700, height=110,
+            width=780, height=110,
             min_size=(360, 76),
             background_color="#0d1117",
             on_top=True,
+            frameless=True,
+            js_api=_HudApi(),
         )
         STATE._hud_window = win
         win.events.closed += lambda: setattr(STATE, "_hud_window", None)

@@ -333,6 +333,62 @@ Users are responsible for verifying all information against N1MM before making d
     else window.addEventListener('pywebviewready', wireWindowControls);
   })();
 
+  // ── Frameless Mini HUD window (desktop app only) ────────────────────────────
+  // The HUD is a separate, tiny pywebview window with its own dedicated
+  // _HudApi (see /api/hud in server.py) — deliberately not the same api as
+  // the main window's wireWindowControls() above (gated on api.minimize,
+  // which _HudApi has no equivalent of). Drag+close only: no minimize/
+  // maximize/resize for a fixed-size glanceable bar.
+  (function () {
+    if (location.pathname !== '/hud') return;
+
+    document.getElementById('hud-close')?.addEventListener('click', () => {
+      const api = window.pywebview && window.pywebview.api;
+      if (api && api.close) api.close();
+      else window.close();   // browser-tab fallback (see btn-hud in overview.js)
+    });
+
+    // Same get-snapshot-then-accumulate-deltas drag pattern as the main
+    // window's wireDragRegions above (see its comments for why), thinned
+    // down since there's no maximize state or drag-region class here — the
+    // whole bar is draggable except the close button.
+    const DRAG_SEND_INTERVAL_MS = 33;
+    function wireHudDrag(api) {
+      if (!api || !api.move_to) return;   // browser-tab fallback — OS handles dragging
+      const bar = document.getElementById('hud-bar'); if (!bar) return;
+      bar.addEventListener('mousedown', (e) => {
+        if (e.button !== 0 || e.target.closest('#hud-close')) return;
+        e.preventDefault();
+        let lastX = e.screenX, lastY = e.screenY;
+        api.get_position().then(({x, y}) => {
+          let curX = x, curY = y, pendingDx = 0, pendingDy = 0;
+          const timer = setInterval(apply, DRAG_SEND_INTERVAL_MS);
+          function apply() {
+            if (!pendingDx && !pendingDy) return;
+            curX += pendingDx; curY += pendingDy;
+            pendingDx = 0; pendingDy = 0;
+            api.move_to(curX, curY);
+          }
+          function onMove(ev) {
+            pendingDx += ev.screenX - lastX;
+            pendingDy += ev.screenY - lastY;
+            lastX = ev.screenX; lastY = ev.screenY;
+          }
+          function onUp() {
+            clearInterval(timer);
+            apply();
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+          }
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        });
+      });
+    }
+    if (window.pywebview) wireHudDrag(window.pywebview.api);
+    else window.addEventListener('pywebviewready', () => wireHudDrag(window.pywebview.api));
+  })();
+
   // ── Tab routing ───────────────────────────────────────────────────────────
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {

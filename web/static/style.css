@@ -196,15 +196,22 @@ body.has-session-bar #content{top:calc(var(--titlebar-h) + var(--sessbar-h) + va
 
 /* ── Mini HUD (rendered only in its own popped-out window, /hud) ────────── */
 #hud-bar{display:none;align-items:center;justify-content:space-around;
-  position:fixed;inset:0;background:var(--bg);
+  position:fixed;inset:0;background:var(--bg);cursor:grab;
   font-family:var(--font-mono);padding:0 14px;}
+#hud-bar:active{cursor:grabbing;}
 .hud-item{display:flex;flex-direction:column;align-items:center;gap:4px;}
 .hud-label{font-size:0.8em;color:var(--muted);letter-spacing:.08em;}
 .hud-val{font-size:2.3em;font-weight:bold;color:var(--accent);}
+#hud-close{display:none;position:absolute;top:4px;right:6px;z-index:1;
+  width:20px;height:20px;line-height:18px;padding:0;text-align:center;
+  background:transparent;border:1px solid var(--bg3);border-radius:4px;
+  color:var(--muted);font-size:0.8em;cursor:pointer;}
+#hud-close:hover{background:var(--red);border-color:var(--red);color:#fff;}
 html.hud-mode body{padding:0;overflow:hidden;}
 html.hud-mode #titlebar,html.hud-mode #session-bar,html.hud-mode #tabbar,
 html.hud-mode #content{display:none!important;}
 html.hud-mode #hud-bar{display:flex;}
+html.hud-mode #hud-close{display:block;}
 
 /* ── Drag-to-reorder tiles ───────────────────────────────────────────────── */
 .reorderable-tile{cursor:grab;}

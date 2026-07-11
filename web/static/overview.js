@@ -787,6 +787,16 @@
     return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
   }
 
+  // Same breakdown as fmtElapsed, but keeps the seconds digit even past the
+  // 1-hour mark — used for the HUD countdown so it visibly ticks every
+  // second instead of appearing to sit still for up to 59s at a time.
+  function fmtCountdown(totalSec){
+    totalSec=Math.max(0,Math.floor(totalSec));
+    const h=Math.floor(totalSec/3600), m=Math.floor((totalSec%3600)/60), s=totalSec%60;
+    if (h>0) return `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
   function tickSinceLastQso(){
     const valEl=document.getElementById('eat-since-last');
     const subEl=document.getElementById('eat-since-sub');
@@ -987,19 +997,43 @@
   // Path-based, not query-string — see index.html bootstrap script for why.
   const HUD_MODE=location.pathname==='/hud';
 
+  // REMAIN ticks down live between snapshots (same "absolute target + local
+  // 1s interval" approach as tickSinceLastQso above) rather than only jumping
+  // in whole-minute steps whenever a snapshot happens to push in.
+  let _hudState=null;    // session_status.state from the most recent snapshot
+  let _hudTarget=null;   // Date — contest start (state 'pre') or end (state 'live')
+
   function updateHud(snap){
     const pb=snap?.personal_bests||{};
     const ss=snap?.session_status||{};
     const scoreEl=document.getElementById('hud-score');
     const rateEl =document.getElementById('hud-rate');
-    const remEl  =document.getElementById('hud-remain');
+    const effEl  =document.getElementById('hud-eff');
     if (scoreEl) scoreEl.textContent=(snap?.score||0).toLocaleString('en-AU');
     if (rateEl)  rateEl.textContent=(pb.current_hour_rate||0)+'/hr';
-    if (remEl){
-      const rem=Math.round(ss.total_remaining_mins??ss.remaining_mins??0);
-      remEl.textContent = ss.state ? rem+'m' : '—';
+    if (effEl){
+      // Same on-air efficiency formula as the Fatigue tile/tab: most-active
+      // operator's on-air minutes as a % of their first-to-last-QSO span.
+      const top=(snap?.operator_times||[])[0];
+      const eff=top?.span_minutes>0 ? Math.round(top.on_minutes/top.span_minutes*100) : null;
+      effEl.textContent = eff==null ? '—' : eff+'%';
+      effEl.style.color = eff==null ? T.muted : (eff>=70?T.green:eff>=40?T.accent3:T.red);
     }
+    _hudState=ss.state||null;
+    const targetDt = ss.state==='pre' ? ss.start_dt : ss.state==='live' ? ss.end_dt : null;
+    _hudTarget = targetDt ? new Date(targetDt+'Z') : null;   // naive UTC, like _lastQsoTime above
+    tickHudRemain();
   }
+
+  function tickHudRemain(){
+    const remEl=document.getElementById('hud-remain'); if(!remEl) return;
+    if (_hudState==='over'){ remEl.textContent='0:00'; remEl.style.color=T.muted; return; }
+    if (!_hudState || !_hudTarget){ remEl.textContent='—'; remEl.style.color=T.muted; return; }
+    const secs=(_hudTarget.getTime()-Date.now())/1000;
+    remEl.textContent=fmtCountdown(secs);
+    remEl.style.color = secs<600?T.red:secs<1800?T.accent3:T.accent;
+  }
+  setInterval(tickHudRemain,1000);
 
   document.getElementById('btn-hud')?.addEventListener('click', async ()=>{
     try {
@@ -1007,7 +1041,7 @@
       const data=await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error||'failed');
     } catch {
-      window.open('/hud','vkca_hud','width=620,height=70,resizable=yes');
+      window.open('/hud','vkca_hud','width=760,height=70,resizable=yes');
     }
   });
 
