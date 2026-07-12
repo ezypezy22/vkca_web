@@ -1,0 +1,68 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue-triage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Triage issue with Claude
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: '--max-turns 8 --allowedTools "Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Bash(gh issue list:*),Bash(gh label list:*)"'
+          prompt: |
+            You are triaging a newly opened GitHub issue on ${{ github.repository }},
+            issue number ${{ github.event.issue.number }}. This repo is VK Contest
+            Analyzer, a ham radio contest-logging companion app (N1MM log analysis,
+            DX cluster, scoring plugins per contest).
+
+            Steps:
+            1. Run `gh issue view ${{ github.event.issue.number }} --json title,body,author,labels`
+               to read the issue.
+            2. Run `gh label list` to see the exact set of labels available. Only use
+               labels that already exist — never invent new ones.
+            3. Classify the issue and apply the single best-fit type label from:
+               bug, enhancement, question, duplicate.
+               - Use `duplicate` only if you find a clearly matching prior issue via
+                 `gh issue list --search "<keywords>" --state all --limit 10`; if so,
+                 mention the matching issue number in a short comment.
+               - Do not apply `invalid` or `wontfix` — those are maintainer-only
+                 judgment calls.
+            4. Apply any domain label that clearly fits (skip if none clearly fit):
+               - `n1mm-integration` — N1MM logger, .s3db files, log import/sync issues
+               - `scoring-plugin` — wrong score/multiplier/points for a specific contest
+                 (files under plugins/*.py)
+               - `external-integration` — DX cluster, QRZ lookup, or other external
+                 service/API issues
+               - `ui-theme` — visual/theme/color/layout issues
+               - `linux-appimage` — Linux packaging/AppImage issues
+               - `good first issue` — only if the fix is clearly small and self-contained
+            5. If the issue is missing information needed to act on it (e.g. a bug
+               report with no repro steps, no contest name, no log excerpt, or a vague
+               one-line description), add the `Awaiting Response` label and post one
+               short comment asking specifically for what's missing. Otherwise, do not
+               comment — labels alone are enough for a normal, well-formed issue.
+            6. Apply labels with `gh issue edit ${{ github.event.issue.number }} --add-label "label1,label2"`.
+
+            Be conservative: when the right label isn't obvious, prefer applying fewer,
+            more confident labels over guessing. Never close the issue, never edit its
+            title or body, and never touch anything outside this one issue.
