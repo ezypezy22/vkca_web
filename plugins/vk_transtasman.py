@@ -3,16 +3,31 @@ plugins/vk_transtasman.py
 ─────────────────────────
 WIA VK Trans-Tasman Contest (VKTTRTTY / VKTTSSBCW).
 
-Contest rules (wia.org.au/members/contests/transtasman/):
+Written rules (wia.org.au/members/contests/transtasman/), verbatim:
   6 hours total: 0800–1400 UTC, 3 × 2-hour blocks.
-    Block 1: 0800–1000 UTC
-    Block 2: 1000–1200 UTC
-    Block 3: 1200–1400 UTC
-  Workable: VK and ZL (ZM) stations only. 1 point per QSO.
-  Dupe rule: DupeType 3 — same call workable once per block per band.
-  Multiplier: unique WPX prefixes per band PER BLOCK (open-ended, no fixed list).
-    A prefix on 40m in Block 1 and again in Block 2 counts as 2 multipliers.
-  Score: total valid QSO points × total prefix-band-block mults.
+  "Points are only awarded for valid contacts between VK and ZL stations."
+  "Every different Prefix used by VK or ZL stations is a valid multiplier
+  and credit can be claimed once per band per block."
+  Read literally, both points AND multipliers are VK/ZL-only, and
+  multipliers reset every 2-hour block.
+
+RESOLVED AGAINST N1MM'S OWN UDC CONFIG FILE (udc/VKTTRTTY.UDC, author
+VK4SN — 2026-07 issue #11 investigation), which is more authoritative than
+either the written rules text or one observed log, since it's N1MM's own
+declared scoring configuration:
+  - `ResetMultsEverySession = 0` — confirms multipliers do NOT reset per
+    block, contradicting the written rule. This plugin follows the UDC:
+    multipliers are unique (prefix, band) for the whole contest.
+  - `CountMultOnlyFor = AX, VI, VJ, VK, VL, ZL, ZM` — confirms multipliers
+    ARE restricted to workable stations, matching the written rule. A real
+    2025 VK4M log's IsMultiplier1 flags initially looked like they
+    contradicted this (non-VK/ZL station N9RV was credited as a
+    multiplier there), but reproducing it live in N1MM (a fresh N9RV QSO,
+    2026-07-12) confirmed that's a genuine N1MM bug — N1MM not correctly
+    enforcing its own declared CountMultOnlyFor — not intended behaviour
+    to replicate. This plugin follows the UDC's declared config instead.
+Net effect: same as the written rule for mult eligibility (VK/ZL-only),
+but no per-block reset. Points (recalc_pts) remain VK/ZL-only either way.
 
 UDC: VKTTRTTY.UDC (author VK4SN)
 """
@@ -58,21 +73,12 @@ def _wpx_prefix(call: str) -> str:
 
 _VKTT_WORKABLE_PREFIXES = frozenset({"AX", "VI", "VJ", "VK", "VL", "ZL", "ZM"})
 
-# Contest blocks (UTC hours, inclusive–exclusive)
-_BLOCKS = [(8, 10), (10, 12), (12, 14)]
-
-def _vktt_block(t) -> int:
-    """Return 0/1/2 for the QSO's block, or -1 if outside contest hours."""
-    if t is None:
-        return -1
-    h = t.hour
-    for i, (start, end) in enumerate(_BLOCKS):
-        if start <= h < end:
-            return i
-    return -1
-
 
 def _is_vktt_workable(call: str) -> bool:
+    """Eligibility for BOTH points and multipliers (VK/ZL/etc.) — matches
+    N1MM's own PointsPerContact and CountMultOnlyFor UDC config. See module
+    docstring for why this does NOT match N9RV-type multiplier credit seen
+    in one real log — that was a reproduced N1MM bug, not intended."""
     call = call.upper().strip()
     for pfx in _VKTT_WORKABLE_PREFIXES:
         if call.startswith(pfx):
@@ -83,9 +89,11 @@ def _is_vktt_workable(call: str) -> bool:
 class VKTransTasmanPlugin(ContestPlugin):
     """
     WIA VK Trans-Tasman Contest (VKTTRTTY / VKTTSSBCW).
-    6 hours: 0800–1400 UTC in 3 × 2-hour blocks.
-    Multipliers are unique WPX prefixes per band PER BLOCK — not just per band.
-    Score = total QSO points × total prefix-band-block multipliers.
+    6 hours: 0800–1400 UTC in 3 × 2-hour blocks (block structure affects
+    session/rate reporting only — per N1MM's own UDC config, multipliers do
+    NOT reset per block despite the written rule; see module docstring).
+    Multipliers are unique WPX prefixes per band, VK/ZL stations only.
+    Score = total QSO points (VK/ZL-only) × total prefix-band multipliers.
     """
 
     def identify(self, contest_name: str) -> bool:
@@ -167,45 +175,65 @@ class VKTransTasmanPlugin(ContestPlugin):
         return pts * total_mults if total_mults else pts
 
     def multipliers(self, qsos: list) -> MultResult:
-        # Multipliers are per-band PER BLOCK — a prefix on 40m in block 1
-        # and again on 40m in block 2 counts as two separate multipliers.
-        # We always derive from the QSO list directly rather than relying on
-        # N1MM's is_mult1 flag, since N1MM's per-block mult-reset behaviour
-        # may not align perfectly with this contest's block structure.
+        # Unique (prefix, band) pairs for the whole contest, VK/ZL stations
+        # only — matches N1MM's own UDC config (CountMultOnlyFor + no
+        # per-block reset), not one log's buggy live output. See module
+        # docstring.
         primary: set = set()
         for q in qsos:
             if q["dupe"]:
                 continue
             pfx = self.mult_of_qso(q)
             if pfx and _is_vktt_workable(q.get("call", "")):
-                block = _vktt_block(q.get("time"))
-                if block >= 0:
-                    primary.add((pfx, q["band"], block))
+                primary.add((pfx, q["band"]))
         return MultResult(primary, set(), "WPX MULTS", "")
 
     def worked_primary_mults(self, qsos: list) -> set:
-        # For display purposes (UI gauge "worked" count) use unique (pfx, band)
-        # pairs rather than the (pfx, band, block) triples used in scoring.
-        return {(self.mult_of_qso(q), q["band"]) for q in qsos
-                if not q["dupe"] and _is_vktt_workable(q.get("call", ""))
-                and self.mult_of_qso(q)}
+        # Same (pfx, band) pairs as multipliers() — kept as a separate method
+        # only because it's part of the ContestPlugin interface.
+        return self.multipliers(qsos).primary_mults
 
     def band_efficiency(self, qsos: list) -> list:
+        # Custom override (rather than the base class default) because mults
+        # here are WPX prefixes derived per-QSO rather than looked up via
+        # the base class's generic `mult1 in ml_set` check, which doesn't
+        # apply to VKTT's open-ended, computed-not-stored prefix mults.
         band_qsos  = defaultdict(int)
+        band_pts   = defaultdict(int)
         band_mults = defaultdict(set)
+        band_last  = {}
+        band_hours = defaultdict(lambda: defaultdict(int))
         for q in qsos:
-            if not q["dupe"]:
-                b = q["band"] or "?"
-                band_qsos[b] += 1
+            if q["dupe"]:
+                continue
+            b = q["band"] or "?"
+            band_qsos[b] += 1
+            band_pts[b]  += q.get("pts", 0) or 0
+            if _is_vktt_workable(q.get("call", "")):
                 pfx = self.mult_of_qso(q)
                 if pfx:
                     band_mults[b].add(pfx)
+            t = q.get("time")
+            if t is not None:
+                if b not in band_last or t > band_last[b]:
+                    band_last[b] = t
+                h_key = t.replace(minute=0, second=0, microsecond=0)
+                band_hours[b][h_key] += 1
         result = []
         for b in band_qsos:
-            qn = band_qsos[b]
-            mn = len(band_mults[b])
-            result.append({"band": b, "qsos": qn, "new_shires": mn,
-                           "efficiency": mn / qn if qn else 0})
+            qn   = band_qsos[b]
+            mn   = len(band_mults[b])
+            best = max(band_hours[b].values()) if band_hours[b] else 0
+            last = band_last.get(b)
+            result.append({
+                "band":           b,
+                "qsos":           qn,
+                "pts":            band_pts[b],
+                "new_shires":     mn,
+                "efficiency":     mn / qn if qn else 0,
+                "best_hour_rate": best,
+                "last_qso_utc":   last.isoformat() if last else None,
+            })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)
 
     def gauge_defs(self, data: dict, total_mults: int) -> list:

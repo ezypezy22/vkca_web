@@ -181,7 +181,7 @@
   }
 
   // ══ PLUGIN-DRIVEN GAUGES ═══════════════════════════════════════════════════
-  let _gaugeDefs=[], _gaugeState={}, _snap=null, _fs=15, _metaLoaded=false, _usesCqZoneScoring=false, _whatifBands=[];
+  let _gaugeDefs=[], _gaugeState={}, _snap=null, _fs=15, _metaLoaded=false, _usesCqZoneScoring=false, _whatifBands=[], _hasFixedMultList=true;
 
   const _tip = document.createElement('div');
   _tip.style.cssText=`position:fixed;display:none;pointer-events:none;z-index:9999;
@@ -200,6 +200,12 @@
       if (!meta.loaded) return;
       _metaLoaded=true; _gaugeDefs=meta.gauge_defs||[]; _usesCqZoneScoring=!!meta.uses_cq_zone_scoring;
       _whatifBands = meta.bands || [];
+      // has_missing_tab doubles as "this contest has a fixed, enumerable mult
+      // list" (see the whatifSupported comment below) — for open-ended mult
+      // contests (WPX prefixes, WAE countries, etc.) there's no fixed universe
+      // to measure "missing" against, so mult-efficiency-style stats using
+      // worked/(worked+missing) are meaningless here (missing is always 0).
+      _hasFixedMultList = meta.has_missing_tab !== false;
       setTabVisible('missing', meta.has_missing_tab!==false);
       // "What if?" simulates working a MISSING mult, so it's only meaningful
       // for contests with a fixed, enumerable mult list (has_missing_tab) —
@@ -746,12 +752,14 @@
     setEA('eat-trend', trendStr, '', trendCol);
     setEA('eat-sub', `cur: ${cur} | prev: ${prev}`, '', '');
 
-    // Mult efficiency
+    // Mult efficiency — meaningless for open-ended mult lists (WPX prefixes,
+    // WAE countries, etc.): "missing" is always 0 with nothing to compare
+    // against, which would otherwise show a false 100%.
     const worked  = snap?.worked  || 0;
     const missing = snap?.missing || 0;
     const possible = worked + missing;
-    const multPct = possible > 0 ? ((worked/possible)*100).toFixed(1)+'%' : '—';
-    const multCol = possible > 0 ? (worked/possible > 0.7 ? T.green : worked/possible > 0.4 ? T.accent3 : T.red) : T.muted;
+    const multPct = (_hasFixedMultList && possible > 0) ? ((worked/possible)*100).toFixed(1)+'%' : '—';
+    const multCol = (_hasFixedMultList && possible > 0) ? (worked/possible > 0.7 ? T.green : worked/possible > 0.4 ? T.accent3 : T.red) : T.muted;
     setEA('eat-mult-pct', multPct, '', multCol);
 
     // Dupe rate

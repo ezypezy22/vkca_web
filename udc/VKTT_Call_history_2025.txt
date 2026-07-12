@@ -1,0 +1,788 @@
+#
+# VKTTRTTY
+# Comment lines do not have to be removed for import. 
+#
+# Field names and size:
+# Call(15), Name(20), Loc1(6), Loc2(6), Sect(8), State(8), CK(#),
+#   Birthdate(date), Exch1(12), Misc(15), Power(8), CqZone(#), ITUZone(#), UserText(60),
+#   LastUpdateNote(export information, field ignored on import)
+#
+# It is not necessary to include all fields for import.
+#
+# Callsigns and import directive command lines may occur multiple
+# times in the import file. Import directives are:
+#  !!Order!! - defines the order of the input data that follows
+#  !!MapStateToSect!! - populate empty Sect from the State
+#  !!FourCharGridSq!! - truncates 6 character grid to 4
+#  !!NoLoc2AltGrid!! - disable the alternate grid (LOC2) feature during import
+#  !!AppendUserText!! - append additional user text (default)
+#  !!NoAppendUserText!! - last user text read is used
+#  !!Validate50State!! - ignore state data that isn't one of the 50 US states
+#  !!MapOnSection!! - map GTE, ONN, ONE, ONS sections to ON section,,,,
+#  !!ValidateArrlSection!! - remove none-ARRL US, VE, PR, VI sections, will remove ON,,,
+#
+!!Order!!, Call, Name
+
+VJ1P ,Gregory
+VJ2A,Matt
+VJ2A,Matthew
+VJ2B,Ken
+VJ2D ,Martin
+VJ2F ,Frank
+VJ2H ,Matthew
+VJ2J ,David
+VJ2N ,Roger
+VJ2S ,Allan
+VJ2U ,Peter
+VJ2W ,Brett
+VJ2X ,Robert
+VJ2Z ,Richard
+VJ3A ,Stephen
+VJ3B ,Norman
+VJ3C ,NERG
+VJ3D ,Alan
+VJ3E,EMDRC
+VJ3G ,Graeme
+VJ3I ,Allan
+VJ3J ,Jamie
+VJ3K ,Philip
+VJ3L ,David
+VJ3N,Chris
+VJ3N ,Christopher
+VJ3O ,Oscar
+VJ3R ,Craig
+VJ3S ,Mark
+VJ3T ,SPCC
+VJ3U,KLAUS
+VJ3V ,Graeme
+VJ3X ,Adam
+VJ3Y,Terrence
+VJ4A ,Glenn
+VJ4G ,Steven
+VJ4K,Trent
+VJ4K ,Phil
+VJ4M ,Paul
+VJ4O ,Keith
+VJ4T,KEN
+VJ5C ,Raymond
+VJ5D ,Kimberley
+VJ5M,Peter
+VJ5Q,Mark
+VJ5T,Stuart
+VJ5W,Grant
+VJ5X ,Paul
+VJ5Z,Andy
+VJ6X ,Alan
+VJ9N ,Luke
+VK0PD,Paul
+VK1C ,Canberra ARC
+VK1CCJ,Greg
+VK1CM,Charles
+VK1DA,Andrew
+VK1DW,DEANE
+VK1ERF,Edward
+VK1HMS,MARK
+VK1JB,Jeffrey
+VK1M ,Matthew
+VK1MA,Matt
+VK1O ,Alan
+VK1PE,Peter
+VK1TTY,Tim
+VK2A ,Robert
+VK2ABL,Yosef
+VK2ACD,CHRIS
+VK2AEJ,OWEN
+VK2AGB,Anthony
+VK2ALR,SKIP
+VK2AOR,Bob
+VK2ATW,Alan
+VK2AYD,David
+VK2AZ,Hilary
+VK2B ,Ivan
+VK2BAM,TONY
+VK2BBQ,KEN
+VK2BFC,frank
+VK2BGL,Steve
+VK2BHO,John
+VK2BJ,Barry
+VK2BJT,IAN
+VK2BPL,Paul
+VK2C ,Charles
+VK2CCC,Tomas
+VK2CIM,PETER
+VK2D ,Benjamin
+VK2DAI,MICHAEL
+VK2DAY,Rod
+VK2DEK,Derrick
+VK2DG,CAM
+VK2DLR,DUNCAN
+VK2DWP,Wayne
+VK2E ,Alex
+VK2EAH,Andy
+VK2EFM,Allan
+VK2EG,Bob
+VK2EIK,Ricvhard
+VK2EY,Doug
+VK2FO,Simon
+VK2FRBG,ROBERT
+VK2FRKA,Robbie
+VK2G,Peter
+VK2GGC,Peter
+VK2GPU,Rae
+VK2GR,Allan
+VK2GRH,Glen
+VK2GZ,Laurie
+VK2H ,Paul
+VK2HJW,RAY
+VK2HRG,ROBIN
+VK2HTV,Glenn
+VK2HV,paul
+VK2I,Rosario
+VK2IE,Ian
+VK2IG,Mike
+VK2IO,Gerard
+VK2IY,Richard
+VK2JA,Ben
+VK2JCC,Colin
+VK2JDR,David
+VK2JEH,Justin
+VK2JNA,Dominic
+VK2JNC,Jamie
+VK2JNR,JOSHUA
+VK2K,CAMERON
+VK2K ,Cameron
+VK2KAW,Alan
+VK2KDP,Craig
+VK2KHA,Stephen
+VK2KI,MARK
+VK2KJJ,Knud
+VK2KQB,Keith
+VK2KX,Clinton
+VK2KZV,Riley
+VK2L ,Robert
+VK2LDM,Leonie
+VK2LEE,LEE
+VK2LX,GRANT
+VK2M,Craig
+VK2MDP,Michael
+VK2MET,Alan
+VK2MG,Alan
+VK2MK,Jim
+VK2MLB,Matthew
+VK2MOE,JOEL
+VK2MOH,MARK
+VK2MOR,Cleeve
+VK2MT,Rob
+VK2N ,Peter
+VK2NMZ,Brad
+VK2O ,Douglas
+VK2OX,Greg
+VK2P ,Philip
+VK2PCT,Paul
+VK2PCT,Trans
+VK2PMG,PAUL
+VK2PN,Patrick
+VK2PPM,Andrew
+VK2PV,Peter
+VK2Q ,David
+VK2QN,John
+VK2R,Gerard
+VK2S ,Phillip
+VK2SDX,Scott
+VK2SIM,Simon
+VK2SJ,Phillip
+VK2STG,STEVE
+VK2T ,Timothy
+VK2TER,James
+VK2TG,Robert
+VK2TS,Anthony
+VK2TTL,Rhoderick
+VK2UE,Andy
+VK2UVP,Vic
+VK2VE,Eric
+VK2VH,Robert
+VK2VU,GARY
+VK2VV,Graham
+VK2W,WaverleyARC
+VK2WQ,David
+VK2X ,Stephen
+VK2XD,Jeff
+VK2XGB,Geoff
+VK2XIC,ROB
+VK2XJM,Jason
+VK2XOR,Max
+VK2XSM,Carl
+VK2Y,Peter
+VK2YI,Ezat
+VK2YW,John
+VK2YY,Chris
+VK2ZDB,DAVID
+VK2ZG,Matt
+VK2ZHE,Henry
+VK2ZK,David
+VK3A ,Brenton
+VK3ABV,ray
+VK3ADS,John
+VK3ADW,David
+VK3AE,dylan
+VK3ALC,Trevor
+VK3AMO,Robert
+VK3AMW,Max
+VK3ANL,NICK
+VK3APJ,Andrew
+VK3AQZ,Luigi
+VK3ARD,MATTHEW
+VK3ASU,TERRY
+VK3ASY,Rory
+VK3ATX,Trevor
+VK3AUQ,KEVIN
+VK3B ,Solar
+VK3BBB,Brian
+VK3BCZ,BRIAN
+VK3BOY,Phil
+VK3BQ,Andrew
+VK3BTV,Keiran
+VK3C ,David
+VK3CHI,Andrew
+VK3CHR,Chris
+VK3CJN,Chris
+VK3CO,PARRY
+VK3CT,DAMIEN
+VK3CTM,TONY
+VK3CWS,Craig
+VK3D ,Michael
+VK3DAN,DANIEL
+VK3DEN,Dennis
+VK3DFR,Darren
+VK3DID,iAN
+VK3DL,Dean
+VK3DLL,Matthew
+VK3DNS,Nathan
+VK3DRH,David
+VK3DY,DAVID
+VK3E ,Pago
+VK3EET,MARK
+VK3ELH,Simon
+VK3ER,LUKAS
+VK3EV,Wayne
+VK3F,Andrew
+VK3FBAA,MATT
+VK3FI,RONALD
+VK3FS,Andrew
+VK3FUR,Michaela
+VK3FY,Chris
+VK3G,Michael
+VK3GC,GLENN
+VK3GF,Bob
+VK3GJG,Garrick
+VK3GK,Lee
+VK3GN,Graeme
+VK3GP,David
+VK3H,Ioannis
+VK3HAG,Ashley
+VK3HAU,Michael
+VK3HGB,DAVID
+VK3HJ,LUKE
+VK3HN,Paul
+VK3HY,Gavin
+VK3IE,Robert
+VK3III,Wimmera
+VK3IO,RON
+VK3JGP,JAMIE
+VK3JK,Craig
+VK3JL,David
+VK3JLS,JOHN
+VK3JNF,John
+VK3JNI,Philip
+VK3JW,Peter
+VK3JWT,JOHN
+VK3K ,Scott
+VK3KIX,Robert
+VK3KK,Shaun
+VK3KRL,Karl
+VK3KTT,Steve
+VK3KZM,Matthew
+VK3L ,Dennis
+VK3LCM,Daniel
+VK3LF,Bryan
+VK3LM,MICHAEL
+VK3LRE,RAY
+VK3LSN,Peter
+VK3LSR,Sandy
+VK3M ,MDRC
+VK3MB,Philip
+VK3MD,MARK
+VK3MDH,Mark
+VK3MH,Brendan
+VK3MLT,Martin
+VK3MNQ,Monique
+VK3MV,Peter
+VK3MZ,IAN
+VK3NCC,Colin
+VK3NDG,Daniel
+VK3NRD,BEN
+VK3O,Stephen
+VK3OAK,Malcolm
+VK3OHM,MARC
+VK3OM,Michael
+VK3OU,Andrew
+VK3P,PERRIN
+VK3P ,Perrin
+VK3PCC,Peter
+VK3PIA,IAN
+VK3PWG,Peter
+VK3Q ,Roston
+VK3QB,Chris
+VK3R ,Ross
+VK3S ,Ian
+VK3SAY,Philip
+VK3SG,LEIGH
+VK3SN,Stephen
+VK3SPX,Stephen
+VK3STV,Stephen
+VK3T ,Tony
+VK3TBR,Tim
+VK3TCP,Alan
+VK3TIN,Megan
+VK3TTT,Tracy
+VK3TWC,Trevor
+VK3TWO,HEATH
+VK3TX,Oscar
+VK3TZE,JAIMIE
+VK3U ,Simon
+VK3UKW,Lukas
+VK3V,Peter
+VK3V ,Peter
+VK3VB,Phil
+VK3VDP,Darrin
+VK3VDX,Ian
+VK3VLF,Stephen
+VK3VMM,Michael
+VK3VT,Greg
+VK3W,Megan
+VK3W ,Megan
+VK3X,Lee
+VK3XV,Tony
+VK3YE,PETER
+VK3YV,Tony
+VK3ZAP,Jim
+VK3ZLT,Colin
+VK3ZPF,PETER
+VK3ZSC,Graham
+VK4A ,Andrew
+VK4ACN,Wayne
+VK4ADC,Doug
+VK4ALH,LEICESTER
+VK4AMG,George
+VK4ATH,Tom
+VK4B,Bernard
+VK4BA,BARC
+VK4BDX,Brett
+VK4BFQ,Benjamin
+VK4BXX,GREG
+VK4BZ,JOHN
+VK4C ,Roger
+VK4CCV,PETER
+VK4CEG,Graham
+VK4CLG,Robert
+VK4D ,Kevin
+VK4DI,DI
+VK4DX,Mike
+VK4E ,Peter
+VK4EMP,Eric
+VK4F,Stuart
+VK4FABN,David
+VK4FJ,Warren
+VK4FLR,Frank
+VK4FOMP,Daniel
+VK4FY,SHAUN
+VK4GCR,Ralf
+VK4GTR,Graham
+VK4GUE,Guerino
+VK4HDY,Mark
+VK4HH,Diane
+VK4HRE,Robert
+VK4I ,Scott
+VK4IZ,RDRC
+VK4J,Jay
+VK4JJW,JOHN
+VK4JM,David
+VK4JSS,STEVE
+VK4K,Garry
+VK4KC,MARTY
+VK4KD,Phil
+VK4KLC,Ron
+VK4KM,Ken
+VK4KWS,KENT
+VK4KY,ANDY
+VK4LEW,Lewis
+VK4M,ALAN
+VK4MGL,Scott
+VK4MGO,Michael
+VK4MST,Tim
+VK4MUD,John
+VK4MZ,David
+VK4N,Greg
+VK4NA,Alan
+VK4NM,Andrew
+VK4O ,John
+VK4OTZ,OTTO
+VK4P ,Andrew
+VK4PB,Peter
+VK4PDG,Peter
+VK4PQ,Peter
+VK4PR,Peter
+VK4QH,KEN
+VK4QS,MIKE
+VK4RJ,BOB
+VK4S ,SCARC
+VK4SN,ALAN
+VK4SP,David
+VK4T ,Trent
+VK4TE,ALEX
+VK4TGL,Gerard
+VK4TT,Keith
+VK4UMB,Ben
+VK4V ,Peter
+VK4VO,Shaun
+VK4WIS,SCARC
+VK4WOO,Eddi
+VK4X ,Bernard
+VK4XQM,MIKE
+VK4XU,SINISA
+VK4Y ,Raymond
+VK4YEO,glen
+VK4Z ,Ricky
+VK4ZD,BILL
+VK5A ,Martin
+VK5AKH,Andrew
+VK5ALX,ALEX
+VK5ARG,Amateur
+VK5AV,Tim
+VK5AVQ,Mark
+VK5AYD,David
+VK5AZL,BOB
+VK5BC,Brian
+VK5BRO,Rob
+VK5BWR,Whyalla
+VK5CB,Barry
+VK5COL,Colin
+VK5CP,Christopher
+VK5D ,David
+VK5DC,Dale
+VK5DMC,David
+VK5DP,DAREN
+VK5DT,Darren
+VK5F ,Frank
+VK5FAAH,TOM
+VK5FBIC,TONY
+VK5FBRO,ROB
+VK5FD,Allen
+VK5FPAW,PAUL
+VK5FSRJ,SAM
+VK5GR,GRANT
+VK5IR,Theo
+VK5JAK,John
+VK5JGM,Graham
+VK5JQ,Jeanne
+VK5JW,JR
+VK5K ,David
+VK5KBJ,BARRY
+VK5KIF,Ian
+VK5KK,David
+VK5LA,Andy
+VK5LJ,Lawrie
+VK5LOL,LESLEY
+VK5LSB,DAVID
+VK5MK,Mark
+VK5MN,Michael
+VK5NNN,IVAN
+VK5NYD,Nora
+VK5OQ,Keith
+VK5PAS,Paul
+VK5PL,David
+VK5PX,Peter
+VK5QI,MARK
+VK5RS,Ivan
+VK5SFA,Steve
+VK5SPJ,Steve
+VK5ST,Steven
+VK5T,Theo
+VK5UE,Colwyn
+VK5UW,Brian
+VK5VC,Charles
+VK5WOW,North
+VK5X ,Olgierd
+VK5XB,HANK
+VK5XY,Colin
+VK5Y,John
+VK5YX,HANS
+VK6AAO,Joseph
+VK6AB,Kevin
+VK6ABC,Marty
+VK6ADI,Barrie
+VK6AJP,ANTHONY
+VK6AKR,Denis
+VK6APK,ALEX
+VK6ATB,TREVOR
+VK6ATX,Alasdair
+VK6B ,Stephen
+VK6BBM,STEPHEN
+VK6BDO,NEIL
+VK6BX,Aaron
+VK6CF,CHRISTOPHER
+VK6CG,ROBERT
+VK6COL,COL
+VK6CPU,Nigel
+VK6CSW,Clive
+VK6DAV,DAVID
+VK6DDX,Chris
+VK6DW,Ian
+VK6E ,Wayne
+VK6EJA,Edward
+VK6EZ,Mark
+VK6FD,John
+VK6FEEE,MARTIN
+VK6FJLM,JEFF
+VK6FLAB,ONNO
+VK6FMON,MONIQUE
+VK6FMTG,Merton
+VK6FN,Max
+VK6FRDM,Robert
+VK6FWCB,COLIN
+VK6FZEB,ELSA
+VK6GC,Gary
+VK6GD,Graham
+VK6GHZ,Duncan
+VK6GOM,Norman
+VK6HAX,Peter
+VK6HC,Adam
+VK6HDY,Bert
+VK6HNM,Henry
+VK6HV,STEPHEN
+VK6I ,Andrew
+VK6IR,STEVE
+VK6IS,Peter
+VK6JEF,Jeff
+VK6JN,Jishnu
+VK6JP,Jim
+VK6JR,WAYNE
+VK6KQ,Kevin
+VK6KV,David
+VK6KW,BOB
+VK6LAP,JEFF
+VK6LTC,TERRY
+VK6LV,Graeme
+VK6MIL,Graeme
+VK6MJC,Michael
+VK6MK,Stuart
+VK6MM,Malcolm
+VK6N ,NCRG
+VK6NAD,Daniel
+VK6NC,NCRG
+VK6NCB,Ben
+VK6NK,Adrian
+VK6NT,Jacob
+VK6NUL,Gerald
+VK6OY,Chris
+VK6POP,Bob
+VK6QS,Matt
+VK6QS,MATTHEW
+VK6RC,Marty
+VK6RG,Richard
+VK6RZ,PETER
+VK6S,Stephen
+VK6SJ,Steve
+VK6ST,STEVEN
+VK6T ,Kevin
+VK6TCP,John
+VK6TDF,ALLAN
+VK6TKR,Kevin
+VK6TU,MICHAEL
+VK6USB,Mark
+VK6VE,Wayne
+VK6VZ,Steve
+VK6WB,Gus
+VK6WE,Daniel
+VK6WHO,Robert
+VK6WR,Randall
+VK6WU,Andrey
+VK6YA,EDDIE
+VK6YD,Milton
+VK6ZM,Mike
+VK6ZMS,Martin
+VK6ZO,MARTIN
+VK6ZRW,Ray
+VK7A ,Andrew
+VK7AAE,David
+VK7AG,Anthony
+VK7ALH,ROSS
+VK7AN,Allen
+VK7AW,Andrew
+VK7BEN,BEN
+VK7BJ,Jane
+VK7BO,ALAN
+VK7BW,Brian
+VK7BYL,ANNE
+VK7C ,Catherine
+VK7CL,CEDRIC
+VK7DG,Dale
+VK7DIK,DICK
+VK7DM,David
+VK7DW,Andrew
+VK7DY,KEN
+VK7EV,Eric
+VK7FB,Michael
+VK7FBOC,ANTHONY
+VK7FPCL,Paul
+VK7FTAS,BRETT
+VK7GH,Catherine
+VK7GN,Martin
+VK7GS,Graham
+VK7HAM,Rodney
+VK7HH,Hayden
+VK7HHS,Hobart
+VK7HSE,SCOTT
+VK7HW,Herman
+VK7HXT,Harry
+VK7IAN,Ian
+VK7ID,Phill
+VK7IF,Ian
+VK7IT,Lewis
+VK7JFD,John
+VK7JGD,GARRY
+VK7JU,CHRIS
+VK7KAJ,Alan
+VK7KC,Kirby
+VK7KDV,David
+VK7KK,Reg
+VK7KPC,Peter
+VK7KRJ,Ken
+VK7KW,Keith
+VK7KWB,Bryan
+VK7LAG,Anthony
+VK7LEE,Lee
+VK7LG,David
+VK7LH,Ross
+VK7LTD,Tony
+VK7MMT,Tanya
+VK7MO,Rex
+VK7NFI,OLIVER
+VK7NTK,THOMAS
+VK7OO,Steve
+VK7OR,OWEN
+VK7PD,PETER
+VK7PEP,Paul
+VK7QP,Linda
+VK7RD,Robert
+VK7RE,Graeme
+VK7RM,Ron
+VK7SH,Steven
+VK7STO,Peter
+VK7SW,Shane
+VK7TW,Justin
+VK7VH,Vince
+VK7VKT,ANTHONY
+VK7WH,WINSTON
+VK7WN,Warren
+VK7WR,WILLIAM
+VK7WW,Nicholas
+VK7XHJ,xavier
+VK7ZA,Lance
+VK7ZBX,Richard
+VK7ZDM,David
+VK7ZGK,graham
+VK7ZMS,Murray
+VK7ZPD,Phil
+VK7ZRF,Robert
+VK7ZRJ,RICHARD
+VK7ZTA,Anthony
+VK8D ,Philip
+VK8DNT,jeff
+VK8GM,Gregory
+VK8JG,JOEL
+VK8NSB,STUIE
+VL2A ,Vladimir
+VL2B ,Barrington
+VL2C ,Bradley
+VL2G ,Allan
+VL2H,Kimberly
+VL2I ,SP
+VL2L ,Peter
+VL2M,IAN
+VL2M ,Ian
+VL2N ,Patrick
+VL2R ,Merrick
+VL2T ,Stanko
+VL2U ,Binu
+VL2V,Paul
+VL2W,Peter
+VL2Z ,Brian
+VL3A ,Peter
+VL3C ,Peter
+VL3D ,David
+VL3E,Tony
+VL3F ,FP
+VL3G ,Stephen
+VL3H ,George
+VL3I,Phil
+VL3I ,Philip
+VL3J ,Mark
+VL3K ,Nikolaas
+VL3L ,Ralph
+VL3M ,Benjamin
+VL3N ,Christopher
+VL3O ,Wayne
+VL3Q ,Peter
+VL3R ,John
+VL3S ,SPARC
+VL3T ,Chris
+VL3U ,Phillip
+VL3V ,Gregory
+VL3X ,VEA
+VL3Y ,DC
+VL4A ,Laurie
+VL4B ,Hugh
+VL4C ,Caboolture
+VL4D,Dave
+VL4K ,Alan
+VL4L ,David
+VL4R,Bill
+VL4U ,Cory
+VL4X ,Robert
+VL4Y ,Benjamin
+VL5A,IAIN
+VL5A ,Iain
+VL5C ,Robert
+VL5D ,Darin
+VL5E ,Stuart
+VL5F ,John
+VL5K ,Andrew
+VL5L,Steve
+VL5L ,Steve
+VL5Q,CHRIS
+VL5Q ,Chris
+VL5X ,AREG
+VL5Z ,Matthew
+VL6K ,Wesley
+VL6M ,Philip
+VL6T ,Stephen
+ZL1CAP,CORBIN
+ZL1GA,Gary
+ZL1IF,LARS
+ZL2GD,Grant
+ZL2GVA,Gerard
+ZL2IW,Rob
+ZL2RX,Roger
+ZL3AB,Mark
+ZL3AC,NZART
+ZL3ART,Stuart
+ZL3CRG,Carl
+ZL3GA,Geoff
+ZL3VZ,Bill
+ZL3YB,Rick
+ZL4KYH,Daniel
+ZL4RA,CHRIS
+ZL4RMF,Ron
+ZL4RO,John
+ZL4SY,Norman

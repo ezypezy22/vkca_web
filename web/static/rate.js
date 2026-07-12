@@ -47,7 +47,7 @@
   function renderRateChart(data) {
     if (!data.length) return;
     const labels = data.map(r => {
-      const d = new Date(r.hour);
+      const d = new Date(r.hour+'Z');   // server times are naive UTC
       return `${String(d.getUTCHours()).padStart(2,'0')}:00`;
     });
     const values = data.map(r => r.qsos);
@@ -98,7 +98,7 @@
   function renderMultsChart(data) {
     if (!data.length) return;
     const labels = data.map(r => {
-      const d = new Date(r.hour);
+      const d = new Date(r.hour+'Z');   // server times are naive UTC
       return `${String(d.getUTCHours()).padStart(2,'0')}:00`;
     });
     const values = data.map(r => r.mults || 0);

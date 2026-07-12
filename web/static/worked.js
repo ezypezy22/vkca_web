@@ -47,14 +47,14 @@
   function readSessionConfig() {
     const snap = window.VKA?.lastSnap?.();
     const ss   = snap?.session_status || {};
-    _contestStart = ss.start_dt ? new Date(ss.start_dt) : null;
+    _contestStart = ss.start_dt ? new Date(ss.start_dt+'Z') : null;   // server times are naive UTC
     _durationMins = ss.duration_mins || null;
     _labelPrefix  = ss.label_prefix || 'B';
   }
 
   function blockInfo(qsoTimeIso) {
     if (!_contestStart || !_durationMins || !qsoTimeIso) return null;
-    const t = new Date(qsoTimeIso);
+    const t = new Date(qsoTimeIso+'Z');   // server times are naive UTC
     const elapsedMins = (t - _contestStart) / 60000;
     if (elapsedMins < 0) return null;
     const bn = Math.floor(elapsedMins / _durationMins);
