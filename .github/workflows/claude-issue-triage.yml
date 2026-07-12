@@ -28,7 +28,8 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_args: '--max-turns 8 --allowedTools "Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Bash(gh issue list:*),Bash(gh label list:*)"'
+          show_full_output: true
+          claude_args: '--max-turns 8 --model claude-sonnet-5 --allowedTools "Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Bash(gh issue list:*),Bash(gh label list:*)"'
           prompt: |
             You are triaging a newly opened GitHub issue on ${{ github.repository }},
             issue number ${{ github.event.issue.number }}. This repo is VK Contest
