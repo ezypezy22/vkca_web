@@ -462,7 +462,7 @@
 
     <div id="cluster-advice" class="panel-box" style="display:none;padding:8px 14px;font-family:var(--font-mono);font-size:0.8em"></div>
 
-    <div style="display:grid;grid-template-columns:1fr 300px;gap:10px;flex:1;min-height:0">
+    <div id="cluster-grid" style="display:grid;grid-template-columns:1fr 8px 300px;gap:10px;flex:1;min-height:0">
       <!-- Spot list -->
       <div class="panel-box" style="display:flex;flex-direction:column;min-height:0">
         <div class="panel-header" style="flex-shrink:0;flex-wrap:wrap;row-gap:6px">
@@ -477,7 +477,10 @@
             <button class="cluster-band-btn" data-band="15M">15</button>
             <button class="cluster-band-btn" data-band="10M">10</button>
           </div>
-          <input id="cluster-filter" class="filter-input" placeholder="Filter call…" style="width:140px;margin-left:auto">
+          <select id="cluster-mode-filter" class="tb-select" style="width:110px;margin-left:auto">
+            <option value="ALL">All Modes</option>
+          </select>
+          <input id="cluster-filter" class="filter-input" placeholder="Filter call…" style="width:140px">
           <button id="cluster-clear-btn" class="btn btn--ghost btn--sm">Clear</button>
         </div>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:4px 10px;font-family:var(--font-mono);font-size:0.72em;color:var(--muted);flex-shrink:0">
@@ -504,11 +507,13 @@
         </div>
         <div class="table-wrap" style="flex:1;max-height:none">
           <table class="data-table">
-            <thead><tr><th>DX Call</th><th>Freq</th><th>Band</th><th>Mult</th><th>Region</th><th>Spotter</th><th>Comment</th><th>Time</th></tr></thead>
+            <thead><tr><th>DX Call</th><th>Freq</th><th>Band</th><th>Mode</th><th>Mult</th><th>Region</th><th>Spotter</th><th>Comment</th><th>Time</th></tr></thead>
             <tbody id="cluster-spots-tbody"></tbody>
           </table>
         </div>
       </div>
+
+      <div id="cluster-resize-handle" class="cluster-resize-handle" title="Drag to resize"></div>
 
       <!-- Raw feed + command -->
       <div class="panel-box" style="display:flex;flex-direction:column;min-height:0">

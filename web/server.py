@@ -2099,9 +2099,12 @@ import socket as _socket
 import re as _re
 
 _SPOT_RE = _re.compile(
-    r"DX\s+de\s+(\S+?):?\s+(\d+(?:\.\d+)?)\s+(\S+)\s+(.*?)\s+(\d{4})Z?\s*$",
+    r"DX\s+de\s+(\S+?):?\s+(\d+(?:\.\d+)?)\s+(\S+)\s+(.*?)\s*(\d{4})Z?\s*$",
     _re.IGNORECASE,
 )
+# Strips stray control bytes (e.g. a trailing BEL some clusters append to
+# live spot announcements) that would otherwise defeat the $ anchor above.
+_CTRL_RE = _re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\ufffd]")
 
 _CLUSTER_PRESETS = [
     {"label": "VK2RCG (VK)",   "host": "vk2rcg.ampr.org",    "port": 7300},
@@ -2134,6 +2137,24 @@ def _freq_to_band_str(freq_khz: float) -> str:
             return name
     return f"{freq_khz:.0f}kHz"
 
+# Cluster spot lines have no distinct mode field — mode (if present at all)
+# shows up as a free-text token in the comment (e.g. "CQ TEST CW"). Only an
+# explicit keyword is trusted; sub-band conventions vary too much by region
+# to guess from frequency alone.
+_MODE_TOKENS = {
+    "CW": "CW", "SSB": "SSB", "USB": "USB", "LSB": "LSB", "FM": "FM", "AM": "AM",
+    "RTTY": "RTTY", "FT8": "FT8", "FT4": "FT4", "PSK31": "PSK31", "PSK": "PSK",
+    "JT65": "JT65", "JT9": "JT9", "MSK144": "MSK144", "JS8": "JS8",
+    "OLIVIA": "OLIVIA", "DIGI": "DIGI", "DATA": "DIGI",
+}
+
+def _guess_mode(comment: str) -> str:
+    for token in comment.upper().split():
+        tok = token.strip(".,;:-")
+        if tok in _MODE_TOKENS:
+            return _MODE_TOKENS[tok]
+    return ""
+
 def _classify_spot(dx_call: str, freq_khz: float, comment: str) -> tuple:
     """
     Returns (status, mult_value, region) where:
@@ -2149,12 +2170,22 @@ def _classify_spot(dx_call: str, freq_khz: float, comment: str) -> tuple:
 
     band = _freq_to_band_str(freq_khz)
     p    = cl.plugin
-    ml_set = set(p.mult_list())
+    # mult_list()/worked_*_mults() are typed per-plugin (e.g. IARU's ITU
+    # zones are ints, most others are strings) — normalize to str for
+    # membership tests so classification doesn't silently fail on type
+    # mismatches.
+    ml_set = {str(m) for m in p.mult_list()}
 
     mult_val = None
     comment_upper = comment.strip().upper()
     for token in comment_upper.split():
         tok = token.strip(".,;:-")
+        # Bare numbers ("tnx 4 the Q", signal reports, serial numbers) are
+        # far too common in free-text spotter comments to trust as a
+        # confirmed exchange value (e.g. IARU's ITU-zone mult list is just
+        # "1".."75" — almost any short number would false-positive match).
+        if tok.isdigit():
+            continue
         if tok in ml_set:
             mult_val = tok
             break
@@ -2170,17 +2201,23 @@ def _classify_spot(dx_call: str, freq_khz: float, comment: str) -> tuple:
             mult_val = p.mult_of_qso(fake_q)
         except Exception:
             mult_val = None
+        # Same ambiguity as the direct scan above: mult_of_qso() was fed the
+        # *entire* free-text comment as mult1, so a comment that happens to
+        # be nothing but a bare number (e.g. a lone signal-report digit)
+        # can come back looking like a confirmed exchange value. Distrust it.
+        if mult_val is not None and str(mult_val).isdigit():
+            mult_val = None
 
-    if mult_val is None or mult_val not in ml_set:
+    if mult_val is None or str(mult_val) not in ml_set:
         return "NOT_MULT", "", ""
 
     region = p.region_of_mult(mult_val) or ""
-    worked = cl.worked_mults()
-    if mult_val not in worked:
+    worked = {str(m) for m in cl.worked_mults()}
+    if str(mult_val) not in worked:
         return "NEW_MULT", mult_val, region
 
     band_wkd = cl.worked_primary_band_mults()
-    on_this_band = any(m == mult_val and b == band for m, b, _mode in band_wkd)
+    on_this_band = any(str(m) == str(mult_val) and b == band for m, b, _mode in band_wkd)
     if not on_this_band:
         return "NEW_BAND", mult_val, region
     return "WORKED", mult_val, region
@@ -2218,11 +2255,11 @@ async def ws_cluster(ws: WebSocket):
                 buf += chunk
                 while b"\n" in buf:
                     line, buf = buf.split(b"\n", 1)
-                    text = line.decode("utf-8", errors="replace").strip()
+                    text = _CTRL_RE.sub("", line.decode("utf-8", errors="replace")).strip()
                     if not text:
                         continue
                     msg = {"type": "raw", "line": text}
-                    m   = _SPOT_RE.match(text)
+                    m   = _SPOT_RE.search(text)
                     if m:
                         freq    = float(m.group(2))
                         dx_call = m.group(3)
@@ -2236,6 +2273,7 @@ async def ws_cluster(ws: WebSocket):
                             "comment": comment,
                             "time":    m.group(5),
                             "band":    _freq_to_band_str(freq),
+                            "mode":    _guess_mode(comment),
                             "status":  status,
                             "mult":    mult_val,
                             "region":  region,

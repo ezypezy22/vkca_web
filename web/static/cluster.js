@@ -18,10 +18,12 @@
 
   let ws         = null;
   let spots      = [];
-  let bandsInLog = null;  // Set of band strings present in the loaded log, or null
+  let bandsInLog = null;  // Set of bands this contest's rules allow, or null
   const MAX_SPOTS = 200;
   let filterBand = 'ALL';
   let filterCall = '';
+  let filterMode = 'ALL';
+  const seenModes = new Set();
 
   // ── DOM refs ──────────────────────────────────────────────────────────────
   const statusDot  = document.getElementById('cluster-status-dot');
@@ -47,7 +49,45 @@
   const chkWorked  = document.getElementById('cluster-show-worked');
   const chkNotMult = document.getElementById('cluster-show-notmult');
   const chkBandsOnly = document.getElementById('cluster-bands-only');
+  const modeFilterSelect = document.getElementById('cluster-mode-filter');
   const chkAlert    = document.getElementById('cluster-alert-toggle');
+  const clusterGrid    = document.getElementById('cluster-grid');
+  const resizeHandle    = document.getElementById('cluster-resize-handle');
+
+  // ── Raw-feed column drag-resize ─────────────────────────────────────────
+  const RAW_W_KEY = 'vka_cluster_raw_w';
+  const RAW_W_MIN = 220;
+  const RAW_W_MAX = 700;
+  function setRawFeedWidth(px) {
+    px = Math.max(RAW_W_MIN, Math.min(RAW_W_MAX, px));
+    if (clusterGrid) clusterGrid.style.gridTemplateColumns = `1fr 8px ${px}px`;
+    return px;
+  }
+  {
+    const stored = parseInt(localStorage.getItem(RAW_W_KEY) || '300', 10);
+    setRawFeedWidth(isNaN(stored) ? 300 : stored);
+  }
+  if (resizeHandle && clusterGrid) {
+    resizeHandle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const rawPanel = resizeHandle.nextElementSibling;
+      const startPanelW = rawPanel.getBoundingClientRect().width;
+      resizeHandle.classList.add('dragging');
+      function onMove(ev) {
+        const dx = ev.clientX - startX;
+        setRawFeedWidth(startPanelW - dx);
+      }
+      function onUp() {
+        resizeHandle.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        localStorage.setItem(RAW_W_KEY, clusterGrid.style.gridTemplateColumns.split(' ').pop().replace('px',''));
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
 
   // ── Audio / desktop alert on a spotted needed mult or band ──────────────────
   const ALERT_KEY = 'vka_cluster_alert';
@@ -124,10 +164,10 @@
     });
   }
 
-  // ── Bands present in the loaded log (for "Contest bands only" filter) ────
+  // ── Bands this contest's rules allow (for "Contest bands only" filter) ───
   function loadBandsInLog() {
-    fetch('/api/bands').then(r=>r.json()).then(rows=>{
-      bandsInLog = new Set((rows||[]).map(r=>r.band));
+    fetch('/api/plugin_meta').then(r=>r.json()).then(meta=>{
+      bandsInLog = new Set(meta.bands || []);
     }).catch(()=>{ bandsInLog = null; });
   }
   loadBandsInLog();
@@ -232,6 +272,13 @@
   function addSpot(spot) {
     spots.unshift(spot);
     if (spots.length > MAX_SPOTS) spots = spots.slice(0, MAX_SPOTS);
+    if (spot.mode && !seenModes.has(spot.mode)) {
+      seenModes.add(spot.mode);
+      const opt = document.createElement('option');
+      opt.value = spot.mode;
+      opt.textContent = spot.mode;
+      modeFilterSelect?.appendChild(opt);
+    }
     alertOnSpot(spot);
     renderSpots();
   }
@@ -246,6 +293,12 @@
     }
   }
 
+  function passesModeFilter(s) {
+    if (filterMode === 'ALL') return true;
+    if (filterMode === '__NONE__') return !s.mode;
+    return s.mode === filterMode;
+  }
+
   function renderSpots() {
     if (!spotTbody) return;
     const q = filterCall.toUpperCase();
@@ -254,6 +307,7 @@
       if (filterBand !== 'ALL' && s.band !== filterBand) return false;
       if (q && !s.dx.toUpperCase().includes(q) && !s.spotter.toUpperCase().includes(q)) return false;
       if (bandsOnly && bandsInLog && bandsInLog.size && !bandsInLog.has(s.band)) return false;
+      if (!passesModeFilter(s)) return false;
       if (!passesStatusFilter(s)) return false;
       return true;
     });
@@ -270,6 +324,7 @@
         <td style="color:${style.color};font-weight:${style.weight}">${s.dx}</td>
         <td style="color:${col}">${s.freq}</td>
         <td style="color:${col}">${s.band}</td>
+        <td style="color:${C.muted}">${s.mode||''}</td>
         <td style="color:${style.color}">${s.mult||''}</td>
         <td style="color:${C.muted}">${s.region||''}</td>
         <td style="color:${C.muted}">${s.spotter}</td>
@@ -321,6 +376,18 @@
     filterCall = e.target.value;
     renderSpots();
   });
+
+  // Mode filter
+  if (modeFilterSelect) {
+    const noneOpt = document.createElement('option');
+    noneOpt.value = '__NONE__';
+    noneOpt.textContent = '(No Mode)';
+    modeFilterSelect.appendChild(noneOpt);
+    modeFilterSelect.addEventListener('change', () => {
+      filterMode = modeFilterSelect.value;
+      renderSpots();
+    });
+  }
 
   [chkNewMult, chkNewBand, chkWorked, chkNotMult, chkBandsOnly].forEach(el=>{
     el?.addEventListener('change', renderSpots);

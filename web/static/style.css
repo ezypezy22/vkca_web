@@ -325,6 +325,10 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .cluster-raw-feed{flex:1;overflow-y:auto;font-family:var(--font-mono);font-size:0.69em;
   color:var(--muted);background:var(--bg);border-radius:4px;padding:6px 8px;
   min-height:200px;line-height:1.5;}
+.cluster-resize-handle{cursor:col-resize;position:relative;}
+.cluster-resize-handle::after{content:"";position:absolute;top:0;bottom:0;left:50%;
+  width:2px;transform:translateX(-50%);background:var(--bg3);border-radius:2px;}
+.cluster-resize-handle:hover::after,.cluster-resize-handle.dragging::after{background:var(--accent);}
 
 /* ── Tables ──────────────────────────────────────────────────────────────── */
 .table-wrap{overflow-y:auto;max-height:calc(100vh - 200px);
