@@ -1,5 +1,17 @@
 # Changelog
 
+## 26.7.11
+
+### Enhancements
+
+f2a8c4f Add mode column/filter to DX Cluster tab
+
+### Bugfixes
+
+1d762ae Fix VK Trans-Tasman scoring and a naive-UTC display bug in Rate/Worked tabs
+f2a8c4f Fix DX cluster spots never reaching the table
+3d48178 Use a fixed port for the pywebview window so localStorage actually persists
+
 ## 26.7.10
 
 ### Enhancements
