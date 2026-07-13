@@ -452,7 +452,7 @@
         <label class="tb-label">Callsign</label>
         <input id="cluster-callsign" class="tb-input" value="VK2YI" style="width:90px">
         <button id="cluster-connect-btn" class="btn btn--primary btn--sm">Connect</button>
-        <button id="cluster-disconnect-btn" class="btn btn--ghost btn--sm" disabled>Disconnect</button>
+        <button id="cluster-disconnect-btn" class="btn btn--ghost btn--sm" disabled style="display:none">Disconnect</button>
         <div class="tb-sep"></div>
         <label class="tb-label" title="Sends SH/DX &lt;n&gt; to the cluster to request its N most recent spots">Spots to fetch</label>
         <input id="cluster-shdx-input" class="tb-input" type="number" min="10" max="200" step="10" value="20" style="width:55px">
@@ -479,6 +479,24 @@
           </div>
           <select id="cluster-mode-filter" class="tb-select" style="width:110px;margin-left:auto">
             <option value="ALL">All Modes</option>
+            <option value="__NONE__">(No Mode)</option>
+            <option value="CW">CW</option>
+            <option value="SSB">SSB</option>
+            <option value="USB">USB</option>
+            <option value="LSB">LSB</option>
+            <option value="FM">FM</option>
+            <option value="AM">AM</option>
+            <option value="RTTY">RTTY</option>
+            <option value="FT8">FT8</option>
+            <option value="FT4">FT4</option>
+            <option value="PSK31">PSK31</option>
+            <option value="PSK">PSK</option>
+            <option value="JT65">JT65</option>
+            <option value="JT9">JT9</option>
+            <option value="MSK144">MSK144</option>
+            <option value="JS8">JS8</option>
+            <option value="OLIVIA">OLIVIA</option>
+            <option value="DIGI">DIGI</option>
           </select>
           <input id="cluster-filter" class="filter-input" placeholder="Filter call…" style="width:140px">
           <button id="cluster-clear-btn" class="btn btn--ghost btn--sm">Clear</button>

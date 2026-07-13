@@ -23,7 +23,6 @@
   let filterBand = 'ALL';
   let filterCall = '';
   let filterMode = 'ALL';
-  const seenModes = new Set();
 
   // ── DOM refs ──────────────────────────────────────────────────────────────
   const statusDot  = document.getElementById('cluster-status-dot');
@@ -136,8 +135,17 @@
   function setStatus(connected, msg) {
     if (statusDot)  { statusDot.className = 'cluster-dot ' + (connected?'dot-conn':'dot-disc'); }
     if (statusText) statusText.textContent = msg;
-    if (btnConnect) btnConnect.disabled  = connected;
-    if (btnDisconn) btnDisconn.disabled  = !connected;
+    if (btnConnect) { btnConnect.disabled = connected; btnConnect.style.display = connected ? 'none' : ''; }
+    if (btnDisconn) {
+      btnDisconn.disabled = !connected;
+      btnDisconn.style.display = connected ? '' : 'none';
+      btnDisconn.classList.toggle('btn--green', connected);
+      btnDisconn.classList.toggle('btn--ghost', !connected);
+    }
+    if (shdxBtn) {
+      shdxBtn.classList.toggle('btn--green', connected);
+      shdxBtn.classList.toggle('btn--ghost', !connected);
+    }
   }
 
   // Load presets
@@ -272,13 +280,6 @@
   function addSpot(spot) {
     spots.unshift(spot);
     if (spots.length > MAX_SPOTS) spots = spots.slice(0, MAX_SPOTS);
-    if (spot.mode && !seenModes.has(spot.mode)) {
-      seenModes.add(spot.mode);
-      const opt = document.createElement('option');
-      opt.value = spot.mode;
-      opt.textContent = spot.mode;
-      modeFilterSelect?.appendChild(opt);
-    }
     alertOnSpot(spot);
     renderSpots();
   }
@@ -377,12 +378,8 @@
     renderSpots();
   });
 
-  // Mode filter
+  // Mode filter — options are static in index.html
   if (modeFilterSelect) {
-    const noneOpt = document.createElement('option');
-    noneOpt.value = '__NONE__';
-    noneOpt.textContent = '(No Mode)';
-    modeFilterSelect.appendChild(noneOpt);
     modeFilterSelect.addEventListener('change', () => {
       filterMode = modeFilterSelect.value;
       renderSpots();
