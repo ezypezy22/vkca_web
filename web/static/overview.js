@@ -123,6 +123,13 @@
     if (frac > 0.001) {
       const fillEnd = G_START + Math.min(frac, 1) * G_SWEEP;
       ctx.save();
+      // Clip the glow to the ring itself (r >= ri) so its blur can't bleed
+      // inward onto the value text — barely visible on dark backgrounds but
+      // shows as fuzzy digit edges against a light card background.
+      ctx.beginPath();
+      ctx.rect(0, 0, w, h);
+      ctx.arc(cx, cy, ri, 0, Math.PI * 2, true);
+      ctx.clip('evenodd');
       ctx.shadowColor = colour;
       ctx.shadowBlur  = Math.max(5, lw * 0.4);
       ctx.beginPath();
@@ -151,33 +158,49 @@
       ctx.strokeStyle=T.muted; ctx.lineWidth=1.5; ctx.lineCap='butt'; ctx.stroke();
     });
 
-    // ── Value text
+    // ── Value + label
     // Font sizes scale off the gauge's own rendered radius (ri) so text stays
     // legible whether there are 3 wide gauges or 8 narrow ones on the row —
     // a fixed pixel size (the old `fs * const` approach) looked fine at one
     // tile width and tiny at another. `fs`/15 (from the zoom slider, default
     // ~1.07) still scales everything up/down around that responsive baseline.
+    //
+    // These are real DOM elements, not ctx.fillText. WebKitGTK's Cairo/Pango
+    // text path defaults to LCD/subpixel antialiasing, which visibly fringes
+    // (red/green channel split) on saturated coloured text — confirmed via
+    // an isolated pywebview repro to be unrelated to canvas/compositing and
+    // present even on plain DOM text, just far less noticeable at the sizes
+    // used elsewhere in the UI. The `-webkit-font-smoothing:antialiased` on
+    // <body> (style.css) is the actual fix (forces grayscale AA); these are
+    // still DOM elements rather than ctx.fillText mainly so that CSS rule is
+    // guaranteed to apply — it's a text-layout property, not guaranteed to
+    // reach into a canvas's internal text rasterizer.
+    const snap = v => Math.round(v * dpr) / dpr;
     const zoomMult = fs / 15;
     const sf    = valStr.length > 7 ? (7/valStr.length) : valStr.length > 5 ? 0.88 : 1.0;
     const valFs = Math.max(12, ri * 0.30 * sf * zoomMult);
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillStyle=colour;
-    ctx.font=`bold ${valFs}px Consolas, monospace`;
-    ctx.fillText(valStr, cx, cy - ri*0.05);
-
-    // ── Label
     const labelFs = Math.max(8, ri * 0.17 * zoomMult);
-    ctx.fillStyle=T.muted;
-    ctx.font=`${labelFs}px Consolas, monospace`;
-    ctx.fillText(label, cx, cy + ri*0.33);
+    const idx = canvas.id.replace('gauge-','');
+    const valEl = document.getElementById(`gauge-val-${idx}`);
+    const lblEl = document.getElementById(`gauge-lbl-${idx}`);
+    if (valEl) {
+      valEl.textContent = valStr;
+      valEl.style.color = colour;
+      valEl.style.fontSize = `${valFs}px`;
+      valEl.style.top  = `${cy - ri*0.05 - valFs*0.55}px`;
+    }
+    if (lblEl) {
+      lblEl.style.fontSize = `${labelFs}px`;
+      lblEl.style.top  = `${cy + ri*0.33 - labelFs*0.55}px`;
+    }
 
     // ── 0 at G_START (150°=lower-left), max at G_END (30°=lower-right)
-    const endFs = Math.max(7, ri * 0.15 * zoomMult);
+    const endFs = Math.round(Math.max(7, ri * 0.15 * zoomMult));
     const [x0,y0] = polarXY(cx, cy, ro*1.10, G_START);
     const [xm,ym] = polarXY(cx, cy, ro*1.10, G_END);
     ctx.fillStyle=T.muted; ctx.font=`${endFs}px Consolas, monospace`; ctx.textAlign='center';
-    ctx.fillText('0', x0, y0);
-    ctx.fillText(maxStr, xm, ym);
+    ctx.fillText('0', snap(x0), snap(y0));
+    ctx.fillText(maxStr, snap(xm), snap(ym));
   }
 
   // ══ PLUGIN-DRIVEN GAUGES ═══════════════════════════════════════════════════
@@ -238,7 +261,20 @@
       const card=document.createElement('div'); card.className='gauge-card';
       card.dataset.tileKey=(g.label||('gauge'+i)).toLowerCase().replace(/[^a-z0-9]+/g,'-');
       const canvas=document.createElement('canvas'); canvas.id=`gauge-${i}`;
-      card.appendChild(canvas); row.appendChild(card);
+      card.appendChild(canvas);
+      // Value/label are real DOM text, not canvas fillText — WebKitGTK's
+      // Cairo/Pango text rasterizer applies LCD/subpixel antialiasing to
+      // canvas text that assumes an opaque known background, and on the
+      // canvas's transparent backing store that decomposes into visible
+      // red/green channel fringing on saturated colours (invisible on the
+      // muted-gray label, which is why only the value looked "off"). DOM
+      // text goes through the normal compositor path and renders clean,
+      // matching every other coloured number elsewhere in the UI.
+      const valEl=document.createElement('div'); valEl.className='gauge-value'; valEl.id=`gauge-val-${i}`;
+      const lblEl=document.createElement('div'); lblEl.className='gauge-label'; lblEl.id=`gauge-lbl-${i}`;
+      lblEl.textContent=g.label||'';
+      card.appendChild(valEl); card.appendChild(lblEl);
+      row.appendChild(card);
       _gaugeState[i]={cur:0,raf:null};
       if (g.tooltip){
         card.addEventListener('mousemove',e=>showTip(g.tooltip,e.clientX,e.clientY));

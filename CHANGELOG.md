@@ -22,6 +22,7 @@ f2a8c4f Fix DX cluster spots never reaching the table
 ### Bugfixes
 
 a23102e Fix persistent settings being wiped on every app restart
+bccdd19 Fix theme/prefs silently resetting on quick app restart on Linux
 
 ## 26.7.9
 

@@ -16,7 +16,14 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{font-size:13px;}  /* zoom slider changes this */
 body{height:100%;background:var(--bg);color:var(--fg);
-     font-family:var(--font-ui);font-size:1em;overflow:hidden;}
+     font-family:var(--font-ui);font-size:1em;overflow:hidden;
+     /* WebKitGTK's Cairo/Pango text path applies LCD/subpixel antialiasing,
+        which visibly fringes (red/green channel split) on saturated coloured
+        text at these sizes. Chromium hides this by defaulting to grayscale
+        AA, which is why it can look fine in a browser and still be fringed
+        in the packaged desktop app. Forcing grayscale AA everywhere fixes it
+        app-wide with no visual cost on a non-LCD-tuned render path anyway. */
+     -webkit-font-smoothing:antialiased;}
 
 /* ── Title bar (two rows) ──────────────────────────────────────────────────── */
 #titlebar{
@@ -257,6 +264,10 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
   overflow:hidden;position:relative;transition:border-top-color .3s,box-shadow .3s;}
 .gauge-card canvas{position:absolute;inset:0;width:100%!important;height:100%!important;}
 .gauge-card:hover{border-top-color:var(--accent3);box-shadow:0 0 10px -4px var(--accent3);}
+.gauge-value,.gauge-label{position:absolute;left:0;right:0;
+  font-family:Consolas,monospace;text-align:center;white-space:nowrap;pointer-events:none;}
+.gauge-value{font-weight:bold;}
+.gauge-label{color:var(--muted);}
 
 /* ── Spark row ───────────────────────────────────────────────────────────── */
 .spark-row{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--gap);flex-shrink:0;}
