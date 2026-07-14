@@ -38,5 +38,14 @@ orjson>=3.9.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 
-# test comment
-# test comment 2
+# ── Test suite ──────────────────────────────────────────────────────────────
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.10.0
+
+# ── Type checking ────────────────────────────────────────────────────────────
+mypy>=1.8.0
+
+# ── Linting / formatting ────────────────────────────────────────────────────
+ruff>=0.3.0
+black>=24.0.0

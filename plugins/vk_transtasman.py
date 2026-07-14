@@ -33,18 +33,27 @@ UDC: VKTTRTTY.UDC (author VK4SN)
 """
 
 from __future__ import annotations
+
 import re
 from collections import defaultdict
-from datetime import date as date_, timedelta
+from datetime import date as date_
+from datetime import timedelta
 from typing import Optional
 
 from plugins.base import (
-    ContestPlugin, SessionConfig, MultResult, GaugeDef,
-    ACCENT, ACCENT2, ACCENT3, GREEN, MUTED,
+    ACCENT,
+    ACCENT2,
+    ACCENT3,
+    GREEN,
+    MUTED,
+    ContestPlugin,
+    GaugeDef,
+    MultResult,
+    SessionConfig,
 )
 
-
 # ── WPX prefix derivation ─────────────────────────────────────────────────────
+
 
 def _wpx_prefix(call: str) -> str:
     """
@@ -53,19 +62,19 @@ def _wpx_prefix(call: str) -> str:
     Examples:  VK2YI→VK2  ZL3AB→ZL3  VJ4K→VJ4  VL5A→VL5  AX3T→AX3
     """
     call = call.upper().strip()
-    call = re.sub(r'/(P|M|QRP|MM|AM|A|B|LH|LGT)$', '', call)
-    if '/' in call:
-        parts = call.split('/')
+    call = re.sub(r"/(P|M|QRP|MM|AM|A|B|LH|LGT)$", "", call)
+    if "/" in call:
+        parts = call.split("/")
         for part in sorted(parts, key=len, reverse=True):
-            if re.search(r'[A-Z]\d', part):
+            if re.search(r"[A-Z]\d", part):
                 call = part
                 break
         else:
             call = parts[0]
-    m = re.match(r'^([A-Z]{1,4})(\d)', call)
+    m = re.match(r"^([A-Z]{1,4})(\d)", call)
     if m:
         return m.group(1) + m.group(2)
-    m2 = re.match(r'^(\d[A-Z]{1,2})(\d)', call)
+    m2 = re.match(r"^(\d[A-Z]{1,2})(\d)", call)
     if m2:
         return m2.group(1) + m2.group(2)
     return call[:3]
@@ -126,14 +135,14 @@ class VKTransTasmanPlugin(ContestPlugin):
         return SessionConfig(duration_mins=120, num_sessions=3, start_hour=8)
 
     def mult_list(self) -> list:
-        return []   # open-ended
+        return []  # open-ended
 
     def mult_label(self) -> str:
         return "WPX Prefix"
 
     def mult_of_qso(self, q: dict) -> Optional[str]:
         stored = (q.get("mult1") or "").strip().upper()
-        if stored and re.match(r'^[A-Z]{1,4}\d$', stored):
+        if stored and re.match(r"^[A-Z]{1,4}\d$", stored):
             return stored
         call = q.get("call", "")
         if call:
@@ -157,6 +166,10 @@ class VKTransTasmanPlugin(ContestPlugin):
 
     @property
     def preferred_exchange_columns(self):
+        # N1MM's ADIF export uses "WPXPrefix" (capitalisation varies by
+        # exporter version — not1mm writes "wpxprefix"). Both must always
+        # be checked because column matching in contest_log.py's load()
+        # tests only column *existence*, not population.
         return ["WPXPrefix", "wpxprefix"]
 
     def recalc_pts(self, qsos: list) -> None:
@@ -198,17 +211,17 @@ class VKTransTasmanPlugin(ContestPlugin):
         # here are WPX prefixes derived per-QSO rather than looked up via
         # the base class's generic `mult1 in ml_set` check, which doesn't
         # apply to VKTT's open-ended, computed-not-stored prefix mults.
-        band_qsos  = defaultdict(int)
-        band_pts   = defaultdict(int)
+        band_qsos = defaultdict(int)
+        band_pts = defaultdict(int)
         band_mults = defaultdict(set)
-        band_last  = {}
+        band_last = {}
         band_hours = defaultdict(lambda: defaultdict(int))
         for q in qsos:
             if q["dupe"]:
                 continue
             b = q["band"] or "?"
             band_qsos[b] += 1
-            band_pts[b]  += q.get("pts", 0) or 0
+            band_pts[b] += q.get("pts", 0) or 0
             if _is_vktt_workable(q.get("call", "")):
                 pfx = self.mult_of_qso(q)
                 if pfx:
@@ -221,34 +234,36 @@ class VKTransTasmanPlugin(ContestPlugin):
                 band_hours[b][h_key] += 1
         result = []
         for b in band_qsos:
-            qn   = band_qsos[b]
-            mn   = len(band_mults[b])
+            qn = band_qsos[b]
+            mn = len(band_mults[b])
             best = max(band_hours[b].values()) if band_hours[b] else 0
             last = band_last.get(b)
-            result.append({
-                "band":           b,
-                "qsos":           qn,
-                "pts":            band_pts[b],
-                "new_shires":     mn,
-                "efficiency":     mn / qn if qn else 0,
-                "best_hour_rate": best,
-                "last_qso_utc":   last.isoformat() if last else None,
-            })
+            result.append(
+                {
+                    "band": b,
+                    "qsos": qn,
+                    "pts": band_pts[b],
+                    "new_shires": mn,
+                    "efficiency": mn / qn if qn else 0,
+                    "best_hour_rate": best,
+                    "last_qso_utc": last.isoformat() if last else None,
+                }
+            )
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)
 
     def gauge_defs(self, data: dict, total_mults: int) -> list:
-        worked   = data.get("worked", 0)
+        worked = data.get("worked", 0)
         band_mult = data.get("band_mults", 0)
         soft_max = max(worked * 1.25, band_mult * 1.25, 20)
-        valid    = data.get("valid", 1) or 1
+        valid = data.get("valid", 1) or 1
         return [
-            GaugeDef("TOTAL QSOs",  "total",      "qso_max",   ACCENT(),  "{v}"),
-            GaugeDef("VALID QSOs",  "valid",      "qso_max",   GREEN(),   "{v}"),
-            GaugeDef("TOTAL SCORE", "score",      "score_max", ACCENT3(), "{v:,}"),
-            GaugeDef("WPX WORKED",  "worked",     soft_max,    ACCENT3(), "{v}"),
-            GaugeDef("WPX MULTS",   "band_mults", soft_max,    GREEN(),   "{v}"),
-            GaugeDef("VK CONTACTS", "vk_cnt",     valid,       ACCENT2(), "{v}"),
-            GaugeDef("ZL CONTACTS", "zl_cnt",     valid,       "#64b5f6", "{v}"),
+            GaugeDef("TOTAL QSOs", "total", "qso_max", ACCENT(), "{v}"),
+            GaugeDef("VALID QSOs", "valid", "qso_max", GREEN(), "{v}"),
+            GaugeDef("TOTAL SCORE", "score", "score_max", ACCENT3(), "{v:,}"),
+            GaugeDef("WPX WORKED", "worked", soft_max, ACCENT3(), "{v}"),
+            GaugeDef("WPX MULTS", "band_mults", soft_max, GREEN(), "{v}"),
+            GaugeDef("VK CONTACTS", "vk_cnt", valid, ACCENT2(), "{v}"),
+            GaugeDef("ZL CONTACTS", "zl_cnt", valid, "#64b5f6", "{v}"),
         ]
 
     def sparkline_mults(self, q: dict, seen: set) -> int:
@@ -256,7 +271,7 @@ class VKTransTasmanPlugin(ContestPlugin):
         if not pfx:
             return 0
         key = (pfx, q["band"])
-        if q.get("is_mult1") == 1 and key not in seen:
+        if q.get("is_mult1") and key not in seen:
             seen.add(key)
             return 1
         return 0
