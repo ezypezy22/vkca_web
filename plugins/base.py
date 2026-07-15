@@ -296,13 +296,54 @@ class ContestPlugin(ABC):
                            "pct": w / t * 100 if t else 0})
         return sorted(result, key=lambda x: x["qsos"], reverse=True)
 
+    def _band_time_stats(self, qsos: list, key_fn=None) -> dict:
+        """
+        Best-60-minute QSO rate and most-recent QSO timestamp, grouped by
+        band (default) — contest-agnostic (pure QSO-time math, no scoring
+        rules involved), so every plugin's band_efficiency() override can
+        pull these two fields from here instead of reimplementing the same
+        band_hours/band_last bookkeeping. Returns {key: {"best_hour_rate":
+        int, "last_qso_utc": str|None}}; a key with no non-dupe QSOs is
+        simply absent from the dict — callers should default missing keys
+        to {"best_hour_rate": 0, "last_qso_utc": None}.
+
+        Pass key_fn to group by something other than band (e.g.
+        plugins/arrl10m.py groups by mode instead, since that contest has
+        no per-band axis) — key_fn(q) -> the grouping key for that QSO.
+
+        Feeds the Bands tab's BEST RATE / LAST QSO columns (bands.js reads
+        best_hour_rate / last_qso_utc directly) — every plugin override that
+        omitted these left those two columns blank (see issue #19).
+        """
+        key_fn = key_fn or (lambda q: q.get("band") or "?")
+        key_last  = {}              # key → most-recent QSO datetime
+        key_hours = defaultdict(lambda: defaultdict(int))  # key → hour → count
+
+        for q in qsos:
+            if q["dupe"]:
+                continue
+            k = key_fn(q)
+            t = q.get("time")
+            if t is None:
+                continue
+            if k not in key_last or t > key_last[k]:
+                key_last[k] = t
+            h_key = t.replace(minute=0, second=0, microsecond=0)
+            key_hours[k][h_key] += 1
+
+        result = {}
+        for k in key_hours:
+            result[k] = {
+                "best_hour_rate": max(key_hours[k].values()),
+                "last_qso_utc":   key_last[k].isoformat() if key_last.get(k) else None,
+            }
+        return result
+
     def band_efficiency(self, qsos: list) -> list:
         ml_set      = set(self.mult_list())
         band_qsos   = defaultdict(int)
         band_pts    = defaultdict(int)
         band_mults  = defaultdict(set)
-        band_last   = {}              # band → most-recent QSO datetime
-        band_hours  = defaultdict(lambda: defaultdict(int))  # band → hour → count
 
         for q in qsos:
             if not q["dupe"]:
@@ -311,27 +352,20 @@ class ContestPlugin(ABC):
                 band_pts[b]  += q.get("pts", 0) or 0
                 if q["mult1"] in ml_set:
                     band_mults[b].add(q["mult1"])
-                t = q.get("time")
-                if t is not None:
-                    if b not in band_last or t > band_last[b]:
-                        band_last[b] = t
-                    h_key = t.replace(minute=0, second=0, microsecond=0)
-                    band_hours[b][h_key] += 1
 
+        time_stats = self._band_time_stats(qsos)
         result = []
         for b in band_qsos:
-            qn   = band_qsos[b]
-            mn   = len(band_mults[b])
-            best = max(band_hours[b].values()) if band_hours[b] else 0
-            last = band_last.get(b)
+            qn = band_qsos[b]
+            mn = len(band_mults[b])
+            ts = time_stats.get(b, {"best_hour_rate": 0, "last_qso_utc": None})
             result.append({
                 "band":           b,
                 "qsos":           qn,
                 "pts":            band_pts[b],
                 "new_shires":     mn,
                 "efficiency":     mn / qn if qn else 0,
-                "best_hour_rate": best,
-                "last_qso_utc":   last.isoformat() if last else None,
+                **ts,
             })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)
 

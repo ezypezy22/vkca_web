@@ -669,6 +669,7 @@ class AllAsianPlugin(ContestPlugin):
     def band_efficiency(self, qsos: list) -> list:
         """Per-band breakdown: Asian QSOs, new prefixes, efficiency."""
         band_qsos = defaultdict(int)
+        band_pts  = defaultdict(int)
         band_pfxs = defaultdict(set)
 
         for q in qsos:
@@ -679,21 +680,26 @@ class AllAsianPlugin(ContestPlugin):
                 continue   # only Asian contacts are scoring QSOs at all
             b = (q.get("band") or "?").upper()
             band_qsos[b] += 1
+            band_pts[b]  += q.get("pts", 0) or 0
             if _is_maritime_mobile(call):
                 continue   # counts as a QSO but never a multiplier
             pfx = _resolved_prefix(q)
             if pfx:
                 band_pfxs[b].add(pfx)
 
+        time_stats = self._band_time_stats(qsos)
         result = []
         for b in band_qsos:
             qn = band_qsos[b]
             mn = len(band_pfxs[b])
+            ts = time_stats.get(b, {"best_hour_rate": 0, "last_qso_utc": None})
             result.append({
                 "band":        b,
                 "qsos":        qn,
+                "pts":         band_pts[b],
                 "new_shires":  mn,     # generic key expected by the UI
                 "efficiency":  mn / qn if qn else 0,
                 "pts_per_qso": _pts_for_band(b),
+                **ts,
             })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)

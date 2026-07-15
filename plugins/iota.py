@@ -375,6 +375,7 @@ class IOTAPlugin(ContestPlugin):
     def band_efficiency(self, qsos: list) -> list:
         from collections import defaultdict
         band_qsos  = defaultdict(int)
+        band_pts   = defaultdict(int)
         band_mults = defaultdict(set)
         for q in qsos:
             if q.get("dupe"):
@@ -382,17 +383,24 @@ class IOTAPlugin(ContestPlugin):
             b   = _band(q.get("band") or q.get("freq") or "?")
             ref = _normalise_ref(str(q.get("mult1") or ""))
             band_qsos[b] += 1
+            band_pts[b]  += q.get("pts", 0) or 0
             if ref:
                 band_mults[b].add(ref)
+
+        time_stats = self._band_time_stats(
+            qsos, key_fn=lambda q: _band(q.get("band") or q.get("freq") or "?"))
         result = []
         for b in band_qsos:
             qn = band_qsos[b]
             mn = len(band_mults[b])
+            ts = time_stats.get(b, {"best_hour_rate": 0, "last_qso_utc": None})
             result.append({
                 "band":       b,
                 "qsos":       qn,
+                "pts":        band_pts[b],
                 "new_shires": mn,
                 "efficiency": mn / qn if qn else 0,
+                **ts,
             })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)
 

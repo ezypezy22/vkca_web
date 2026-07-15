@@ -319,20 +319,26 @@ class VKShiresPlugin(ContestPlugin):
         # use is_mult1 for new-shire counts so 160m (and any band) always appears.
         from collections import defaultdict
         band_qsos  = defaultdict(int)
+        band_pts   = defaultdict(int)
         band_mults = defaultdict(set)
         for q in qsos:
             if q.get("dupe"):
                 continue
             b = q.get("band") or "?"
             band_qsos[b] += 1
+            band_pts[b]  += q.get("pts", 0) or 0
             if q.get("is_mult1") == 1 and q.get("raw_mult"):
                 band_mults[b].add(q["raw_mult"].strip().upper())
+        time_stats = self._band_time_stats(qsos)
         result = []
         for b, qn in band_qsos.items():
             mn = len(band_mults[b])
+            ts = time_stats.get(b, {"best_hour_rate": 0, "last_qso_utc": None})
             result.append({"band": b, "qsos": qn,
+                           "pts": band_pts[b],
                            "new_shires": mn,
-                           "efficiency": mn / qn if qn else 0})
+                           "efficiency": mn / qn if qn else 0,
+                           **ts})
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)
 
     def score(self, qsos: list) -> int:

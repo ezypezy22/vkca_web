@@ -630,6 +630,7 @@ class CQWWPlugin(ContestPlugin):
     def band_efficiency(self, qsos: list) -> list:
         """Per-band breakdown: QSOs, new countries, new zones, efficiency."""
         band_qsos      = defaultdict(int)
+        band_pts       = defaultdict(int)
         band_countries = defaultdict(set)
         band_zones     = defaultdict(set)
 
@@ -638,23 +639,28 @@ class CQWWPlugin(ContestPlugin):
                 continue
             b = q.get("band") or "?"
             band_qsos[b] += 1
+            band_pts[b]  += q.get("pts", 0) or 0
             if q.get("mult1"):
                 band_countries[b].add(q["mult1"])
             if q.get("cqz") is not None:
                 band_zones[b].add(q["cqz"])
 
+        time_stats = self._band_time_stats(qsos)
         result = []
         for b in band_qsos:
             qn  = band_qsos[b]
             cn  = len(band_countries[b])
             zn  = len(band_zones[b])
             mn  = cn + zn
+            ts  = time_stats.get(b, {"best_hour_rate": 0, "last_qso_utc": None})
             result.append({
                 "band":         b,
                 "qsos":         qn,
+                "pts":          band_pts[b],
                 "new_shires":   mn,   # reuses the generic key name
                 "new_countries": cn,
                 "new_zones":    zn,
                 "efficiency":   mn / qn if qn else 0,
+                **ts,
             })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)

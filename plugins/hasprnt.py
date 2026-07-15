@@ -431,23 +431,30 @@ class HASprint80mPlugin(ContestPlugin):
         mode_qsos  = defaultdict(int)
         mode_pts   = defaultdict(int)
 
+        def _mode_label(q):
+            return "CW" if _is_cw(q.get("mode")) else "Phone"
+
         for q in qsos:
             if q["dupe"]:
                 continue
-            mode_label = "CW" if _is_cw(q.get("mode")) else "Phone"
+            mode_label = _mode_label(q)
             mode_qsos[mode_label] += 1
             mode_pts[mode_label]  += q.get("pts", _pts_for_mode(q.get("mode")))
 
+        time_stats = self._band_time_stats(qsos, key_fn=_mode_label)
         result = []
         for m in mode_qsos:
             qn = mode_qsos[m]
             pn = mode_pts[m]
+            ts = time_stats.get(m, {"best_hour_rate": 0, "last_qso_utc": None})
             result.append({
                 "band":        m,
                 "qsos":        qn,
+                "pts":         pn,
                 "new_shires":  pn,          # points — "new_shires" is the generic UI key
                 "efficiency":  pn / qn if qn else 0,
                 "pts_per_qso": _pts_for_mode("CW" if m == "CW" else "SSB"),
+                **ts,
             })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)
 

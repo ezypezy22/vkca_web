@@ -498,6 +498,7 @@ class CQWPXPlugin(ContestPlugin):
         scoring-relevant "new on this band" concept to show).
         """
         band_qsos     = defaultdict(int)
+        band_pts      = defaultdict(int)
         band_prefixes = defaultdict(set)
 
         for q in qsos:
@@ -505,18 +506,23 @@ class CQWPXPlugin(ContestPlugin):
                 continue
             b = q.get("band") or "?"
             band_qsos[b] += 1
+            band_pts[b]  += q.get("pts", 0) or 0
             if q.get("mult1"):
                 band_prefixes[b].add(q["mult1"])
 
+        time_stats = self._band_time_stats(qsos)
         result = []
         for b in band_qsos:
             qn = band_qsos[b]
             pn = len(band_prefixes[b])
+            ts = time_stats.get(b, {"best_hour_rate": 0, "last_qso_utc": None})
             result.append({
                 "band":          b,
                 "qsos":          qn,
+                "pts":           band_pts[b],
                 "new_shires":    pn,   # reuses the generic key name
                 "new_prefixes":  pn,
                 "efficiency":    pn / qn if qn else 0,
+                **ts,
             })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)

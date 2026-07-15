@@ -615,30 +615,41 @@ class JIDXPlugin(ContestPlugin):
         counting rather than the generic mult1 membership test.
         """
         band_qsos  = defaultdict(int)
+        band_pts   = defaultdict(int)
         band_prefs = defaultdict(set)
+        ja_qsos    = []   # scored subset — feeds _band_time_stats below
 
         for q in qsos:
             if q["dupe"]:
                 continue
             if not _is_ja_call(str(q.get("call") or "")):
                 continue
+            ja_qsos.append(q)
             b    = (q.get("band") or "?").upper()
             raw  = str(q.get("mult1") or q.get("shire") or "")
             pref = _normalise_prefecture(raw)
             band_qsos[b] += 1
+            band_pts[b]  += q.get("pts", 0) or 0
             if pref:
                 band_prefs[b].add(pref)
 
+        # Scoped to the same JA-only, non-dupe QSOs as the counts above, so
+        # BEST RATE / LAST QSO reflect this table's own "qsos" column rather
+        # than mixing in non-scoring contacts.
+        time_stats = self._band_time_stats(ja_qsos)
         result = []
         for b in band_qsos:
             qn = band_qsos[b]
             mn = len(band_prefs[b])
+            ts = time_stats.get(b, {"best_hour_rate": 0, "last_qso_utc": None})
             result.append({
                 "band":        b,
                 "qsos":        qn,
+                "pts":         band_pts[b],
                 "new_shires":  mn,      # generic key expected by the UI
                 "efficiency":  mn / qn if qn else 0,
                 "pts_per_qso": _pts_for_band(b),
+                **ts,
             })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)
 

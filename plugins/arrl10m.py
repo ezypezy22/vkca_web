@@ -755,27 +755,36 @@ class ARRL10MPlugin(ContestPlugin):
         per-band efficiency view.
         """
         mode_qsos  = defaultdict(int)
+        mode_pts   = defaultdict(int)
         mode_mults = defaultdict(set)
         own_entity = _own_entity_prefix(qsos)
+
+        def _mode_label(q):
+            return "CW" if _is_cw(q.get("mode")) else "Phone"
 
         for q in qsos:
             if q["dupe"]:
                 continue
-            mode_label = "CW" if _is_cw(q.get("mode")) else "Phone"
+            mode_label = _mode_label(q)
             mode_qsos[mode_label] += 1
+            mode_pts[mode_label]  += q.get("pts", 0) or 0
             mult_key = _classify_exchange(q, own_entity)
             if mult_key:
                 mode_mults[mode_label].add(mult_key)
 
+        time_stats = self._band_time_stats(qsos, key_fn=_mode_label)
         result = []
         for m in mode_qsos:
             qn = mode_qsos[m]
             mn = len(mode_mults[m])
+            ts = time_stats.get(m, {"best_hour_rate": 0, "last_qso_utc": None})
             result.append({
                 "band":        m,          # generic key expected by the UI
                 "qsos":        qn,
+                "pts":         mode_pts[m],
                 "new_shires":  mn,
                 "efficiency":  mn / qn if qn else 0,
                 "pts_per_qso": _pts_for_mode("CW" if m == "CW" else "SSB"),
+                **ts,
             })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)

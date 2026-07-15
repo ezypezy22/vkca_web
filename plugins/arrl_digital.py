@@ -419,16 +419,19 @@ class ARRLDigitalPlugin(ContestPlugin):
             band_qsos[b] += 1
             band_pts[b]  += q.get("pts", 0) or 0
 
+        time_stats = self._band_time_stats(qsos)
         result = []
         for b in band_qsos:
             qn = band_qsos[b]
             pn = band_pts[b]
+            ts = time_stats.get(b, {"best_hour_rate": 0, "last_qso_utc": None})
             result.append({
                 "band":         b,
                 "qsos":         qn,
                 "new_shires":   pn,   # reuses the generic key name
                 "pts":          pn,
                 "efficiency":   pn / qn if qn else 0,
+                **ts,
             })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)
 

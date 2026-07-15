@@ -219,14 +219,18 @@ class OceaniaDXPlugin(ContestPlugin):
                 pfx = self.mult_of_qso(q)
                 if pfx:
                     band_mults[b].add(pfx)
+        time_stats = self._band_time_stats(qsos)
         result = []
         for b in band_qsos:
             qn = band_qsos[b]
             mn = len(band_mults[b])
+            ts = time_stats.get(b, {"best_hour_rate": 0, "last_qso_utc": None})
             result.append({
                 "band": b, "qsos": qn, "new_shires": mn,
+                "pts":          band_pts[b],
                 "efficiency":   mn / qn if qn else 0,
                 "pts_per_qso":  band_pts[b] / qn if qn else 0,
+                **ts,
             })
         return sorted(result, key=lambda x: x["pts_per_qso"], reverse=True)
 

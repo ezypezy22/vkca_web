@@ -704,6 +704,7 @@ class IARUPlugin(ContestPlugin):
     def band_efficiency(self, qsos: list) -> list:
         """Per-band breakdown: QSOs, new zone mults, new HQ mults, efficiency."""
         band_qsos  = defaultdict(int)
+        band_pts   = defaultdict(int)
         band_zones = defaultdict(set)
         band_hq    = defaultdict(set)
 
@@ -712,6 +713,7 @@ class IARUPlugin(ContestPlugin):
                 continue
             b = q.get("band") or "?"
             band_qsos[b] += 1
+            band_pts[b]  += q.get("pts", 0) or 0
             m1 = q.get("mult1")
             if _is_hq_or_official(m1):
                 band_hq[b].add(str(m1).upper())
@@ -720,19 +722,23 @@ class IARUPlugin(ContestPlugin):
                 if z is not None:
                     band_zones[b].add(int(z))
 
+        time_stats = self._band_time_stats(qsos)
         result = []
         for b in band_qsos:
             qn = band_qsos[b]
             zn = len(band_zones[b])
             hn = len(band_hq[b])
             mn = zn + hn
+            ts = time_stats.get(b, {"best_hour_rate": 0, "last_qso_utc": None})
             result.append({
                 "band":        b,
                 "qsos":        qn,
+                "pts":         band_pts[b],
                 "new_shires":  mn,    # reuses the generic key name
                 "new_zones":   zn,
                 "new_hq":      hn,
                 "efficiency":  mn / qn if qn else 0,
+                **ts,
             })
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)
 
