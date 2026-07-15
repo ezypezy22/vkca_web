@@ -1,5 +1,14 @@
 # Changelog
 
+## 26.7.13
+
+### Bugfixes
+
+59a1593 Fix no single-instance guard and unchecked startup timeout (#21, #22)
+b715f45 Fix DX Cluster reconnect race and port-bind TOCTOU race (#26, #23)
+f433239 Fix IOTA off-band mislabeling and Mini HUD close() hang (#24, #25)
+6857147 Fix contest_start() crash and pts-floor data corruption (#27, #28)
+
 ## 26.7.12
 
 ### Enhancements
