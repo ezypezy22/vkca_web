@@ -5,7 +5,7 @@
 // GitHub "New Issue" URL.
 (function () {
   const GITHUB_REPO = 'ezypezy22/vkca_web';
-  const VERSION      = '26.7.11';
+  const VERSION      = '26.7.12';
 
   const overlay   = document.getElementById('report-issue-dialog');
   const btnOpen   = document.getElementById('btn-report-issue');

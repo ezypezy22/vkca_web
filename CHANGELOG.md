@@ -1,5 +1,18 @@
 # Changelog
 
+## 26.7.12
+
+### Enhancements
+
+4abedb1 Add CQ WW Digi and ARRL International Digital contest plugins (#17)
+
+### Bugfixes
+
+76ec01e Fix Bands tab showing blank Score/%/Best Rate/Last QSO for most contests (#19)
+2620f0d Fix overview gauge glow bleed and coloured-digit fringing on Linux
+1723340 Fix theme/prefs silently resetting on quick app restart on Linux
+d36bfbe Fix DX Cluster mode filter and connect/disconnect button state
+
 ## 26.7.11
 
 ### Enhancements
