@@ -2280,6 +2280,48 @@ async def ws_cluster(ws: WebSocket):
     tcp: _socket.socket | None = None
     reader_task = None
 
+    async def _teardown():
+        """Stop the current connection and its reader task, and wait for
+        the reader to actually finish before returning — not just close()
+        + cancel() and move on.
+
+        close() alone from a different thread doesn't reliably unblock a
+        concurrent blocking recv() (notably on Windows), so the old
+        _read_tcp() task could still be blocked in
+        loop.run_in_executor(None, tcp.recv, 1024) for up to its 30s
+        socket timeout after we've already moved on to a new connection.
+        When it finally does unblock, it sends its own "Disconnected"
+        status — which can arrive on the SAME websocket after a newer
+        connection's "Connected" status, flipping the UI to the wrong
+        state (see issue #26). shutdown(SHUT_RDWR) reliably unblocks that
+        recv() promptly cross-platform, and awaiting the (now cancelled)
+        task afterward guarantees its cleanup message is fully sent
+        before this function returns, so callers can safely proceed to
+        open a new connection right after.
+        """
+        nonlocal tcp, reader_task
+        old_tcp, old_task = tcp, reader_task
+        tcp = None
+        if old_tcp:
+            try:
+                old_tcp.shutdown(_socket.SHUT_RDWR)
+            except Exception:
+                pass
+            try:
+                old_tcp.close()
+            except Exception:
+                pass
+        if old_task:
+            old_task.cancel()
+            try:
+                # Bounded wait even though shutdown() above should unblock
+                # the reader almost immediately — never let a pathological
+                # platform/socket edge case hang the whole handler.
+                await asyncio.wait_for(old_task, timeout=5.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
+                pass
+        reader_task = None
+
     async def _read_tcp():
         nonlocal tcp
         loop = asyncio.get_event_loop()
@@ -2329,11 +2371,7 @@ async def ws_cluster(ws: WebSocket):
             cmd = json.loads(raw)
 
             if cmd.get("cmd") == "connect":
-                if tcp:
-                    try: tcp.close()
-                    except: pass
-                if reader_task:
-                    reader_task.cancel()
+                await _teardown()
                 host = cmd.get("host","")
                 port = int(cmd.get("port", 7300))
                 call = cmd.get("callsign","VK2YI")
@@ -2359,20 +2397,13 @@ async def ws_cluster(ws: WebSocket):
                 except: pass
 
             elif cmd.get("cmd") == "disconnect":
-                if tcp:
-                    try: tcp.close()
-                    except: pass
-                    tcp = None
+                await _teardown()
                 break
 
     except (WebSocketDisconnect, Exception):
         pass
     finally:
-        if tcp:
-            try: tcp.close()
-            except: pass
-        if reader_task:
-            reader_task.cancel()
+        await _teardown()
 
 
 # ── Themes ────────────────────────────────────────────────────────────────────
@@ -2851,15 +2882,16 @@ async def _poll_loop():
 
 _PREFERRED_PORT = 58631   # arbitrary, in the dynamic/private range (49152-65535)
 
-def _find_free_port() -> int:
-    """Prefer a fixed port so the pywebview window's origin — and therefore
-    every localStorage-backed preference (theme, zoom, tile layout, the Pace
-    tab's target score, etc.) — stays the same across app restarts; a
-    different port each launch means a different origin, which WebView2
-    treats as a brand-new site with empty storage even with private_mode=False
-    and a persistent storage_path (see launch_webview()). Falls back to a
-    random free port only if the preferred one is actually taken (e.g. a
-    second instance already running), rather than failing outright.
+def _bind_server_socket(port: Optional[int] = None) -> tuple[socket.socket, int]:
+    """Bind and start listening on the preferred fixed port so the pywebview
+    window's origin — and therefore every localStorage-backed preference
+    (theme, zoom, tile layout, the Pace tab's target score, etc.) — stays
+    the same across app restarts; a different port each launch means a
+    different origin, which WebView2 treats as a brand-new site with empty
+    storage even with private_mode=False and a persistent storage_path (see
+    launch_webview()). Falls back to a random free port only if the
+    preferred one is actually taken (e.g. a second instance already
+    running), rather than failing outright.
 
     SO_REUSEADDR matters here: this app hard-exits via os._exit() on close
     (see _start_shutdown()), skipping the graceful connection teardown that
@@ -2870,22 +2902,35 @@ def _find_free_port() -> int:
     quick restart silently lands on a random fallback port instead, which
     is a different origin to the embedded browser and starts with empty
     localStorage — i.e. it looks like the theme/zoom/tile-layout prefs this
-    fixed port exists to preserve just got wiped."""
-    with socket.socket() as s:
-        try:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind(("127.0.0.1", _PREFERRED_PORT))
-            return _PREFERRED_PORT
-        except OSError:
-            pass
-    with socket.socket() as s:
+    fixed port exists to preserve just got wiped.
+
+    Returns the actual bound-and-listening socket together with its port.
+    Callers must hand this same socket straight to uvicorn's
+    ``Server.serve(sockets=[...])`` rather than letting uvicorn bind its
+    own — closing this probe socket and having uvicorn bind a fresh one a
+    moment later would leave a small window where another process could
+    steal the port in between (see issue #23). Holding the one socket from
+    bind through serve closes that window entirely.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        s.bind(("127.0.0.1", port or _PREFERRED_PORT))
+    except OSError:
+        if port:
+            # Caller asked for a specific port — don't silently substitute
+            # a different one out from under them.
+            raise
+        s.close()
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+    s.listen(128)
+    return s, s.getsockname()[1]
 
 
 def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
-    port = port or _find_free_port()
-    url  = f"http://127.0.0.1:{port}"
+    sock, port = _bind_server_socket(port)
+    url = f"http://127.0.0.1:{port}"
     STATE._base_url = url
 
     # Pre-load if a valid file was passed on the command line
@@ -2902,7 +2947,10 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
     server = uvicorn.Server(config)
 
     def _run_server():
-        asyncio.run(server.serve())
+        # Passing our already-bound socket (see _bind_server_socket) instead
+        # of letting uvicorn bind its own host/port — avoids the TOCTOU
+        # close-then-rebind gap issue #23 flagged.
+        asyncio.run(server.serve(sockets=[sock]))
 
     server_thread = threading.Thread(target=_run_server, daemon=True, name="uvicorn")
     server_thread.start()
