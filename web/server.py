@@ -15,28 +15,30 @@ import math
 import os
 import queue
 import re
+import socket
 import sys
+
+# ── Path setup (works both normally and when frozen by PyInstaller) ───────────
+import sys as _sys
 import threading
 import time
-import socket
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-# ── Path setup (works both normally and when frozen by PyInstaller) ───────────
-import sys as _sys
 
 def _get_base_path():
     """Return the base directory whether running normally or as a PyInstaller exe."""
-    if getattr(_sys, 'frozen', False) and hasattr(_sys, '_MEIPASS'):
+    if getattr(_sys, "frozen", False) and hasattr(_sys, "_MEIPASS"):
         # Running inside PyInstaller bundle — assets are in _MEIPASS
         return Path(_sys._MEIPASS)
-    return Path(__file__).resolve().parent.parent   # normal: project root
+    return Path(__file__).resolve().parent.parent  # normal: project root
 
-_HERE   = Path(__file__).resolve().parent
-_ROOT   = _get_base_path()
-_STATIC = _ROOT / 'web' / 'static'
+
+_HERE = Path(__file__).resolve().parent
+_ROOT = _get_base_path()
+_STATIC = _ROOT / "web" / "static"
 
 # In frozen mode _ROOT is _MEIPASS; in dev mode it's the project root.
 sys.path.insert(0, str(_ROOT))
@@ -46,18 +48,29 @@ sys.path.insert(0, str(_ROOT))
 # on them — e.g. uvicorn's default logging setup — crashes with
 # "AttributeError: 'NoneType' object has no attribute 'isatty'" the moment
 # it runs. Give them a harmless no-op stream instead of leaving them None.
-if getattr(_sys, 'frozen', False):
-    class _NullStream:
-        def write(self, *a, **k): pass
-        def flush(self, *a, **k): pass
-        def isatty(self): return False
-    if sys.stdout is None: sys.stdout = _NullStream()
-    if sys.stderr is None: sys.stderr = _NullStream()
+if getattr(_sys, "frozen", False):
 
+    class _NullStream:
+        def write(self, *a, **k):
+            pass
+
+        def flush(self, *a, **k):
+            pass
+
+        def isatty(self):
+            return False
+
+    if sys.stdout is None:
+        sys.stdout = _NullStream()
+    if sys.stderr is None:
+        sys.stderr = _NullStream()
+
+import cosb
+import qrz
 import uvicorn
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 # Direct import — no tkinter mocking needed
 from contest_log import ContestLog
@@ -68,17 +81,18 @@ import qrz
 
 log = logging.getLogger(__name__)
 
+
 def _app_data_dir() -> Path:
     """Per-user-writable app folder. A properly installed exe typically lives
     under Program Files, which standard (non-admin) users can't write to —
     writing files next to the exe there raises PermissionError immediately."""
-    if getattr(sys, 'frozen', False):
-        if sys.platform == 'win32':
-            app_data = os.environ.get('LOCALAPPDATA') or str(Path.home() / 'AppData' / 'Local')
-        elif sys.platform == 'darwin':
-            app_data = str(Path.home() / 'Library' / 'Application Support')
+    if getattr(sys, "frozen", False):
+        if sys.platform == "win32":
+            app_data = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        elif sys.platform == "darwin":
+            app_data = str(Path.home() / "Library" / "Application Support")
         else:
-            app_data = os.environ.get('XDG_DATA_HOME') or str(Path.home() / '.local' / 'share')
+            app_data = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
         d = Path(app_data) / "VKContestAnalyzer"
         d.mkdir(parents=True, exist_ok=True)
         return d
@@ -93,10 +107,11 @@ def _setup_logging():
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[
             logging.FileHandler(log_path, encoding="utf-8"),
-            logging.StreamHandler(),   # still goes to console in dev mode
-        ]
+            logging.StreamHandler(),  # still goes to console in dev mode
+        ],
     )
     log.info(f"Log file: {log_path}")
+
 
 _setup_logging()
 
@@ -110,6 +125,7 @@ _SETTINGS_PATH = _app_data_dir() / "vkca_web_settings.json"
 
 
 def _load_settings() -> dict:
+    _SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
     try:
         with open(_SETTINGS_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -153,29 +169,30 @@ def _save_qrz_cache(cache: dict):
 # ── App state ─────────────────────────────────────────────────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class AppState:
     def __init__(self):
-        self.db_path:       Optional[str]        = None
-        self.contest_nr:    Optional[int]         = None
-        self.plugin                               = None
-        self.contest_log:   Optional[ContestLog]  = None
-        self.last_snapshot: dict                  = {}
-        self.last_mtime:    float                 = 0.0
-        self.poll_interval: float                 = 5.0
-        self._lock                                = threading.Lock()
-        self._clients:      list                  = []
-        self._webview_window                      = None  # set after webview starts
-        self._base_url:     Optional[str]         = None  # set after webview starts; used by /api/popout
-        self._hud_window                          = None  # the single Mini HUD window, if open
-        self.yoy_extra_paths: list                = []    # extra .s3db files added on the YOY tab
-        self.pace_extra_paths: list               = []    # [{"path":..., "kind":"s3db"|"adif"|"cabrillo"}]
-        self.fatigue_extra_paths: list            = []    # extra .s3db files added on the Fatigue tab
-        self.bandeff_extra_paths: list             = []    # extra .s3db files added on the Band Breakdown YoY view
+        self.db_path: Optional[str] = None
+        self.contest_nr: Optional[int] = None
+        self.plugin = None
+        self.contest_log: Optional[ContestLog] = None
+        self.last_snapshot: dict = {}
+        self.last_mtime: float = 0.0
+        self.poll_interval: float = 5.0
+        self._lock = threading.Lock()
+        self._clients: list = []
+        self._webview_window = None  # set after webview starts
+        self._base_url: Optional[str] = None  # set after webview starts; used by /api/popout
+        self._hud_window = None  # the single Mini HUD window, if open
+        self.yoy_extra_paths: list = []  # extra .s3db files added on the YOY tab
+        self.pace_extra_paths: list = []  # [{"path":..., "kind":"s3db"|"adif"|"cabrillo"}]
+        self.fatigue_extra_paths: list = []  # extra .s3db files added on the Fatigue tab
+        self.bandeff_extra_paths: list = []  # extra .s3db files added on the Band Breakdown YoY view
         # Live-ranking lookup cache: {callsign: (fetched_at, result_or_None)}.
         # Keeps the Overview tab's Contest Online ScoreBoard panel from
         # re-scraping on every request — see /api/live_rank.
-        self._live_rank_cache: dict               = {}
-        self._live_rank_ttl:   float               = 120.0
+        self._live_rank_cache: dict = {}
+        self._live_rank_ttl: float = 120.0
         # QRZ.com lookup enrichment (see web/qrz.py) — _qrz_client.lookup_one()
         # only ever runs on the single QRZ worker thread (_qrz_worker_loop);
         # set_credentials()/has_credentials() are also called from the main/
@@ -183,13 +200,13 @@ class AppState:
         # since they're plain attribute reads/writes under the GIL, not a
         # network call. Everything else here is shared with those threads and
         # guarded by _qrz_cache_lock.
-        self._qrz_client                          = qrz.QRZClient()
-        self._qrz_cache:    dict                  = _load_qrz_cache()
-        self._qrz_cache_lock                      = threading.Lock()
-        self._qrz_queue                           = queue.Queue()
-        self._qrz_inflight: set                   = set()   # calls queued/being looked up — dedup
-        self._qrz_last_broadcast: float           = 0.0
-        self._main_loop                           = None    # set in lifespan(); used by the QRZ worker to broadcast
+        self._qrz_client = qrz.QRZClient()
+        self._qrz_cache: dict = _load_qrz_cache()
+        self._qrz_cache_lock = threading.Lock()
+        self._qrz_queue = queue.Queue()
+        self._qrz_inflight: set = set()  # calls queued/being looked up — dedup
+        self._qrz_last_broadcast: float = 0.0
+        self._main_loop = None  # set in lifespan(); used by the QRZ worker to broadcast
         # Enrich All batch progress — reset by _qrz_enrich_all() to the size
         # of that batch, then _qrz_batch_remaining counts down as the worker
         # finishes each item (see _qrz_worker_loop). The same worker/queue
@@ -197,8 +214,8 @@ class AppState:
         # QSOs trickle in mid-batch this undercounts slightly (remaining can
         # plateau briefly) — fine for a progress indicator, not used for
         # anything correctness-sensitive. Guarded by _qrz_cache_lock.
-        self._qrz_batch_total:     int             = 0
-        self._qrz_batch_remaining: int             = 0
+        self._qrz_batch_total: int = 0
+        self._qrz_batch_remaining: int = 0
 
     # ── Path validation (no DB open) ─────────────────────────────────────────
 
@@ -215,8 +232,7 @@ class AppState:
         if not p.exists():
             return f"File not found: {path}"
         if p.is_dir():
-            return (f"That is a folder, not a file. "
-                    f"Please select a log file inside: {path}")
+            return f"That is a folder, not a file. Please select a log file inside: {path}"
         if p.suffix.lower() not in AppState._VALID_SUFFIXES:
             return f"Expected a .s3db/.db/.sqlite file, got: {p.name}"
         return None
@@ -225,22 +241,24 @@ class AppState:
 
     def scan_contests(self, path: str) -> dict:
         path = str(Path(path).resolve())
-        err  = self.validate_path(path)
+        err = self.validate_path(path)
         if err:
             return {"error": err}
         try:
             contests = ContestLog.available_contests(path)
-            result   = []
+            result = []
             for ct in contests:
                 p = plugin_for(str(ct.get("ContestName", "")))
-                result.append({
-                    "contest_nr":   ct["ContestNR"],
-                    "contest_name": ct.get("ContestName", ""),
-                    "display_name": ct.get("DisplayName", ct.get("ContestName", "")),
-                    "start_date":   str(ct.get("StartDate", ""))[:10],
-                    "qso_count":    ct.get("QSOCount", 0),
-                    "plugin":       p.display_name,
-                })
+                result.append(
+                    {
+                        "contest_nr": ct["ContestNR"],
+                        "contest_name": ct.get("ContestName", ""),
+                        "display_name": ct.get("DisplayName", ct.get("ContestName", "")),
+                        "start_date": str(ct.get("StartDate", ""))[:10],
+                        "qso_count": ct.get("QSOCount", 0),
+                        "plugin": p.display_name,
+                    }
+                )
             return {"ok": True, "path": path, "contests": result}
         except Exception as exc:
             log.exception("scan_contests failed")
@@ -248,21 +266,20 @@ class AppState:
 
     # ── Full load (creates ContestLog + compute_snapshot) ────────────────────
 
-    def load_db(self, path: str, contest_nr: Optional[int] = None,
-                plugin=None) -> dict:
+    def load_db(self, path: str, contest_nr: Optional[int] = None, plugin=None) -> dict:
         path = str(Path(path).resolve())
-        err  = self.validate_path(path)
+        err = self.validate_path(path)
         if err:
             return {"error": err}
         try:
             cl = ContestLog(path, contest_nr=contest_nr, plugin=plugin)
             with self._lock:
-                self.db_path      = path
-                self.contest_nr   = contest_nr
-                self.plugin       = plugin
-                self.contest_log  = cl
+                self.db_path = path
+                self.contest_nr = contest_nr
+                self.plugin = plugin
+                self.contest_log = cl
                 self._enrich_qsos(cl)
-                self.last_mtime   = os.path.getmtime(path)
+                self.last_mtime = os.path.getmtime(path)
                 self.last_snapshot = self._safe_snapshot()
             return {"ok": True, "path": path}
         except Exception as exc:
@@ -290,13 +307,11 @@ class AppState:
         if not force and mtime <= self.last_mtime:
             return False
         try:
-            cl = ContestLog(self.db_path,
-                            contest_nr=self.contest_nr,
-                            plugin=self.plugin)
+            cl = ContestLog(self.db_path, contest_nr=self.contest_nr, plugin=self.plugin)
             with self._lock:
-                self.contest_log   = cl
+                self.contest_log = cl
                 self._enrich_qsos(cl)
-                self.last_mtime    = mtime
+                self.last_mtime = mtime
                 self.last_snapshot = self._safe_snapshot()
             return True
         except Exception:
@@ -335,8 +350,8 @@ class AppState:
         status = "found" if entry.get("found") else "not_found"
         for q in cl.qsos:
             if (q.get("call") or "").upper() == call:
-                q["qrz_name"]  = entry.get("name", "")
-                q["qrz_grid"]  = entry.get("grid", "")
+                q["qrz_name"] = entry.get("name", "")
+                q["qrz_grid"] = entry.get("grid", "")
                 q["qrz_state"] = entry.get("state", "")
                 q["qrz_status"] = status
 
@@ -374,11 +389,12 @@ class AppState:
 
 # ── JSON serialiser ───────────────────────────────────────────────────────────
 
+
 def _json_safe(obj):
-    from datetime import datetime, date
+    from datetime import date, datetime
+
     if isinstance(obj, dict):
-        return {k: _json_safe(v) for k, v in obj.items()
-                if not k.startswith("_")}
+        return {k: _json_safe(v) for k, v in obj.items() if not k.startswith("_")}
     if isinstance(obj, (list, tuple)):
         return [_json_safe(v) for v in obj]
     if isinstance(obj, (datetime, date)):
@@ -404,6 +420,7 @@ STATE = AppState()
 # asyncio event loop — the worker is a plain daemon thread — except
 # _qrz_maybe_broadcast(), which hops back onto the event loop via
 # run_coroutine_threadsafe() since _broadcast() is a coroutine.
+
 
 def _qrz_cache_get(call: str) -> Optional[dict]:
     with STATE._qrz_cache_lock:
@@ -518,17 +535,19 @@ async def popout_page(key: str):
 
 # ── Status ────────────────────────────────────────────────────────────────────
 
+
 @app.get("/api/status")
 async def api_status():
     return {
-        "loaded":     STATE.contest_log is not None,
-        "db_path":    STATE.db_path,
+        "loaded": STATE.contest_log is not None,
+        "db_path": STATE.db_path,
         "contest_nr": STATE.contest_nr,
-        "plugin":     getattr(STATE.plugin, "display_name", None),
+        "plugin": getattr(STATE.plugin, "display_name", None),
     }
 
 
 # ── Supported contest plugins (shown on the splash screen) ───────────────────
+
 
 @app.get("/api/plugins")
 async def api_plugins():
@@ -540,13 +559,14 @@ async def api_plugins():
     return [
         {
             "display_name": getattr(p, "display_name", type(p).__name__),
-            "class_name":    type(p).__name__,
+            "class_name": type(p).__name__,
         }
         for p in plugins
     ]
 
 
 # ── Native file browse (pywebview) ────────────────────────────────────────────
+
 
 @app.get("/api/browse")
 async def api_browse():
@@ -556,11 +576,12 @@ async def api_browse():
         return JSONResponse({"error": "PyWebView window not ready"}, status_code=503)
     try:
         import webview as _wv
+
         # OPEN_DIALOG = 10  (FOLDER_DIALOG = 20 — that was the old bug)
         result = win.create_file_dialog(
             dialog_type=_wv.FileDialog.OPEN,
             allow_multiple=False,
-            file_types=("Contest Log Files (*.s3db;*.db;*.sqlite)", "All files (*.*)")
+            file_types=("Contest Log Files (*.s3db;*.db;*.sqlite)", "All files (*.*)"),
         )
         if not result:
             return {"path": None}
@@ -568,8 +589,8 @@ async def api_browse():
         # Guard: pywebview may return a directory if the user didn't select a file
         if os.path.isdir(chosen):
             return JSONResponse(
-                {"error": f"Selected a folder, not a log file: {chosen}"},
-                status_code=400)
+                {"error": f"Selected a folder, not a log file: {chosen}"}, status_code=400
+            )
         return {"path": chosen}
     except Exception as exc:
         log.exception("browse failed")
@@ -586,6 +607,7 @@ async def api_browse_folder():
         return JSONResponse({"error": "PyWebView window not ready"}, status_code=503)
     try:
         import webview as _wv
+
         result = win.create_file_dialog(dialog_type=_wv.FileDialog.FOLDER)
         if not result:
             return {"path": None}
@@ -688,6 +710,7 @@ async def api_remove_log_dir(body: dict):
 # settings store as everything else here (log_dirs, window_geometry) — same
 # trust model as N1MM's own unencrypted database.
 
+
 @app.get("/api/qrz/credentials")
 async def api_qrz_credentials_get():
     creds = _load_settings().get("qrz_credentials")
@@ -726,7 +749,8 @@ async def api_qrz_credentials_post(body: dict):
     if not username or not password:
         return JSONResponse({"error": "Username and password required"}, status_code=400)
     result = await asyncio.get_event_loop().run_in_executor(
-        None, _qrz_test_and_save, username, password)
+        None, _qrz_test_and_save, username, password
+    )
     if "error" in result:
         return JSONResponse(result, status_code=400)
     return result
@@ -771,9 +795,9 @@ async def api_qrz_enrich_all():
 @app.get("/api/qrz/status")
 async def api_qrz_status():
     with STATE._qrz_cache_lock:
-        cache_size      = len(STATE._qrz_cache)
-        in_flight       = len(STATE._qrz_inflight)
-        batch_total     = STATE._qrz_batch_total
+        cache_size = len(STATE._qrz_cache)
+        in_flight = len(STATE._qrz_inflight)
+        batch_total = STATE._qrz_batch_total
         batch_remaining = STATE._qrz_batch_remaining
     return {
         "configured": STATE._qrz_client.has_credentials(),
@@ -805,17 +829,20 @@ async def api_scan_known_locations():
                     st = f.stat()
                 except OSError:
                     continue
-                found.append({
-                    "path":  str(f),
-                    "name":  f.name,
-                    "size":  st.st_size,
-                    "mtime": st.st_mtime,
-                })
+                found.append(
+                    {
+                        "path": str(f),
+                        "name": f.name,
+                        "size": st.st_size,
+                        "mtime": st.st_mtime,
+                    }
+                )
     found.sort(key=lambda r: r["mtime"], reverse=True)
     return {"databases": found, "os": sys.platform}
 
 
 # ── Pop-out tile window (pywebview) ───────────────────────────────────────────
+
 
 @app.post("/api/popout")
 async def api_popout(body: dict):
@@ -826,17 +853,20 @@ async def api_popout(body: dict):
     if STATE._webview_window is None or not STATE._base_url:
         return JSONResponse({"error": "PyWebView window not ready"}, status_code=503)
 
-    title  = (body.get("title") or "Tile").strip()
-    width  = int(body.get("width")  or 480)
+    title = (body.get("title") or "Tile").strip()
+    width = int(body.get("width") or 480)
     height = int(body.get("height") or 380)
 
     def _open():
-        import webview as _wv
         from urllib.parse import quote
+
+        import webview as _wv
+
         _wv.create_window(
             title=f"{title} — VK Contest Analyzer",
             url=f"{STATE._base_url}/popout/{quote(key, safe='')}",
-            width=width, height=height,
+            width=width,
+            height=height,
             min_size=(240, 180),
             background_color="#0d1117",
         )
@@ -859,11 +889,13 @@ async def api_hud():
 
     existing = STATE._hud_window
     if existing is not None:
+
         def _restore():
             try:
                 existing.restore()
             except Exception:
                 pass
+
         await asyncio.get_event_loop().run_in_executor(None, _restore)
         return {"ok": True, "reused": True}
 
@@ -894,7 +926,8 @@ async def api_hud():
         win = _wv.create_window(
             title="VK Contest Analyzer — HUD",
             url=f"{STATE._base_url}/hud",
-            width=780, height=110,
+            width=780,
+            height=110,
             min_size=(360, 76),
             background_color="#0d1117",
             on_top=True,
@@ -918,8 +951,9 @@ async def api_upload_log(file: UploadFile = File(...)):
     the uploaded file to a temp path on this same machine and hands back
     that path, so the rest of the load/scan flow can treat it exactly like
     a path chosen via the native dialog."""
-    import tempfile
     import shutil
+    import tempfile
+
     try:
         name = os.path.basename(file.filename or "upload")
         tmp_dir = Path(tempfile.gettempdir()) / "vkca_uploads"
@@ -935,19 +969,19 @@ async def api_upload_log(file: UploadFile = File(...)):
 
 # ── Scan contests in a .s3db (no full load) ───────────────────────────────────
 
+
 @app.post("/api/scan")
 async def api_scan(body: dict):
     """Validate path and list contests — does NOT load QSOs."""
     path = (body.get("path") or "").strip()
     if not path:
         return JSONResponse({"error": "No path supplied"}, status_code=400)
-    result = await asyncio.get_event_loop().run_in_executor(
-        None, STATE.scan_contests, path
-    )
+    result = await asyncio.get_event_loop().run_in_executor(None, STATE.scan_contests, path)
     return result
 
 
 # ── Full load ─────────────────────────────────────────────────────────────────
+
 
 @app.post("/api/load")
 async def api_load(body: dict):
@@ -956,9 +990,9 @@ async def api_load(body: dict):
     if not path:
         return JSONResponse({"error": "No path supplied"}, status_code=400)
 
-    contest_nr  = body.get("contest_nr")
+    contest_nr = body.get("contest_nr")
     plugin_name = body.get("plugin_name") or ""
-    plugin      = plugin_for(plugin_name) if plugin_name else None
+    plugin = plugin_for(plugin_name) if plugin_name else None
 
     result = await asyncio.get_event_loop().run_in_executor(
         None, STATE.load_db, path, contest_nr, plugin
@@ -969,6 +1003,7 @@ async def api_load(body: dict):
 
 
 # ── Data endpoints ────────────────────────────────────────────────────────────
+
 
 @app.get("/api/snapshot")
 async def api_snapshot():
@@ -1028,6 +1063,7 @@ async def api_live_rank():
 
 
 # ── Replay scrubber ───────────────────────────────────────────────────────────
+
 
 @app.get("/api/scrub_range")
 async def api_scrub_range():
@@ -1094,14 +1130,16 @@ async def api_replay_whatif(body: dict):
         if not STATE.contest_log:
             return JSONResponse({"error": "No log loaded"}, status_code=400)
         plugin = STATE.contest_log.plugin
-        qsos   = list(STATE.contest_log.qsos)
+        qsos = list(STATE.contest_log.qsos)
 
     try:
         valid_mults = set(plugin.mult_list())
     except Exception:
         valid_mults = set()
     if valid_mults and mult not in valid_mults:
-        return JSONResponse({"error": f"'{mult}' is not a recognized multiplier for this contest"}, status_code=400)
+        return JSONResponse(
+            {"error": f"'{mult}' is not a recognized multiplier for this contest"}, status_code=400
+        )
 
     try:
         zone_int = int(zone) if zone not in (None, "") else None
@@ -1122,18 +1160,30 @@ async def api_replay_whatif(body: dict):
     default_mode = max(mode_counts, key=mode_counts.get) if mode_counts else "CW"
 
     synthetic = {
-        "call": "WHATIF", "band": band, "mode": default_mode,
-        "mult1": mult, "mult2": mult, "cqz": zone_int, "raw_mult": mult,
-        "dupe": False, "is_mult1": 1, "is_mult2": 1 if zone_int is not None else 0,
-        "time": datetime.utcnow(), "pts": 0,
+        "call": "WHATIF",
+        "band": band,
+        "mode": default_mode,
+        "mult1": mult,
+        "mult2": mult,
+        "cqz": zone_int,
+        "raw_mult": mult,
+        "dupe": False,
+        "is_mult1": 1,
+        "is_mult2": 1 if zone_int is not None else 0,
+        "time": datetime.utcnow(),
+        "pts": 0,
     }
 
     caveat = None
     try:
         plugin.recalc_pts([synthetic])
     except Exception:
-        log.exception("what-if replay: recalc_pts failed for plugin %s", getattr(plugin, "display_name", "?"))
-        caveat = "Could not estimate an exact point value for this contest type — treat as approximate."
+        log.exception(
+            "what-if replay: recalc_pts failed for plugin %s", getattr(plugin, "display_name", "?")
+        )
+        caveat = (
+            "Could not estimate an exact point value for this contest type — treat as approximate."
+        )
 
     pts_delta = synthetic.get("pts") or 0
     if pts_delta <= 0 and caveat is None:
@@ -1143,8 +1193,11 @@ async def api_replay_whatif(body: dict):
         caveat = f"{caveat} {zone_note}" if caveat else zone_note
 
     return {
-        "band": band, "mult": mult, "pts_delta": pts_delta,
-        "is_new_mult": is_new_mult, "caveat": caveat,
+        "band": band,
+        "mult": mult,
+        "pts_delta": pts_delta,
+        "is_new_mult": is_new_mult,
+        "caveat": caveat,
     }
 
 
@@ -1162,9 +1215,9 @@ async def api_band_advice():
     with STATE._lock:
         if not STATE.contest_log:
             return {"recommended_band": None}
-        cl     = STATE.contest_log
+        cl = STATE.contest_log
         plugin = cl.plugin
-        qsos   = list(cl.qsos)
+        qsos = list(cl.qsos)
     try:
         est = cl._qso_value_estimate(qsos, plugin)
     except Exception:
@@ -1173,8 +1226,11 @@ async def api_band_advice():
         return {"recommended_band": None}
 
     current_band = None
-    timed = [(q["time"], q["band"]) for q in qsos
-             if not q.get("dupe") and q.get("time") and q.get("band")]
+    timed = [
+        (q["time"], q["band"])
+        for q in qsos
+        if not q.get("dupe") and q.get("time") and q.get("band")
+    ]
     if timed:
         current_band = max(timed, key=lambda t: t[0])[1]
 
@@ -1190,7 +1246,7 @@ async def api_band_advice():
         return {"recommended_band": None}
     return {
         "recommended_band": best_band,
-        "avg_pts":  est["bands"][best_band].get("avg_pts", 0),
+        "avg_pts": est["bands"][best_band].get("avg_pts", 0),
         "one_mult_value": best_val,
         "reason": f"Working a new mult on {best_band} is currently worth ~{round(best_val):,} pts",
     }
@@ -1201,22 +1257,26 @@ async def api_worked():
     return STATE.snapshot().get("last_worked", [])
 
 
-
 @app.get("/api/rate")
 async def api_rate():
     with STATE._lock:
         if not STATE.contest_log:
             return []
         try:
-            qsos_by_hour  = dict(STATE.contest_log.rate_by_hour())
+            qsos_by_hour = dict(STATE.contest_log.rate_by_hour())
             mults_by_hour = dict(STATE.contest_log.mults_by_hour())
             hours = sorted(set(qsos_by_hour) | set(mults_by_hour))
             return [
-                {"hour": h.isoformat(), "qsos": qsos_by_hour.get(h, 0), "mults": mults_by_hour.get(h, 0)}
+                {
+                    "hour": h.isoformat(),
+                    "qsos": qsos_by_hour.get(h, 0),
+                    "mults": mults_by_hour.get(h, 0),
+                }
                 for h in hours
             ]
         except Exception:
             return []
+
 
 @app.get("/api/sessions")
 async def api_sessions():
@@ -1228,6 +1288,7 @@ async def api_sessions():
         except Exception:
             return []
 
+
 @app.get("/api/dupes")
 async def api_dupes():
     with STATE._lock:
@@ -1237,12 +1298,12 @@ async def api_dupes():
             by_band, by_call = STATE.contest_log.dupe_analysis()
             return {
                 "by_band": dict(by_band),
-                "by_call": dict(sorted(by_call.items(),
-                                       key=lambda x: x[1], reverse=True)[:50]),
+                "by_call": dict(sorted(by_call.items(), key=lambda x: x[1], reverse=True)[:50]),
                 "rule_text": STATE.contest_log.plugin.dupe_rule_text,
             }
         except Exception:
             return {"by_band": {}, "by_call": {}}
+
 
 @app.get("/api/qsos")
 async def api_qsos():
@@ -1254,6 +1315,7 @@ async def api_qsos():
             return _json_safe(STATE.contest_log.qso_timeline())
         except Exception:
             return []
+
 
 @app.get("/api/operators")
 async def api_operators():
@@ -1318,7 +1380,7 @@ def _yoy_build_trajectory(cl: "ContestLog") -> Optional[dict]:
     acc: list = []
     elapsed_hrs, utc_hrs = [], []
     cum_score, cum_qsos, cum_mults = [], [], []
-    rate_counts     = [0] * n_buckets
+    rate_counts = [0] * n_buckets
     utc_rate_counts = [0] * 24
 
     vi = 0
@@ -1346,24 +1408,24 @@ def _yoy_build_trajectory(cl: "ContestLog") -> Optional[dict]:
             plugin.sparkline_mults(q, seen_mults)
         if cum_qsos:
             rate_counts[-1] += len(valid) - vi
-            cum_qsos[-1]  = len(acc)
+            cum_qsos[-1] = len(acc)
             cum_score[-1] = plugin.running_score_for_sparkline(acc)
             cum_mults[-1] = len(seen_mults)
 
     return {
-        "elapsed_hrs":     elapsed_hrs,
-        "utc_hrs":         utc_hrs,
-        "cum_score":       cum_score,
-        "cum_qsos":        cum_qsos,
-        "cum_mults":       cum_mults,
-        "rate_hrs":        [b + 0.5 for b in range(n_buckets)],
-        "rate_counts":     rate_counts,
-        "utc_rate_hrs":    [h + 0.5 for h in range(24)],
+        "elapsed_hrs": elapsed_hrs,
+        "utc_hrs": utc_hrs,
+        "cum_score": cum_score,
+        "cum_qsos": cum_qsos,
+        "cum_mults": cum_mults,
+        "rate_hrs": [b + 0.5 for b in range(n_buckets)],
+        "rate_counts": rate_counts,
+        "utc_rate_hrs": [h + 0.5 for h in range(24)],
         "utc_rate_counts": utc_rate_counts,
-        "final_score":     cum_score[-1] if cum_score else 0,
-        "final_qsos":      cum_qsos[-1]  if cum_qsos  else 0,
-        "final_mults":     cum_mults[-1] if cum_mults else 0,
-        "total_hrs":       total_hrs,
+        "final_score": cum_score[-1] if cum_score else 0,
+        "final_qsos": cum_qsos[-1] if cum_qsos else 0,
+        "final_mults": cum_mults[-1] if cum_mults else 0,
+        "total_hrs": total_hrs,
     }
 
 
@@ -1406,17 +1468,26 @@ def _yoy_collect_series(db_path: str, existing_keys: set, current_plugin_type=No
 
             sd = str(ci.get("StartDate", ""))[:4]
             start_yr = int(sd) if sd.isdigit() else 0
-            qso_yr   = cl.qsos[0]["time"].year if cl.qsos else 0
-            year = qso_yr if (start_yr and qso_yr and abs(start_yr - qso_yr) > 1) else (start_yr or qso_yr)
+            qso_yr = cl.qsos[0]["time"].year if cl.qsos else 0
+            year = (
+                qso_yr
+                if (start_yr and qso_yr and abs(start_yr - qso_yr) > 1)
+                else (start_yr or qso_yr)
+            )
 
             display = str(ci.get("DisplayName") or contest_name or "?").strip()
-            out.append({
-                "key": key, "year": year,
-                "label": f"{year} — {display}",
-                "contest_name": contest_name, "display_name": display,
-                "db_path": db_path, "contest_nr": ci["ContestNR"],
-                **traj,
-            })
+            out.append(
+                {
+                    "key": key,
+                    "year": year,
+                    "label": f"{year} — {display}",
+                    "contest_name": contest_name,
+                    "display_name": display,
+                    "db_path": db_path,
+                    "contest_nr": ci["ContestNR"],
+                    **traj,
+                }
+            )
             existing_keys.add(key)
         except Exception:
             log.exception("YOY: failed loading ContestNR %s from %s", ci.get("ContestNR"), db_path)
@@ -1428,7 +1499,7 @@ def _yoy_full_state(same_contest: bool = False) -> dict:
     series = []
     with STATE._lock:
         primary = STATE.db_path
-        cl      = STATE.contest_log
+        cl = STATE.contest_log
         extra_paths = list(STATE.yoy_extra_paths)
     current_plugin_type = type(cl.plugin) if (same_contest and cl) else None
     if primary:
@@ -1475,6 +1546,7 @@ async def api_yoy_clear_logs():
 
 # ── Pace Tracker ──────────────────────────────────────────────────────────────
 
+
 def _pace_trajectory_from_times(times: list, contest_start) -> Optional[dict]:
     """
     Given a sorted list of valid-QSO datetimes and a contest-start datetime,
@@ -1501,9 +1573,12 @@ def _pace_trajectory_from_times(times: list, contest_start) -> Optional[dict]:
     rate_hrs = [b + 0.5 for b in range(n_buckets)]
 
     return {
-        "elapsed_hrs": elapsed_hrs, "cum_qsos": cum_qsos,
-        "rate_hrs": rate_hrs, "rate_counts": rate_counts,
-        "final_qsos": cum_qsos[-1], "total_hrs": max_e,
+        "elapsed_hrs": elapsed_hrs,
+        "cum_qsos": cum_qsos,
+        "rate_hrs": rate_hrs,
+        "rate_counts": rate_counts,
+        "final_qsos": cum_qsos[-1],
+        "total_hrs": max_e,
     }
 
 
@@ -1515,8 +1590,9 @@ def _pace_trajectory_for_log(cl: "ContestLog") -> Optional[dict]:
     return _pace_trajectory_from_times([q["time"] for q in valid], cs)
 
 
-def _pace_collect_same_contest(db_path: str, current_contest_nr, current_plugin_type,
-                                existing_keys: set) -> list:
+def _pace_collect_same_contest(
+    db_path: str, current_contest_nr, current_plugin_type, existing_keys: set
+) -> list:
     """Auto-load other contest-years owned by the SAME plugin from the primary
     .s3db — mirrors the old desktop app's auto-load in _refresh_pace, so the
     chart doesn't fill up with unrelated contests."""
@@ -1545,14 +1621,26 @@ def _pace_collect_same_contest(db_path: str, current_contest_nr, current_plugin_
                 continue
             sd = str(ci.get("StartDate", ""))[:4]
             start_yr = int(sd) if sd.isdigit() else 0
-            qso_yr   = cl.qsos[0]["time"].year if cl.qsos else 0
-            year = qso_yr if (start_yr and qso_yr and abs(start_yr - qso_yr) > 1) else (start_yr or qso_yr)
+            qso_yr = cl.qsos[0]["time"].year if cl.qsos else 0
+            year = (
+                qso_yr
+                if (start_yr and qso_yr and abs(start_yr - qso_yr) > 1)
+                else (start_yr or qso_yr)
+            )
             display = str(ci.get("DisplayName") or contest_name or "?").strip()
-            out.append({
-                "key": key, "year": year, "label": f"{year} — {display}",
-                "contest_name": contest_name, "display_name": display, "source": "auto",
-                "db_path": db_path, "contest_nr": ci["ContestNR"], **traj,
-            })
+            out.append(
+                {
+                    "key": key,
+                    "year": year,
+                    "label": f"{year} — {display}",
+                    "contest_name": contest_name,
+                    "display_name": display,
+                    "source": "auto",
+                    "db_path": db_path,
+                    "contest_nr": ci["ContestNR"],
+                    **traj,
+                }
+            )
             existing_keys.add(key)
         except Exception:
             log.exception("Pace: failed loading ContestNR %s from %s", ci.get("ContestNR"), db_path)
@@ -1577,7 +1665,7 @@ def _pace_collect_all_from_db(db_path: str, existing_keys: set) -> list:
         if key in existing_keys:
             continue
         try:
-            p  = plugin_for(contest_name)
+            p = plugin_for(contest_name)
             cl = ContestLog(db_path, contest_nr=ci["ContestNR"], plugin=p)
             if not cl.qsos:
                 continue
@@ -1586,14 +1674,26 @@ def _pace_collect_all_from_db(db_path: str, existing_keys: set) -> list:
                 continue
             sd = str(ci.get("StartDate", ""))[:4]
             start_yr = int(sd) if sd.isdigit() else 0
-            qso_yr   = cl.qsos[0]["time"].year if cl.qsos else 0
-            year = qso_yr if (start_yr and qso_yr and abs(start_yr - qso_yr) > 1) else (start_yr or qso_yr)
+            qso_yr = cl.qsos[0]["time"].year if cl.qsos else 0
+            year = (
+                qso_yr
+                if (start_yr and qso_yr and abs(start_yr - qso_yr) > 1)
+                else (start_yr or qso_yr)
+            )
             display = str(ci.get("DisplayName") or contest_name or "?").strip()
-            out.append({
-                "key": key, "year": year, "label": f"{year} — {display}",
-                "contest_name": contest_name, "display_name": display, "source": "manual",
-                "db_path": db_path, "contest_nr": ci["ContestNR"], **traj,
-            })
+            out.append(
+                {
+                    "key": key,
+                    "year": year,
+                    "label": f"{year} — {display}",
+                    "contest_name": contest_name,
+                    "display_name": display,
+                    "source": "manual",
+                    "db_path": db_path,
+                    "contest_nr": ci["ContestNR"],
+                    **traj,
+                }
+            )
             existing_keys.add(key)
         except Exception:
             log.exception("Pace: failed loading ContestNR %s from %s", ci.get("ContestNR"), db_path)
@@ -1601,6 +1701,7 @@ def _pace_collect_all_from_db(db_path: str, existing_keys: set) -> list:
 
 
 _ADIF_TAG_RE = re.compile(r"<([^:>]+)(?::(\d+)(?::[^>]*)?)?>", re.IGNORECASE)
+
 
 def _parse_adif_times(text: str) -> list:
     """Yield QSO datetimes from an ADIF file (QSO_DATE + TIME_ON fields)."""
@@ -1632,7 +1733,7 @@ def _parse_adif_times(text: str) -> list:
         if lstr is None:
             continue
         length = int(lstr)
-        record[tag] = text[pos:pos + length]
+        record[tag] = text[pos : pos + length]
         pos += length
     return times
 
@@ -1657,13 +1758,20 @@ def _pace_load_adif(path: str, existing_keys: set) -> Optional[dict]:
     if traj is None:
         return None
 
-    year  = contest_start.year
+    year = contest_start.year
     fname = os.path.splitext(os.path.basename(path))[0]
     label = f"{year} — {fname} (ADIF)"
     existing_keys.add(key)
     return {
-        "key": key, "year": year, "label": label, "contest_name": fname,
-        "display_name": fname, "source": "manual", "db_path": None, "contest_nr": None, **traj,
+        "key": key,
+        "year": year,
+        "label": label,
+        "contest_name": fname,
+        "display_name": fname,
+        "source": "manual",
+        "db_path": None,
+        "contest_nr": None,
+        **traj,
     }
 
 
@@ -1732,30 +1840,38 @@ def _pace_load_cabrillo(path: str, existing_keys: set) -> Optional[dict]:
     if traj is None:
         return None
 
-    year         = contest_start.year
+    year = contest_start.year
     contest_name = header.get("CONTEST", "") or header.get("CONTEST-ID", "")
-    fname        = os.path.splitext(os.path.basename(path))[0]
+    fname = os.path.splitext(os.path.basename(path))[0]
     display_name = contest_name if contest_name else fname
-    label        = f"{year} — {display_name} (Cabrillo)"
+    label = f"{year} — {display_name} (Cabrillo)"
     existing_keys.add(key)
     return {
-        "key": key, "year": year, "label": label, "contest_name": display_name,
-        "display_name": display_name, "source": "manual", "db_path": None,
-        "contest_nr": None, **traj,
+        "key": key,
+        "year": year,
+        "label": label,
+        "contest_name": display_name,
+        "display_name": display_name,
+        "source": "manual",
+        "db_path": None,
+        "contest_nr": None,
+        **traj,
     }
 
 
 def _pace_full_state() -> dict:
     with STATE._lock:
-        primary            = STATE.db_path
-        cl                  = STATE.contest_log
-        current_contest_nr  = STATE.contest_nr
-        extra               = list(STATE.pace_extra_paths)
+        primary = STATE.db_path
+        cl = STATE.contest_log
+        current_contest_nr = STATE.contest_nr
+        extra = list(STATE.pace_extra_paths)
 
     existing_keys: set = set()
     refs = []
     if primary and cl:
-        refs.extend(_pace_collect_same_contest(primary, current_contest_nr, type(cl.plugin), existing_keys))
+        refs.extend(
+            _pace_collect_same_contest(primary, current_contest_nr, type(cl.plugin), existing_keys)
+        )
 
     for item in extra:
         path, kind = item["path"], item["kind"]
@@ -1825,7 +1941,9 @@ async def api_pace_add_log(body: dict):
     path = str(p.resolve())
     with STATE._lock:
         is_primary = STATE.db_path and os.path.normcase(path) == os.path.normcase(STATE.db_path)
-        already = any(os.path.normcase(it["path"]) == os.path.normcase(path) for it in STATE.pace_extra_paths)
+        already = any(
+            os.path.normcase(it["path"]) == os.path.normcase(path) for it in STATE.pace_extra_paths
+        )
         if not is_primary and not already:
             STATE.pace_extra_paths.append({"path": path, "kind": kind})
     return await asyncio.get_event_loop().run_in_executor(None, _pace_full_state)
@@ -1841,6 +1959,7 @@ async def api_pace_clear_refs():
 
 
 # ── Fatigue (cross-year hourly rate) ──────────────────────────────────────────
+
 
 def _fatigue_build_contest_entry(cl: "ContestLog", ci: dict, db_path: str) -> Optional[dict]:
     """Per-contest UTC-hour-of-day QSO counts (all bands + per band), for the
@@ -1858,14 +1977,20 @@ def _fatigue_build_contest_entry(cl: "ContestLog", ci: dict, db_path: str) -> Op
         b = q.get("band") or "?"
         by_band.setdefault(b, [0] * 24)[h] += 1
 
-    sd   = str(ci.get("StartDate", ""))[:4]
+    sd = str(ci.get("StartDate", ""))[:4]
     year = int(sd) if sd.isdigit() else (valid[0]["time"].year if valid else 0)
     name = str(ci.get("DisplayName") or ci.get("ContestName") or "?").strip()
 
     return {
-        "key": f"{db_path}::{ci['ContestNR']}", "year": year, "name": name,
-        "label": f"{year}  {name}", "db_path": db_path, "contest_nr": ci["ContestNR"],
-        "qso_count": len(valid), "hour_all": hour_all, "hour_by_band": by_band,
+        "key": f"{db_path}::{ci['ContestNR']}",
+        "year": year,
+        "name": name,
+        "label": f"{year}  {name}",
+        "db_path": db_path,
+        "contest_nr": ci["ContestNR"],
+        "qso_count": len(valid),
+        "hour_all": hour_all,
+        "hour_by_band": by_band,
     }
 
 
@@ -1886,22 +2011,24 @@ def _fatigue_collect_from_db(db_path: str, existing_keys: set) -> list:
         if key in existing_keys:
             continue
         try:
-            p   = plugin_for(str(ci.get("ContestName", "")))
-            cl  = ContestLog(db_path, contest_nr=ci["ContestNR"], plugin=p)
+            p = plugin_for(str(ci.get("ContestName", "")))
+            cl = ContestLog(db_path, contest_nr=ci["ContestNR"], plugin=p)
             entry = _fatigue_build_contest_entry(cl, ci, db_path)
             if entry is None:
                 continue
             out.append(entry)
             existing_keys.add(key)
         except Exception:
-            log.exception("Fatigue: failed loading ContestNR %s from %s", ci.get("ContestNR"), db_path)
+            log.exception(
+                "Fatigue: failed loading ContestNR %s from %s", ci.get("ContestNR"), db_path
+            )
     return out
 
 
 def _fatigue_full_state() -> dict:
     with STATE._lock:
         primary = STATE.db_path
-        extra   = list(STATE.fatigue_extra_paths)
+        extra = list(STATE.fatigue_extra_paths)
 
     existing_keys: set = set()
     contests = []
@@ -1931,7 +2058,9 @@ async def api_fatigue_add_log(body: dict):
     path = str(Path(path).resolve())
     with STATE._lock:
         is_primary = STATE.db_path and os.path.normcase(path) == os.path.normcase(STATE.db_path)
-        already = any(os.path.normcase(p) == os.path.normcase(path) for p in STATE.fatigue_extra_paths)
+        already = any(
+            os.path.normcase(p) == os.path.normcase(path) for p in STATE.fatigue_extra_paths
+        )
         if not is_primary and not already:
             STATE.fatigue_extra_paths.append(path)
     return await asyncio.get_event_loop().run_in_executor(None, _fatigue_full_state)
@@ -1952,6 +2081,7 @@ async def api_fatigue_clear_logs():
 # blending across contest types, since "efficiency" and even the "band" field
 # itself mean different things for different plugins (see efficiency_label()).
 
+
 def _bandeff_build_contest_entry(cl: "ContestLog", ci: dict, db_path: str) -> Optional[dict]:
     if not cl.qsos:
         return None
@@ -1962,13 +2092,17 @@ def _bandeff_build_contest_entry(cl: "ContestLog", ci: dict, db_path: str) -> Op
     if not rows:
         return None
 
-    sd   = str(ci.get("StartDate", ""))[:4]
+    sd = str(ci.get("StartDate", ""))[:4]
     year = int(sd) if sd.isdigit() else (cl.qsos[0]["time"].year if cl.qsos else 0)
     name = str(ci.get("DisplayName") or ci.get("ContestName") or "?").strip()
 
     return {
-        "key": f"{db_path}::{ci['ContestNR']}", "year": year, "name": name,
-        "label": f"{year}  {name}", "db_path": db_path, "contest_nr": ci["ContestNR"],
+        "key": f"{db_path}::{ci['ContestNR']}",
+        "year": year,
+        "name": name,
+        "label": f"{year}  {name}",
+        "db_path": db_path,
+        "contest_nr": ci["ContestNR"],
         "efficiency_label": cl.plugin.efficiency_label(),
         "bands": rows,
     }
@@ -1996,26 +2130,28 @@ def _bandeff_collect_from_db(db_path: str, plugin_type_filter, existing_keys: se
         if key in existing_keys:
             continue
         cname = str(ci.get("ContestName", ""))
-        p     = plugin_for(cname)
+        p = plugin_for(cname)
         if plugin_type_filter is not None and type(p) is not plugin_type_filter:
             continue
         try:
-            cl    = ContestLog(db_path, contest_nr=ci["ContestNR"], plugin=p)
+            cl = ContestLog(db_path, contest_nr=ci["ContestNR"], plugin=p)
             entry = _bandeff_build_contest_entry(cl, ci, db_path)
             if entry is None:
                 continue
             out.append(entry)
             existing_keys.add(key)
         except Exception:
-            log.exception("BandEff YoY: failed loading ContestNR %s from %s", ci.get("ContestNR"), db_path)
+            log.exception(
+                "BandEff YoY: failed loading ContestNR %s from %s", ci.get("ContestNR"), db_path
+            )
     return out
 
 
 def _bandeff_full_state() -> dict:
     with STATE._lock:
         primary = STATE.db_path
-        extra   = list(STATE.bandeff_extra_paths)
-        cl      = STATE.contest_log
+        extra = list(STATE.bandeff_extra_paths)
+        cl = STATE.contest_log
 
     current_plugin_type = type(cl.plugin) if cl else None
 
@@ -2047,7 +2183,9 @@ async def api_bandeff_yoy_add_log(body: dict):
     path = str(Path(path).resolve())
     with STATE._lock:
         is_primary = STATE.db_path and os.path.normcase(path) == os.path.normcase(STATE.db_path)
-        already = any(os.path.normcase(p) == os.path.normcase(path) for p in STATE.bandeff_extra_paths)
+        already = any(
+            os.path.normcase(p) == os.path.normcase(path) for p in STATE.bandeff_extra_paths
+        )
         if not is_primary and not already:
             STATE.bandeff_extra_paths.append(path)
     return await asyncio.get_event_loop().run_in_executor(None, _bandeff_full_state)
@@ -2077,7 +2215,7 @@ async def api_plugin_meta():
     if not STATE.contest_log:
         return {"loaded": False}
 
-    p    = STATE.contest_log.plugin
+    p = STATE.contest_log.plugin
     snap = STATE.snapshot()
     total_mults = snap.get("_total_mults", snap.get("band_mults", 0))
 
@@ -2094,31 +2232,33 @@ async def api_plugin_meta():
         # max_key may be a string (snap key) or a numeric literal
         if isinstance(max_val, str):
             max_val = snap.get(max_val, 1)
-        gauge_list.append({
-            "label":     g.label,
-            "value_key": g.value_key,
-            "max_val":   max_val,
-            "colour":    g.colour if isinstance(g.colour, str) else "#00d4aa",
-            "fmt":       g.fmt,
-            "tooltip":   getattr(g, "tooltip", ""),
-        })
+        gauge_list.append(
+            {
+                "label": g.label,
+                "value_key": g.value_key,
+                "max_val": max_val,
+                "colour": g.colour if isinstance(g.colour, str) else "#00d4aa",
+                "fmt": g.fmt,
+                "tooltip": getattr(g, "tooltip", ""),
+            }
+        )
 
     return {
-        "loaded":           True,
-        "display_name":     getattr(p, "display_name", "Generic"),
-        "has_missing_tab":  getattr(p, "has_missing_tab", lambda: True)(),
-        "has_region_heat":  getattr(p, "has_region_heat", lambda: False)(),
-        "has_state_bars":   getattr(p, "has_state_bars",  lambda: False)(),
-        "mult_label":       getattr(p, "mult_label",      lambda: "Mult")(),
+        "loaded": True,
+        "display_name": getattr(p, "display_name", "Generic"),
+        "has_missing_tab": getattr(p, "has_missing_tab", lambda: True)(),
+        "has_region_heat": getattr(p, "has_region_heat", lambda: False)(),
+        "has_state_bars": getattr(p, "has_state_bars", lambda: False)(),
+        "mult_label": getattr(p, "mult_label", lambda: "Mult")(),
         "uses_cq_zone_scoring": getattr(p, "uses_cq_zone_scoring", lambda: False)(),
-        "gauge_defs":       gauge_list,
-        "bands":            getattr(p, "band_list", lambda: [])(),
+        "gauge_defs": gauge_list,
+        "bands": getattr(p, "band_list", lambda: [])(),
     }
 
 
 # ── DX Cluster ──────────────────────────────────────────────────────────────
-import socket as _socket
 import re as _re
+import socket as _socket
 
 _SPOT_RE = _re.compile(
     r"DX\s+de\s+(\S+?):?\s+(\d+(?:\.\d+)?)\s+(\S+)\s+(.*?)\s*(\d{4})Z?\s*$",
@@ -2129,29 +2269,30 @@ _SPOT_RE = _re.compile(
 _CTRL_RE = _re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\ufffd]")
 
 _CLUSTER_PRESETS = [
-    {"label": "VK2RCG (VK)",   "host": "vk2rcg.ampr.org",    "port": 7300},
-    {"label": "VK4RBD (VK)",   "host": "vk4rbd.dyndns.org",  "port": 7300},
-    {"label": "VE7CC (NA)",    "host": "dx.ve7cc.net",        "port": 7300},
-    {"label": "DL9GTB (EU)",   "host": "cluster.dl9gtb.de",   "port": 7300},
-    {"label": "GB7MBC (EU)",   "host": "gb7mbc.spoo.org",     "port": 7300},
-    {"label": "K3LR (NA)",     "host": "cluster.k3lr.com",    "port": 7300},
-    {"label": "WA9PIE (NA)",   "host": "hrd.wa9pie.net",      "port": 8000},
+    {"label": "VK2RCG (VK)", "host": "vk2rcg.ampr.org", "port": 7300},
+    {"label": "VK4RBD (VK)", "host": "vk4rbd.dyndns.org", "port": 7300},
+    {"label": "VE7CC (NA)", "host": "dx.ve7cc.net", "port": 7300},
+    {"label": "DL9GTB (EU)", "host": "cluster.dl9gtb.de", "port": 7300},
+    {"label": "GB7MBC (EU)", "host": "gb7mbc.spoo.org", "port": 7300},
+    {"label": "K3LR (NA)", "host": "cluster.k3lr.com", "port": 7300},
+    {"label": "WA9PIE (NA)", "host": "hrd.wa9pie.net", "port": 8000},
 ]
 
 _CLUSTER_BAND_EDGES = [
-    (1800,    2000,    "160M"),
-    (3500,    4000,     "80M"),
-    (5330,    5410,     "60M"),
-    (7000,    7300,     "40M"),
-    (10100,   10150,    "30M"),
-    (14000,   14350,    "20M"),
-    (18068,   18168,    "17M"),
-    (21000,   21450,    "15M"),
-    (24890,   24990,    "12M"),
-    (28000,   29700,    "10M"),
-    (50000,   54000,     "6M"),
-    (144000,  148000,    "2M"),
+    (1800, 2000, "160M"),
+    (3500, 4000, "80M"),
+    (5330, 5410, "60M"),
+    (7000, 7300, "40M"),
+    (10100, 10150, "30M"),
+    (14000, 14350, "20M"),
+    (18068, 18168, "17M"),
+    (21000, 21450, "15M"),
+    (24890, 24990, "12M"),
+    (28000, 29700, "10M"),
+    (50000, 54000, "6M"),
+    (144000, 148000, "2M"),
 ]
+
 
 def _freq_to_band_str(freq_khz: float) -> str:
     for lo, hi, name in _CLUSTER_BAND_EDGES:
@@ -2159,16 +2300,32 @@ def _freq_to_band_str(freq_khz: float) -> str:
             return name
     return f"{freq_khz:.0f}kHz"
 
+
 # Cluster spot lines have no distinct mode field — mode (if present at all)
 # shows up as a free-text token in the comment (e.g. "CQ TEST CW"). Only an
 # explicit keyword is trusted; sub-band conventions vary too much by region
 # to guess from frequency alone.
 _MODE_TOKENS = {
-    "CW": "CW", "SSB": "SSB", "USB": "USB", "LSB": "LSB", "FM": "FM", "AM": "AM",
-    "RTTY": "RTTY", "FT8": "FT8", "FT4": "FT4", "PSK31": "PSK31", "PSK": "PSK",
-    "JT65": "JT65", "JT9": "JT9", "MSK144": "MSK144", "JS8": "JS8",
-    "OLIVIA": "OLIVIA", "DIGI": "DIGI", "DATA": "DIGI",
+    "CW": "CW",
+    "SSB": "SSB",
+    "USB": "USB",
+    "LSB": "LSB",
+    "FM": "FM",
+    "AM": "AM",
+    "RTTY": "RTTY",
+    "FT8": "FT8",
+    "FT4": "FT4",
+    "PSK31": "PSK31",
+    "PSK": "PSK",
+    "JT65": "JT65",
+    "JT9": "JT9",
+    "MSK144": "MSK144",
+    "JS8": "JS8",
+    "OLIVIA": "OLIVIA",
+    "DIGI": "DIGI",
+    "DATA": "DIGI",
 }
+
 
 def _guess_mode(comment: str) -> str:
     for token in comment.upper().split():
@@ -2176,6 +2333,7 @@ def _guess_mode(comment: str) -> str:
         if tok in _MODE_TOKENS:
             return _MODE_TOKENS[tok]
     return ""
+
 
 def _classify_spot(dx_call: str, freq_khz: float, comment: str) -> tuple:
     """
@@ -2191,7 +2349,7 @@ def _classify_spot(dx_call: str, freq_khz: float, comment: str) -> tuple:
         return "NO_LOG", "", ""
 
     band = _freq_to_band_str(freq_khz)
-    p    = cl.plugin
+    p = cl.plugin
     # mult_list()/worked_*_mults() are typed per-plugin (e.g. IARU's ITU
     # zones are ints, most others are strings) — normalize to str for
     # membership tests so classification doesn't silently fail on type
@@ -2214,9 +2372,15 @@ def _classify_spot(dx_call: str, freq_khz: float, comment: str) -> tuple:
 
     if mult_val is None:
         fake_q = {
-            "call": dx_call.upper(), "mult1": comment_upper, "band": band,
-            "mode": "SSB", "pts": 1, "dupe": False,
-            "is_mult1": None, "is_mult2": None, "cqz": None,
+            "call": dx_call.upper(),
+            "mult1": comment_upper,
+            "band": band,
+            "mode": "SSB",
+            "pts": 1,
+            "dupe": False,
+            "is_mult1": None,
+            "is_mult2": None,
+            "cqz": None,
             "time": datetime.utcnow(),
         }
         try:
@@ -2244,9 +2408,11 @@ def _classify_spot(dx_call: str, freq_khz: float, comment: str) -> tuple:
         return "NEW_BAND", mult_val, region
     return "WORKED", mult_val, region
 
+
 @app.get("/api/cluster/presets")
 async def api_cluster_presets():
     return _CLUSTER_PRESETS
+
 
 @app.websocket("/ws/cluster")
 async def ws_cluster(ws: WebSocket):
@@ -2268,7 +2434,7 @@ async def ws_cluster(ws: WebSocket):
     async def _read_tcp():
         nonlocal tcp
         loop = asyncio.get_event_loop()
-        buf  = b""
+        buf = b""
         while tcp:
             try:
                 chunk = await loop.run_in_executor(None, tcp.recv, 1024)
@@ -2281,30 +2447,32 @@ async def ws_cluster(ws: WebSocket):
                     if not text:
                         continue
                     msg = {"type": "raw", "line": text}
-                    m   = _SPOT_RE.search(text)
+                    m = _SPOT_RE.search(text)
                     if m:
-                        freq    = float(m.group(2))
+                        freq = float(m.group(2))
                         dx_call = m.group(3)
                         comment = m.group(4).strip()
                         status, mult_val, region = _classify_spot(dx_call, freq, comment)
                         msg = {
-                            "type":    "spot",
+                            "type": "spot",
                             "spotter": m.group(1),
-                            "freq":    freq,
-                            "dx":      dx_call,
+                            "freq": freq,
+                            "dx": dx_call,
                             "comment": comment,
-                            "time":    m.group(5),
-                            "band":    _freq_to_band_str(freq),
-                            "mode":    _guess_mode(comment),
-                            "status":  status,
-                            "mult":    mult_val,
-                            "region":  region,
+                            "time": m.group(5),
+                            "band": _freq_to_band_str(freq),
+                            "mode": _guess_mode(comment),
+                            "status": status,
+                            "mult": mult_val,
+                            "region": region,
                         }
                     await ws.send_text(json.dumps(msg))
             except Exception:
                 break
         try:
-            await ws.send_text(json.dumps({"type":"status","connected":False,"msg":"Disconnected"}))
+            await ws.send_text(
+                json.dumps({"type": "status", "connected": False, "msg": "Disconnected"})
+            )
         except Exception:
             pass
 
@@ -2315,38 +2483,52 @@ async def ws_cluster(ws: WebSocket):
 
             if cmd.get("cmd") == "connect":
                 if tcp:
-                    try: tcp.close()
-                    except: pass
+                    try:
+                        tcp.close()
+                    except:
+                        pass
                 if reader_task:
                     reader_task.cancel()
-                host = cmd.get("host","")
+                host = cmd.get("host", "")
                 port = int(cmd.get("port", 7300))
-                call = cmd.get("callsign","VK2YI")
+                call = cmd.get("callsign", "VK2YI")
                 try:
                     loop = asyncio.get_event_loop()
-                    tcp  = await loop.run_in_executor(
-                        None, lambda: _socket.create_connection((host,port), timeout=10))
+                    tcp = await loop.run_in_executor(
+                        None, lambda: _socket.create_connection((host, port), timeout=10)
+                    )
                     tcp.settimeout(30)
                     reader_task = asyncio.create_task(_read_tcp())
                     await asyncio.sleep(1)
-                    tcp.sendall((call+"\n").encode())
+                    tcp.sendall((call + "\n").encode())
                     await asyncio.sleep(1)
                     tcp.sendall(b"SET/DX\n")
-                    await ws.send_text(json.dumps({
-                        "type":"status","connected":True,
-                        "msg":f"Connected to {host}:{port}"}))
+                    await ws.send_text(
+                        json.dumps(
+                            {
+                                "type": "status",
+                                "connected": True,
+                                "msg": f"Connected to {host}:{port}",
+                            }
+                        )
+                    )
                 except Exception as e:
-                    await ws.send_text(json.dumps({
-                        "type":"status","connected":False,"msg":str(e)}))
+                    await ws.send_text(
+                        json.dumps({"type": "status", "connected": False, "msg": str(e)})
+                    )
 
             elif cmd.get("cmd") == "send" and tcp:
-                try: tcp.sendall((cmd.get("text","")+"\n").encode())
-                except: pass
+                try:
+                    tcp.sendall((cmd.get("text", "") + "\n").encode())
+                except:
+                    pass
 
             elif cmd.get("cmd") == "disconnect":
                 if tcp:
-                    try: tcp.close()
-                    except: pass
+                    try:
+                        tcp.close()
+                    except:
+                        pass
                     tcp = None
                 break
 
@@ -2354,8 +2536,10 @@ async def ws_cluster(ws: WebSocket):
         pass
     finally:
         if tcp:
-            try: tcp.close()
-            except: pass
+            try:
+                tcp.close()
+            except:
+                pass
         if reader_task:
             reader_task.cancel()
 
@@ -2363,39 +2547,79 @@ async def ws_cluster(ws: WebSocket):
 # ── Themes ────────────────────────────────────────────────────────────────────
 _THEMES = {
     "Dark (Default)": {
-        "bg":"#0d1117","bg2":"#161b22","bg3":"#21262d",
-        "accent":"#00d4aa","accent2":"#ff6b35","accent3":"#f0c040",
-        "red":"#ff4757","green":"#2ed573","muted":"#8b949e","fg":"#e6edf3",
+        "bg": "#0d1117",
+        "bg2": "#161b22",
+        "bg3": "#21262d",
+        "accent": "#00d4aa",
+        "accent2": "#ff6b35",
+        "accent3": "#f0c040",
+        "red": "#ff4757",
+        "green": "#2ed573",
+        "muted": "#8b949e",
+        "fg": "#e6edf3",
     },
     "Light": {
-        "bg":"#f5f6fa","bg2":"#ffffff","bg3":"#e8ecf0",
-        "accent":"#0077aa","accent2":"#cc4400","accent3":"#886600",
-        "red":"#cc0022","green":"#117733","muted":"#6b7280","fg":"#1a1d23",
+        "bg": "#f5f6fa",
+        "bg2": "#ffffff",
+        "bg3": "#e8ecf0",
+        "accent": "#0077aa",
+        "accent2": "#cc4400",
+        "accent3": "#886600",
+        "red": "#cc0022",
+        "green": "#117733",
+        "muted": "#6b7280",
+        "fg": "#1a1d23",
     },
     "High Contrast": {
-        "bg":"#000000","bg2":"#0a0a0a","bg3":"#1a1a1a",
-        "accent":"#ffff00","accent2":"#ff8800","accent3":"#ffffff",
-        "red":"#ff4444","green":"#00ff88","muted":"#bbbbbb","fg":"#ffffff",
+        "bg": "#000000",
+        "bg2": "#0a0a0a",
+        "bg3": "#1a1a1a",
+        "accent": "#ffff00",
+        "accent2": "#ff8800",
+        "accent3": "#ffffff",
+        "red": "#ff4444",
+        "green": "#00ff88",
+        "muted": "#bbbbbb",
+        "fg": "#ffffff",
     },
     "Deuteranopia-Safe": {
-        "bg":"#0d1117","bg2":"#161b22","bg3":"#21262d",
-        "accent":"#56b4e9","accent2":"#e69f00","accent3":"#f0e442",
-        "red":"#cc79a7","green":"#0072b2","muted":"#8b949e","fg":"#e6edf3",
+        "bg": "#0d1117",
+        "bg2": "#161b22",
+        "bg3": "#21262d",
+        "accent": "#56b4e9",
+        "accent2": "#e69f00",
+        "accent3": "#f0e442",
+        "red": "#cc79a7",
+        "green": "#0072b2",
+        "muted": "#8b949e",
+        "fg": "#e6edf3",
     },
     "Protanopia-Safe": {
-        "bg":"#0d1117","bg2":"#161b22","bg3":"#21262d",
-        "accent":"#00b4d8","accent2":"#fca311","accent3":"#e9c46a",
-        "red":"#a8dadc","green":"#2196f3","muted":"#8b949e","fg":"#e6edf3",
+        "bg": "#0d1117",
+        "bg2": "#161b22",
+        "bg3": "#21262d",
+        "accent": "#00b4d8",
+        "accent2": "#fca311",
+        "accent3": "#e9c46a",
+        "red": "#a8dadc",
+        "green": "#2196f3",
+        "muted": "#8b949e",
+        "fg": "#e6edf3",
     },
 }
+
 
 @app.get("/api/themes")
 async def api_themes():
     return {"themes": list(_THEMES.keys()), "palette": _THEMES}
 
+
 # ── Export CSV ─────────────────────────────────────────────────────────────────
+import csv
+import io
+
 from fastapi.responses import StreamingResponse
-import csv, io
+
 
 @app.get("/api/export/csv/{dataset}")
 async def api_export_csv(dataset: str):
@@ -2409,35 +2633,37 @@ async def api_export_csv(dataset: str):
     fname = f"vkcontest_{dataset}.csv"
 
     if dataset == "qsos":
-        headers = ["call","band","mode","mult1","pts","dupe","time"]
-        rows    = [[q.get(h,"") for h in headers] for q in cl.qsos]
+        headers = ["call", "band", "mode", "mult1", "pts", "dupe", "time"]
+        rows = [[q.get(h, "") for h in headers] for q in cl.qsos]
 
     elif dataset == "missing":
         mbr = cl.mults_by_region()
-        headers = ["mult","region"]
+        headers = ["mult", "region"]
         for region, data in mbr.items():
-            for m in data.get("missing",[]):
+            for m in data.get("missing", []):
                 rows.append([m, region])
 
     elif dataset == "bands":
         be = cl.band_efficiency()
         if be:
             headers = list(be[0].keys())
-            rows    = [[r.get(h,"") for h in headers] for r in be]
+            rows = [[r.get(h, "") for h in headers] for r in be]
 
     elif dataset == "rate":
         rh = cl.rate_by_hour()
-        headers = ["hour","qsos"]
-        rows    = [[str(h), n] for h, n in rh]
+        headers = ["hour", "qsos"]
+        rows = [[str(h), n] for h, n in rh]
 
     elif dataset == "dupes":
         by_band, by_call = cl.dupe_analysis()
-        headers = ["type","key","count"]
-        for b, n in by_band.items(): rows.append(["band", b, n])
-        for c, n in by_call.items(): rows.append(["call", c, n])
+        headers = ["type", "key", "count"]
+        for b, n in by_band.items():
+            rows.append(["band", b, n])
+        for c, n in by_call.items():
+            rows.append(["call", c, n])
 
     buf = io.StringIO()
-    w   = csv.writer(buf)
+    w = csv.writer(buf)
     w.writerow(headers)
     w.writerows(rows)
     buf.seek(0)
@@ -2446,6 +2672,7 @@ async def api_export_csv(dataset: str):
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
+
 
 # ── Snapshot (PNG of current overview) — returns JSON data for client-side render
 @app.get("/api/snapshot_data")
@@ -2457,38 +2684,48 @@ async def api_snapshot_data():
 # ── OS Theme detection ────────────────────────────────────────────────────────
 import subprocess as _subprocess
 
+
 @app.get("/api/os_theme")
 async def api_os_theme():
     """Detect OS dark/light mode preference."""
     import platform
+
     system = platform.system()
     try:
         if system == "Windows":
             import winreg
-            key  = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            )
             val, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
             winreg.CloseKey(key)
             return {"theme": "Light" if val == 1 else "Dark (Default)"}
         elif system == "Darwin":
             result = _subprocess.run(
-                ["defaults", "read", "-g", "AppleInterfaceStyle"],
-                capture_output=True, text=True)
+                ["defaults", "read", "-g", "AppleInterfaceStyle"], capture_output=True, text=True
+            )
             return {"theme": "Dark (Default)" if "Dark" in result.stdout else "Light"}
         else:
             # Linux: check GTK settings
             result = _subprocess.run(
                 ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
-                capture_output=True, text=True)
+                capture_output=True,
+                text=True,
+            )
             return {"theme": "Dark (Default)" if "dark" in result.stdout.lower() else "Light"}
     except Exception:
         return {"theme": "Dark (Default)"}
+
 
 # ── Save notification helper ──────────────────────────────────────────────────
 @app.get("/api/save_location")
 async def api_save_location():
     """Return the default downloads/documents folder for the current OS."""
-    import platform, os
+    import os
+    import platform
+
     system = platform.system()
     if system == "Windows":
         folder = os.path.join(os.path.expanduser("~"), "Downloads")
@@ -2498,38 +2735,52 @@ async def api_save_location():
         folder = os.path.join(os.path.expanduser("~"), "Downloads")
     return {"folder": folder, "os": system}
 
+
 # ── Map data endpoint ─────────────────────────────────────────────────────────
 # Simple prefix→lat/lon lookup for major DXCC prefixes
 
 import subprocess as _subprocess
 
+
 @app.get("/api/os_theme")
 async def api_os_theme():
     import platform
+
     system = platform.system()
     try:
         if system == "Windows":
             import winreg
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            )
             val, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
             winreg.CloseKey(key)
             return {"theme": "Light" if val == 1 else "Dark (Default)"}
         elif system == "Darwin":
-            r = _subprocess.run(["defaults","read","-g","AppleInterfaceStyle"],
-                capture_output=True, text=True)
+            r = _subprocess.run(
+                ["defaults", "read", "-g", "AppleInterfaceStyle"], capture_output=True, text=True
+            )
             return {"theme": "Dark (Default)" if "Dark" in r.stdout else "Light"}
         else:
-            r = _subprocess.run(["gsettings","get","org.gnome.desktop.interface","color-scheme"],
-                capture_output=True, text=True)
+            r = _subprocess.run(
+                ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
+                capture_output=True,
+                text=True,
+            )
             return {"theme": "Dark (Default)" if "dark" in r.stdout.lower() else "Light"}
     except Exception:
         return {"theme": "Dark (Default)"}
 
+
 @app.get("/api/save_location")
 async def api_save_location():
-    import platform, os
+    import os
+    import platform
+
     return {"folder": os.path.join(os.path.expanduser("~"), "Downloads"), "os": platform.system()}
+
 
 # Prefix lat/lon lookup (ASCII minus only)
 # DXCC prefix lookup — longer prefixes listed first to take priority over shorter ones
@@ -2537,132 +2788,275 @@ async def api_save_location():
 _PFX = {}
 
 # 4-char prefixes
-for k,v in [("KH6 ",(21,-158)),("KH8 ",(-14,-171)),("KP4 ",(18,-67))]:
+for k, v in [("KH6 ", (21, -158)), ("KH8 ", (-14, -171)), ("KP4 ", (18, -67))]:
     _PFX[k.strip()] = v
 
 # Pacific / Oceania 3-char (BEFORE shorter prefixes like F)
-for k,v in [
-    ("FK8",(-22,167)),  # New Caledonia
-    ("FK7",(-19,158)),  # Chesterfield Is
-    ("FO8",(-18,-149)), # French Polynesia
-    ("KH6",(21,-158)),  # Hawaii
-    ("KH0",(15,146)),   # Mariana Is
-    ("KH2",(13,145)),   # Guam
-    ("KL7",(61,-150)),  # Alaska
-    ("KP4",(18,-67)),   # Puerto Rico
-    ("P29",(-9,148)),   # Papua New Guinea
-    ("ZK2",(-19,-170)), # Niue
-    ("3D2",(-18,178)),  # Fiji
-    ("5W1",(-14,-172)), # Samoa
-    ("T30",(0,174)),    # W Kiribati
-    ("V63",(7,158)),    # Micronesia
-    ("V73",(9,168)),    # Marshall Is
-    ("YJ8",(-15,168)),  # Vanuatu
-    ("E51",(-10,-161)), # N Cook Is
-    ("E52",(-20,-158)), # S Cook Is
-    ("ZL8",(-29,-178)), # Kermadec
-    ("ZL9",(-53,169)),  # Subantarctic NZ
+for k, v in [
+    ("FK8", (-22, 167)),  # New Caledonia
+    ("FK7", (-19, 158)),  # Chesterfield Is
+    ("FO8", (-18, -149)),  # French Polynesia
+    ("KH6", (21, -158)),  # Hawaii
+    ("KH0", (15, 146)),  # Mariana Is
+    ("KH2", (13, 145)),  # Guam
+    ("KL7", (61, -150)),  # Alaska
+    ("KP4", (18, -67)),  # Puerto Rico
+    ("P29", (-9, 148)),  # Papua New Guinea
+    ("ZK2", (-19, -170)),  # Niue
+    ("3D2", (-18, 178)),  # Fiji
+    ("5W1", (-14, -172)),  # Samoa
+    ("T30", (0, 174)),  # W Kiribati
+    ("V63", (7, 158)),  # Micronesia
+    ("V73", (9, 168)),  # Marshall Is
+    ("YJ8", (-15, 168)),  # Vanuatu
+    ("E51", (-10, -161)),  # N Cook Is
+    ("E52", (-20, -158)),  # S Cook Is
+    ("ZL8", (-29, -178)),  # Kermadec
+    ("ZL9", (-53, 169)),  # Subantarctic NZ
 ]:
     _PFX[k] = v
 
 # All remaining 2-char and common prefixes
-for k,v in [
-    ("FK",(-22,167)),   # New Caledonia (all FK)
-    ("FG",(16,-62)),    ("FH",(-13,45)),   ("FM",(14,-61)),
-    ("FO",(-18,-149)),  ("FP",(47,-56)),   ("FR",(-21,56)),
-    ("FW",(-14,-178)),  ("FY",(4,-53)),
-    ("ZL",(-41,174)),   ("ZS",(-30,26)),   ("ZP",(-23,-58)),
-    ("ZA",(41,20)),     ("ZB",(36,-5)),    ("ZF",(19,-81)),
-    ("ZK",(-19,-170)),  ("ZD",(-16,-6)),
-    ("VE",(45,-76)),    ("VK",(-25,134)),  ("VO",(47,-53)),
-    ("VR",(22,114)),    ("VU",(21,78)),    ("V3",(17,-89)),
-    ("V5",(-22,17)),    ("V6",(7,158)),    ("V7",(9,168)),
-    ("V8",(5,115)),
-    ("G", (52,-1)),     ("GM",(57,-4)),    ("GW",(52,-4)),
-    ("GD",(54,-4)),     ("GJ",(49,-2)),    ("GU",(50,-3)),
-    ("DL",(51,10)),     ("DJ",(51,10)),    ("DK",(51,10)),
-    ("DA",(51,10)),     ("DB",(51,10)),    ("DC",(51,10)),
-    ("DF",(51,10)),     ("DG",(51,10)),    ("DH",(51,10)),
-    ("JA",(36,138)),    ("JE",(36,138)),   ("JH",(36,138)),
-    ("JR",(36,138)),    ("JD",(27,142)),
-    ("BY",(35,105)),    ("BG",(35,105)),   ("BH",(35,105)),
-    ("BV",(25,122)),    ("BU",(25,122)),   # Taiwan
-    ("UA",(56,38)),     ("RA",(56,38)),    ("RK",(56,38)),
-    ("RL",(56,38)),     ("RM",(56,38)),    ("RN",(56,38)),
-    ("RO",(56,38)),     ("RQ",(56,38)),    ("RT",(56,38)),
-    ("RU",(56,38)),     ("RV",(56,38)),    ("RW",(56,38)),
-    ("RX",(56,38)),     ("RY",(56,38)),    ("RZ",(56,38)),
-    ("UA9",(56,60)),    # Asiatic Russia (overridden by 3-char below)
-    ("UI",(56,60)),     ("UK",(41,64)),    ("UN",(51,71)),    ("UR",(50,31)),
-    ("OH",(62,26)),     ("OG",(62,26)),    ("OZ",(56,10)),
-    ("OX",(64,-51)),    ("OY",(62,-7)),    ("OE",(48,14)),
-    ("OK",(50,16)),     ("OL",(50,16)),    ("OM",(48,17)),
-    ("ON",(51,4)),    ("OO",(51,4)),    ("OP",(51,4)),    ("OQ",(51,4)),
-    ("OR",(51,4)),    ("OS",(51,4)),    ("OT",(51,4)),
-    ("SM",(60,15)),     ("SK",(60,15)),
-    ("SP",(52,20)),     ("SN",(52,20)),    ("SQ",(52,20)),
-    ("SV",(38,24)),     ("SW",(38,24)),
-    ("PA",(52,5)),      ("PB",(52,5)),     ("PD",(52,5)),
-    ("PE",(52,5)),      ("PH",(52,5)),
-    ("PY",(-10,-55)),   ("PP",(-10,-55)),  ("PQ",(-10,-55)),
-    ("PR",(-10,-55)),   ("PS",(-10,-55)),  ("PU",(-10,-55)),
-    ("PW",(-10,-55)),   ("PX",(-10,-55)),
-    ("EA",(40,-4)),     ("EB",(40,-4)),    ("EC",(40,-4)),
-    ("EI",(53,-8)),     ("EJ",(53,-8)),    ("EK",(40,45)),
-    ("EP",(33,54)),     ("ER",(47,29)),    ("ES",(59,25)),
-    ("EU",(53,28)),     ("EW",(53,28)),    ("EX",(43,75)),
-    ("EY",(39,71)),     ("EZ",(38,58)),
-    ("HA",(47,19)),     ("HB",(47,8)),     ("HC",(-2,-78)),
-    ("HH",(19,-72)),    ("HI",(19,-70)),   ("HK",(4,-74)),
-    ("HL",(37,127)),    ("DS",(37,127)),
-    ("HP",(9,-80)),     ("HR",(15,-87)),   ("HS",(15,101)),
-    ("HV",(42,12)),     ("HZ",(24,45)),
-    ("LA",(60,10)),     ("LB",(60,10)),    ("LC",(60,10)),
-    ("LU",(-34,-64)),   ("LV",(-34,-64)),  ("LW",(-34,-64)),
-    ("LX",(50,6)),      ("LY",(56,24)),    ("LZ",(43,25)),
-    ("I", (43,12)),     ("IS",(40,9)),     ("IG",(37,14)),
-    ("YA",(34,69)),     ("YB",(-7,110)),   ("YC",(-7,110)),
-    ("YI",(33,44)),     ("YJ",(-17,168)),  ("YK",(35,38)),
-    ("YL",(57,25)),     ("YN",(12,-86)),   ("YO",(45,25)),
-    ("YT",(44,21)),     ("YU",(44,21)),    ("YV",(10,-67)),
-    ("TA",(39,35)),     ("TF",(65,-18)),   ("TI",(10,-84)),
-    ("TK",(42,9)),      ("TL",(6,19)),     ("TN",(-4,15)),
-    ("TR",(0,12)),      ("TT",(12,15)),    ("TU",(7,-6)),
-    ("TY",(10,2)),      ("TZ",(13,-2)),
-    ("XE",(20,-100)),   ("XW",(18,103)),   ("XV",(16,108)),
-    ("XU",(12,105)),    ("XT",(13,-2)),
-    ("4X",(31,35)),     ("4Z",(31,35)),
-    ("5A",(27,17)),     ("5B",(35,33)),    ("5H",(-6,35)),
-    ("5N",(9,8)),       ("5R",(-19,47)),   ("5T",(18,-16)),
-    ("5U",(14,8)),      ("5V",(8,1)),      ("5W",(-14,-172)),
-    ("5X",(1,32)),      ("5Z",(1,38)),
-    ("6W",(15,-14)),    ("6Y",(18,-77)),
-    ("7P",(-29,28)),    ("7Q",(-14,34)),   ("7X",(28,3)),
-    ("8P",(13,-59)),    ("8Q",(4,74)),     ("8R",(5,-59)),
-    ("9A",(45,16)),     ("9G",(8,-2)),     ("9H",(35,14)),
-    ("9J",(-15,28)),    ("9K",(29,47)),    ("9L",(8,-12)),
-    ("9M",(4,108)),     ("9N",(28,84)),    ("9Q",(-4,24)),
-    ("9V",(1,104)),     ("9W",(4,108)),    ("9X",(-2,30)),
-    ("9Y",(10,-61)),
-    ("A2",(-22,24)),    ("A3",(-21,-175)), ("A4",(23,58)),
-    ("A5",(27,90)),     ("A6",(24,54)),    ("A7",(25,51)),
-    ("A9",(26,51)),
-    ("CE",(-30,-71)),   ("CO",(22,-80)),
-    ("CT",(39,-9)),     ("CU",(38,-28)),   ("CX",(-33,-56)),
-    ("D2",(-8,18)),     ("D4",(16,-24)),   ("D6",(-12,44)),
-    ("E7",(44,17)),
-    ("OA",(-12,-77)),   ("OB",(-12,-77)),
-    ("P2",(-9,147)),    ("P4",(12,-70)),
-    ("T7",(44,12)),
-    ("CE",(-30,-71)),
-    ("JT",(47,106)),
-    ("VE",(45,-76)),
+for k, v in [
+    ("FK", (-22, 167)),  # New Caledonia (all FK)
+    ("FG", (16, -62)),
+    ("FH", (-13, 45)),
+    ("FM", (14, -61)),
+    ("FO", (-18, -149)),
+    ("FP", (47, -56)),
+    ("FR", (-21, 56)),
+    ("FW", (-14, -178)),
+    ("FY", (4, -53)),
+    ("ZL", (-41, 174)),
+    ("ZS", (-30, 26)),
+    ("ZP", (-23, -58)),
+    ("ZA", (41, 20)),
+    ("ZB", (36, -5)),
+    ("ZF", (19, -81)),
+    ("ZK", (-19, -170)),
+    ("ZD", (-16, -6)),
+    ("VE", (45, -76)),
+    ("VK", (-25, 134)),
+    ("VO", (47, -53)),
+    ("VR", (22, 114)),
+    ("VU", (21, 78)),
+    ("V3", (17, -89)),
+    ("V5", (-22, 17)),
+    ("V6", (7, 158)),
+    ("V7", (9, 168)),
+    ("V8", (5, 115)),
+    ("G", (52, -1)),
+    ("GM", (57, -4)),
+    ("GW", (52, -4)),
+    ("GD", (54, -4)),
+    ("GJ", (49, -2)),
+    ("GU", (50, -3)),
+    ("DL", (51, 10)),
+    ("DJ", (51, 10)),
+    ("DK", (51, 10)),
+    ("DA", (51, 10)),
+    ("DB", (51, 10)),
+    ("DC", (51, 10)),
+    ("DF", (51, 10)),
+    ("DG", (51, 10)),
+    ("DH", (51, 10)),
+    ("JA", (36, 138)),
+    ("JE", (36, 138)),
+    ("JH", (36, 138)),
+    ("JR", (36, 138)),
+    ("JD", (27, 142)),
+    ("BY", (35, 105)),
+    ("BG", (35, 105)),
+    ("BH", (35, 105)),
+    ("BV", (25, 122)),
+    ("BU", (25, 122)),  # Taiwan
+    ("UA", (56, 38)),
+    ("RA", (56, 38)),
+    ("RK", (56, 38)),
+    ("RL", (56, 38)),
+    ("RM", (56, 38)),
+    ("RN", (56, 38)),
+    ("RO", (56, 38)),
+    ("RQ", (56, 38)),
+    ("RT", (56, 38)),
+    ("RU", (56, 38)),
+    ("RV", (56, 38)),
+    ("RW", (56, 38)),
+    ("RX", (56, 38)),
+    ("RY", (56, 38)),
+    ("RZ", (56, 38)),
+    ("UA9", (56, 60)),  # Asiatic Russia (overridden by 3-char below)
+    ("UI", (56, 60)),
+    ("UK", (41, 64)),
+    ("UN", (51, 71)),
+    ("UR", (50, 31)),
+    ("OH", (62, 26)),
+    ("OG", (62, 26)),
+    ("OZ", (56, 10)),
+    ("OX", (64, -51)),
+    ("OY", (62, -7)),
+    ("OE", (48, 14)),
+    ("OK", (50, 16)),
+    ("OL", (50, 16)),
+    ("OM", (48, 17)),
+    ("ON", (51, 4)),
+    ("OO", (51, 4)),
+    ("OP", (51, 4)),
+    ("OQ", (51, 4)),
+    ("OR", (51, 4)),
+    ("OS", (51, 4)),
+    ("OT", (51, 4)),
+    ("SM", (60, 15)),
+    ("SK", (60, 15)),
+    ("SP", (52, 20)),
+    ("SN", (52, 20)),
+    ("SQ", (52, 20)),
+    ("SV", (38, 24)),
+    ("SW", (38, 24)),
+    ("PA", (52, 5)),
+    ("PB", (52, 5)),
+    ("PD", (52, 5)),
+    ("PE", (52, 5)),
+    ("PH", (52, 5)),
+    ("PY", (-10, -55)),
+    ("PP", (-10, -55)),
+    ("PQ", (-10, -55)),
+    ("PR", (-10, -55)),
+    ("PS", (-10, -55)),
+    ("PU", (-10, -55)),
+    ("PW", (-10, -55)),
+    ("PX", (-10, -55)),
+    ("EA", (40, -4)),
+    ("EB", (40, -4)),
+    ("EC", (40, -4)),
+    ("EI", (53, -8)),
+    ("EJ", (53, -8)),
+    ("EK", (40, 45)),
+    ("EP", (33, 54)),
+    ("ER", (47, 29)),
+    ("ES", (59, 25)),
+    ("EU", (53, 28)),
+    ("EW", (53, 28)),
+    ("EX", (43, 75)),
+    ("EY", (39, 71)),
+    ("EZ", (38, 58)),
+    ("HA", (47, 19)),
+    ("HB", (47, 8)),
+    ("HC", (-2, -78)),
+    ("HH", (19, -72)),
+    ("HI", (19, -70)),
+    ("HK", (4, -74)),
+    ("HL", (37, 127)),
+    ("DS", (37, 127)),
+    ("HP", (9, -80)),
+    ("HR", (15, -87)),
+    ("HS", (15, 101)),
+    ("HV", (42, 12)),
+    ("HZ", (24, 45)),
+    ("LA", (60, 10)),
+    ("LB", (60, 10)),
+    ("LC", (60, 10)),
+    ("LU", (-34, -64)),
+    ("LV", (-34, -64)),
+    ("LW", (-34, -64)),
+    ("LX", (50, 6)),
+    ("LY", (56, 24)),
+    ("LZ", (43, 25)),
+    ("I", (43, 12)),
+    ("IS", (40, 9)),
+    ("IG", (37, 14)),
+    ("YA", (34, 69)),
+    ("YB", (-7, 110)),
+    ("YC", (-7, 110)),
+    ("YI", (33, 44)),
+    ("YJ", (-17, 168)),
+    ("YK", (35, 38)),
+    ("YL", (57, 25)),
+    ("YN", (12, -86)),
+    ("YO", (45, 25)),
+    ("YT", (44, 21)),
+    ("YU", (44, 21)),
+    ("YV", (10, -67)),
+    ("TA", (39, 35)),
+    ("TF", (65, -18)),
+    ("TI", (10, -84)),
+    ("TK", (42, 9)),
+    ("TL", (6, 19)),
+    ("TN", (-4, 15)),
+    ("TR", (0, 12)),
+    ("TT", (12, 15)),
+    ("TU", (7, -6)),
+    ("TY", (10, 2)),
+    ("TZ", (13, -2)),
+    ("XE", (20, -100)),
+    ("XW", (18, 103)),
+    ("XV", (16, 108)),
+    ("XU", (12, 105)),
+    ("XT", (13, -2)),
+    ("4X", (31, 35)),
+    ("4Z", (31, 35)),
+    ("5A", (27, 17)),
+    ("5B", (35, 33)),
+    ("5H", (-6, 35)),
+    ("5N", (9, 8)),
+    ("5R", (-19, 47)),
+    ("5T", (18, -16)),
+    ("5U", (14, 8)),
+    ("5V", (8, 1)),
+    ("5W", (-14, -172)),
+    ("5X", (1, 32)),
+    ("5Z", (1, 38)),
+    ("6W", (15, -14)),
+    ("6Y", (18, -77)),
+    ("7P", (-29, 28)),
+    ("7Q", (-14, 34)),
+    ("7X", (28, 3)),
+    ("8P", (13, -59)),
+    ("8Q", (4, 74)),
+    ("8R", (5, -59)),
+    ("9A", (45, 16)),
+    ("9G", (8, -2)),
+    ("9H", (35, 14)),
+    ("9J", (-15, 28)),
+    ("9K", (29, 47)),
+    ("9L", (8, -12)),
+    ("9M", (4, 108)),
+    ("9N", (28, 84)),
+    ("9Q", (-4, 24)),
+    ("9V", (1, 104)),
+    ("9W", (4, 108)),
+    ("9X", (-2, 30)),
+    ("9Y", (10, -61)),
+    ("A2", (-22, 24)),
+    ("A3", (-21, -175)),
+    ("A4", (23, 58)),
+    ("A5", (27, 90)),
+    ("A6", (24, 54)),
+    ("A7", (25, 51)),
+    ("A9", (26, 51)),
+    ("CE", (-30, -71)),
+    ("CO", (22, -80)),
+    ("CT", (39, -9)),
+    ("CU", (38, -28)),
+    ("CX", (-33, -56)),
+    ("D2", (-8, 18)),
+    ("D4", (16, -24)),
+    ("D6", (-12, 44)),
+    ("E7", (44, 17)),
+    ("OA", (-12, -77)),
+    ("OB", (-12, -77)),
+    ("P2", (-9, 147)),
+    ("P4", (12, -70)),
+    ("T7", (44, 12)),
+    ("CE", (-30, -71)),
+    ("JT", (47, 106)),
+    ("VE", (45, -76)),
     # 1-char LAST — only matched if nothing longer matched
-    ("F",(47,2)),       # France
-    ("W",(39,-98)),     # USA
-    ("K",(39,-98)),     # USA
-    ("N",(39,-98)),     # USA
-    ("R",(56,38)),      # Russia
+    ("F", (47, 2)),  # France
+    ("W", (39, -98)),  # USA
+    ("K", (39, -98)),  # USA
+    ("N", (39, -98)),  # USA
+    ("R", (56, 38)),  # Russia
 ]:
     _PFX[k] = v
 
@@ -2673,16 +3067,16 @@ for k,v in [
 # California, not "somewhere in the contiguous US"). These tables are checked
 # before the generic _PFX lookup so the digit wins when present.
 _US_CALL_AREA = {
-    "0": (41, -98),   # CO/IA/KS/MN/MO/NE/ND/SD
-    "1": (43, -71),   # New England
-    "2": (41, -74),   # NY/NJ
-    "3": (39, -77),   # PA/DE/MD/DC
-    "4": (33, -84),   # AL/FL/GA/KY/NC/SC/TN/VA
-    "5": (32, -97),   # AR/LA/MS/NM/OK/TX
+    "0": (41, -98),  # CO/IA/KS/MN/MO/NE/ND/SD
+    "1": (43, -71),  # New England
+    "2": (41, -74),  # NY/NJ
+    "3": (39, -77),  # PA/DE/MD/DC
+    "4": (33, -84),  # AL/FL/GA/KY/NC/SC/TN/VA
+    "5": (32, -97),  # AR/LA/MS/NM/OK/TX
     "6": (37, -120),  # CA
     "7": (44, -114),  # AZ/ID/MT/NV/OR/UT/WA/WY
-    "8": (40, -82),   # MI/OH/WV
-    "9": (41, -89),   # IL/IN/WI
+    "8": (40, -82),  # MI/OH/WV
+    "9": (41, -89),  # IL/IN/WI
 }
 
 # Brazilian amateur prefixes use second-letter P..Y (PP, PQ, PR, PS, PT, PU,
@@ -2690,23 +3084,23 @@ _US_CALL_AREA = {
 # canonical PY-digit regions are used for every P[P-Y] block, which is exact
 # for PY itself and a reasonable regional approximation for the others.
 _BR_CALL_AREA = {
-    "0": (-3.85, -32.4),   # oceanic (Fernando de Noronha etc.)
-    "1": (-22.9, -43.2),   # Rio de Janeiro
-    "2": (-23.5, -46.6),   # Sao Paulo
-    "3": (-30.0, -51.2),   # Rio Grande do Sul
-    "4": (-19.9, -43.9),   # Minas Gerais
-    "5": (-25.4, -49.3),   # Parana
-    "6": (-12.9, -38.5),   # Bahia
-    "7": (-8.1, -34.9),    # Pernambuco
-    "8": (-1.5, -48.5),    # Para
-    "9": (-15.6, -56.1),   # Mato Grosso
+    "0": (-3.85, -32.4),  # oceanic (Fernando de Noronha etc.)
+    "1": (-22.9, -43.2),  # Rio de Janeiro
+    "2": (-23.5, -46.6),  # Sao Paulo
+    "3": (-30.0, -51.2),  # Rio Grande do Sul
+    "4": (-19.9, -43.9),  # Minas Gerais
+    "5": (-25.4, -49.3),  # Parana
+    "6": (-12.9, -38.5),  # Bahia
+    "7": (-8.1, -34.9),  # Pernambuco
+    "8": (-1.5, -48.5),  # Para
+    "9": (-15.6, -56.1),  # Mato Grosso
 }
 _BR_LETTERS = set("PQRSTUVWXY")
 
 _MX_CALL_AREA = {
-    "1": (19.4, -99.1),    # Central (CDMX)
-    "2": (28.0, -110.0),   # Northwest
-    "3": (19.0, -92.0),    # Southeast
+    "1": (19.4, -99.1),  # Central (CDMX)
+    "2": (28.0, -110.0),  # Northwest
+    "3": (19.0, -92.0),  # Southeast
 }
 
 # Australia allocates AX/VH/VI/VJ/VK/VL/VM/VN/VZ as one ITU block. VK is the
@@ -2717,15 +3111,15 @@ _MX_CALL_AREA = {
 _AU_PREFIXES = ("VK", "VH", "VI", "VJ", "VL", "VM", "VN", "VZ", "AX")
 _AU_CALL_AREA = {
     "0": (-54.5, 158.9),  # Macquarie Is / Antarctic stations
-    "1": (-35, 149),      # ACT
-    "2": (-34, 151),      # NSW
-    "3": (-38, 145),      # VIC
-    "4": (-28, 153),      # QLD
-    "5": (-35, 139),      # SA
-    "6": (-32, 116),      # WA
-    "7": (-43, 147),      # TAS
-    "8": (-13, 131),      # NT
-    "9": (-14, 126),      # external territories (Christmas I. etc)
+    "1": (-35, 149),  # ACT
+    "2": (-34, 151),  # NSW
+    "3": (-38, 145),  # VIC
+    "4": (-28, 153),  # QLD
+    "5": (-35, 139),  # SA
+    "6": (-32, 116),  # WA
+    "7": (-43, 147),  # TAS
+    "8": (-13, 131),  # NT
+    "9": (-14, 126),  # external territories (Christmas I. etc)
 }
 
 
@@ -2735,8 +3129,7 @@ def _call_to_latlon(callsign: str):
 
     if call[:1] in ("W", "K", "N") and len(call) > 1 and call[1] in _US_CALL_AREA:
         return _US_CALL_AREA[call[1]]
-    if (len(call) > 2 and call[0] == "P" and call[1] in _BR_LETTERS
-            and call[2] in _BR_CALL_AREA):
+    if len(call) > 2 and call[0] == "P" and call[1] in _BR_LETTERS and call[2] in _BR_CALL_AREA:
         return _BR_CALL_AREA[call[2]]
     if call[:2] in ("XE", "XF") and len(call) > 2 and call[2] in _MX_CALL_AREA:
         return _MX_CALL_AREA[call[2]]
@@ -2751,7 +3144,6 @@ def _call_to_latlon(callsign: str):
     if call[:2] in _AU_PREFIXES:
         return [-25, 134]
     return None
-
 
 
 @app.get("/api/map_data")
@@ -2771,24 +3163,34 @@ async def api_map_data():
         if not ll:
             continue
         if call not in agg:
-            agg[call] = {"call": call, "band": q.get("band", "?"),
-                         "lat": ll[0], "lon": ll[1], "count": 0,
-                         "mult": q.get("mult1", "")}
+            agg[call] = {
+                "call": call,
+                "band": q.get("band", "?"),
+                "lat": ll[0],
+                "lon": ll[1],
+                "count": 0,
+                "mult": q.get("mult1", ""),
+            }
         agg[call]["count"] += 1
     return list(agg.values())
 
 
 # ── WebSocket live feed ───────────────────────────────────────────────────────
 
+
 @app.websocket("/ws/live")
 async def ws_live(ws: WebSocket):
     await ws.accept()
     STATE._clients.append(ws)
     try:
-        await ws.send_text(json.dumps({
-            "type": "snapshot",
-            "data": STATE.snapshot(),
-        }))
+        await ws.send_text(
+            json.dumps(
+                {
+                    "type": "snapshot",
+                    "data": STATE.snapshot(),
+                }
+            )
+        )
         while True:
             try:
                 await asyncio.wait_for(ws.receive_text(), timeout=30)
@@ -2806,7 +3208,7 @@ async def ws_live(ws: WebSocket):
 
 
 async def _broadcast(data: dict):
-    msg  = json.dumps({"type": "snapshot", "data": data})
+    msg = json.dumps({"type": "snapshot", "data": data})
     dead = []
     for ws in list(STATE._clients):
         try:
@@ -2823,9 +3225,7 @@ async def _broadcast(data: dict):
 async def _poll_loop():
     while True:
         await asyncio.sleep(STATE.poll_interval)
-        changed = await asyncio.get_event_loop().run_in_executor(
-            None, STATE.poll_once
-        )
+        changed = await asyncio.get_event_loop().run_in_executor(None, STATE.poll_once)
         if changed:
             await _broadcast(STATE.snapshot())
 
@@ -2834,7 +3234,8 @@ async def _poll_loop():
 # ── PyWebView launcher ────────────────────────────────────────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
 
-_PREFERRED_PORT = 58631   # arbitrary, in the dynamic/private range (49152-65535)
+_PREFERRED_PORT = 58631  # arbitrary, in the dynamic/private range (49152-65535)
+
 
 def _find_free_port() -> int:
     """Prefer a fixed port so the pywebview window's origin — and therefore
@@ -2870,7 +3271,7 @@ def _find_free_port() -> int:
 
 def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
     port = port or _find_free_port()
-    url  = f"http://127.0.0.1:{port}"
+    url = f"http://127.0.0.1:{port}"
     STATE._base_url = url
 
     # Pre-load if a valid file was passed on the command line
@@ -2878,11 +3279,14 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
         STATE.load_db(db_path)
 
     config = uvicorn.Config(
-        app, host="127.0.0.1", port=port,
-        log_level="warning", loop="asyncio",
-        log_config=None,   # use our own logging setup, not uvicorn's default
-                            # (its formatter calls sys.stdout.isatty(), which
-                            # is None in a windowed/console=False build)
+        app,
+        host="127.0.0.1",
+        port=port,
+        log_level="warning",
+        loop="asyncio",
+        log_config=None,  # use our own logging setup, not uvicorn's default
+        # (its formatter calls sys.stdout.isatty(), which
+        # is None in a windowed/console=False build)
     )
     server = uvicorn.Server(config)
 
@@ -2909,7 +3313,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
         # pywebview's WebView2 backend silently cancels every download unless
         # this is explicitly enabled (default False) — without it, CSV/report
         # exports via the in-page <a download> click do nothing with no error.
-        webview.settings['ALLOW_DOWNLOADS'] = True
+        webview.settings["ALLOW_DOWNLOADS"] = True
 
         # Frameless: the OS title bar (and its minimize/maximize/close buttons)
         # is gone, so the frontend draws its own (#window-controls in
@@ -2929,7 +3333,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
         # window .resize()/.move() to the real work-area rect ourselves.
         from webview.window import FixPoint
 
-        _MIN_W, _MIN_H = 900, 600   # keep in sync with min_size below
+        _MIN_W, _MIN_H = 900, 600  # keep in sync with min_size below
 
         # ── Restore window geometry from the previous session ────────────────
         # Saved by _on_closing() below into the same small JSON store used for
@@ -2963,20 +3367,37 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
             return False
 
         _saved_w, _saved_h = _saved_geom.get("width"), _saved_geom.get("height")
-        if (_valid_dim(_saved_w, _MIN_W, 10000) and _valid_dim(_saved_h, _MIN_H, 10000)
-                and _matches_monitor_bounds(_saved_w, _saved_h)):
-            log.info("Discarding saved window geometry %sx%s — matches a monitor's full bounds", _saved_w, _saved_h)
+        if (
+            _valid_dim(_saved_w, _MIN_W, 10000)
+            and _valid_dim(_saved_h, _MIN_H, 10000)
+            and _matches_monitor_bounds(_saved_w, _saved_h)
+        ):
+            log.info(
+                "Discarding saved window geometry %sx%s — matches a monitor's full bounds",
+                _saved_w,
+                _saved_h,
+            )
             _saved_geom = {k: v for k, v in _saved_geom.items() if k not in ("width", "height")}
 
-        _init_w = int(_saved_geom["width"]) if _valid_dim(_saved_geom.get("width"), _MIN_W, 10000) else 1400
-        _init_h = int(_saved_geom["height"]) if _valid_dim(_saved_geom.get("height"), _MIN_H, 10000) else 860
+        _init_w = (
+            int(_saved_geom["width"])
+            if _valid_dim(_saved_geom.get("width"), _MIN_W, 10000)
+            else 1400
+        )
+        _init_h = (
+            int(_saved_geom["height"])
+            if _valid_dim(_saved_geom.get("height"), _MIN_H, 10000)
+            else 860
+        )
         _init_x = _saved_geom.get("x")
         _init_y = _saved_geom.get("y")
         _has_init_pos = _valid_dim(_init_x, -100, 10000) and _valid_dim(_init_y, -100, 10000)
         _initial_maximized = bool(_saved_geom.get("maximized"))
 
-        _maximized     = False   # starts windowed regardless of _initial_maximized — see _on_loaded below
-        _pre_max_geom  = None    # (x, y, width, height) to restore back to
+        _maximized = (
+            False  # starts windowed regardless of _initial_maximized — see _on_loaded below
+        )
+        _pre_max_geom = None  # (x, y, width, height) to restore back to
 
         def _save_window_geometry():
             """Shared by the native 'closing' event and the custom titlebar's
@@ -2987,11 +3408,19 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 settings = _load_settings()
                 if _maximized and _pre_max_geom:
                     x, y, w, h = _pre_max_geom
-                    settings["window_geometry"] = {"x": x, "y": y, "width": w, "height": h, "maximized": True}
+                    settings["window_geometry"] = {
+                        "x": x,
+                        "y": y,
+                        "width": w,
+                        "height": h,
+                        "maximized": True,
+                    }
                 else:
                     settings["window_geometry"] = {
-                        "x": window.x, "y": window.y,
-                        "width": window.width, "height": window.height,
+                        "x": window.x,
+                        "y": window.y,
+                        "width": window.width,
+                        "height": window.height,
                         "maximized": False,
                     }
                 _save_settings(settings)
@@ -3013,7 +3442,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 # This is benign (the class was already unregistered by the time the
                 # renderer tries again) but confusing in logs.
                 _devnull = open(os.devnull, "w")
-                os.dup2(_devnull.fileno(), 2)   # redirect fd 2 (stderr) to /dev/null
+                os.dup2(_devnull.fileno(), 2)  # redirect fd 2 (stderr) to /dev/null
 
                 # Close WebSocket clients gracefully — STATE._main_loop (the
                 # actual running uvicorn event loop, set in lifespan()) is
@@ -3098,6 +3527,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
             if sys.platform.startswith("linux") and getattr(window, "native", None) is not None:
                 try:
                     from gi.repository import Gdk
+
                     window.native.set_gravity(Gdk.Gravity.NORTH_WEST)
                     log.info("_reset_gravity: set_gravity(NORTH_WEST) succeeded")
                 except Exception:
@@ -3143,8 +3573,8 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 if not _maximized:
                     _pre_max_geom = (window.x, window.y, window.width, window.height)
                     screen = _current_screen()
-                    work = getattr(screen, 'frame', None)
-                    if work is not None and hasattr(work, 'Width'):
+                    work = getattr(screen, "frame", None)
+                    if work is not None and hasattr(work, "Width"):
                         x, y, w, h = work.X, work.Y, work.Width, work.Height
                     else:
                         x, y, w, h = screen.x, screen.y, screen.width, screen.height
@@ -3172,16 +3602,26 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                         # stays a normal, freely resizable one.
                         w -= 1
                         h -= 1
-                    log.info("toggle_maximize: maximizing — pre_geom=%s target=%s", _pre_max_geom, (x, y, w, h))
+                    log.info(
+                        "toggle_maximize: maximizing — pre_geom=%s target=%s",
+                        _pre_max_geom,
+                        (x, y, w, h),
+                    )
                     _reset_gravity()
                     _move_resize_window(x, y, w, h)
-                    log.info("toggle_maximize: after move_resize — actual=%s", (window.x, window.y, window.width, window.height))
+                    log.info(
+                        "toggle_maximize: after move_resize — actual=%s",
+                        (window.x, window.y, window.width, window.height),
+                    )
                 elif _pre_max_geom:
                     x, y, w, h = _pre_max_geom
                     log.info("toggle_maximize: restoring — target=%s", (x, y, w, h))
                     _reset_gravity()
                     _move_resize_window(x, y, w, h)
-                    log.info("toggle_maximize: after move_resize — actual=%s", (window.x, window.y, window.width, window.height))
+                    log.info(
+                        "toggle_maximize: after move_resize — actual=%s",
+                        (window.x, window.y, window.width, window.height),
+                    )
                 _maximized = not _maximized
                 return _maximized
 
@@ -3205,7 +3645,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 # edge/corner drag (see wireResizeHandles in app.js) — the
                 # rest of the drag computes absolute sizes from this origin
                 # instead of round-tripping on every mousemove.
-                return {'width': window.width, 'height': window.height}
+                return {"width": window.width, "height": window.height}
 
             def resize_to(self, width, height, edge):
                 # 'edge' is which border/corner is being dragged ('n', 'sw',
@@ -3214,10 +3654,10 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 # pywebview's default top-left-anchored growth.
                 nonlocal _maximized
                 _maximized = False
-                width  = max(_MIN_W, int(width))
+                width = max(_MIN_W, int(width))
                 height = max(_MIN_H, int(height))
-                horiz = FixPoint.EAST if 'w' in edge else FixPoint.WEST
-                vert  = FixPoint.SOUTH if 'n' in edge else FixPoint.NORTH
+                horiz = FixPoint.EAST if "w" in edge else FixPoint.WEST
+                vert = FixPoint.SOUTH if "n" in edge else FixPoint.NORTH
                 window.resize(width, height, horiz | vert)
 
             def get_position(self):
@@ -3237,7 +3677,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 # platforms/gtk.py's move() re-adding the screen origin,
                 # which snaps the window toward the top-left the instant a
                 # drag starts.
-                return {'x': window.x, 'y': window.y}
+                return {"x": window.x, "y": window.y}
 
             def move_to(self, x, y):
                 nonlocal _maximized
@@ -3258,6 +3698,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 if not (isinstance(url, str) and url.startswith(("http://", "https://"))):
                     return
                 import webbrowser
+
                 webbrowser.open(url)
 
         _window_api = _WindowApi()
@@ -3273,8 +3714,8 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
             js_api=_window_api,
         )
         if _has_init_pos:
-            _create_kwargs['x'] = int(_init_x)
-            _create_kwargs['y'] = int(_init_y)
+            _create_kwargs["x"] = int(_init_x)
+            _create_kwargs["y"] = int(_init_y)
         window = webview.create_window(**_create_kwargs)
 
         def _on_loaded():
@@ -3293,7 +3734,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
         # (see _WindowApi.close()) without going through window.destroy(),
         # since that path was observed to hang indefinitely on Linux/GTK.
         window.events.closing += _save_window_geometry
-        window.events.closed  += _start_shutdown
+        window.events.closed += _start_shutdown
 
         # webview.start() blocks here until the window closes.
         # _on_closed will call os._exit(0) so execution never returns here
@@ -3305,8 +3746,12 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
         # points the persistent profile at the same per-user app-data folder
         # already used for settings.json/logs (see _app_data_dir()), rather
         # than pywebview's default location.
-        webview.start(_on_loaded, debug=False, private_mode=False,
-                       storage_path=str(_app_data_dir() / "webview_storage"))
+        webview.start(
+            _on_loaded,
+            debug=False,
+            private_mode=False,
+            storage_path=str(_app_data_dir() / "webview_storage"),
+        )
 
         # Fallback for non-PyWebView / browser-direct mode
         server.should_exit = True
@@ -3321,8 +3766,12 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
         )
 
     import webbrowser
+
     webbrowser.open(url)
-    log.info("Opened %s in the default browser — close this process via Task Manager to stop the server.", url)
+    log.info(
+        "Opened %s in the default browser — close this process via Task Manager to stop the server.",
+        url,
+    )
     try:
         server_thread.join()
     except KeyboardInterrupt:

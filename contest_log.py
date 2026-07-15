@@ -2,72 +2,130 @@
 contest_log.py — self-contained data layer for VK Contest Analyzer
 Zero tkinter / matplotlib dependencies. Importable by the web server.
 """
+
 from __future__ import annotations
 
-import sqlite3
-import os
-import sys
-import re
-import json
-import math
 import logging
-from datetime import datetime, timedelta, timezone
+import math
+import os
+import re
+import sqlite3
+import sys
 from collections import defaultdict
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 # ── Plugin framework ──────────────────────────────────────────────────────────
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from plugins.base import (
-    ContestPlugin, SessionConfig, MultResult, GaugeDef,
+    ContestPlugin,
+    GaugeDef,
+    MultResult,
+    SessionConfig,
 )
-from plugins.loader import plugin_for, get_all_plugins
 from plugins.generic import GenericPlugin
+from plugins.loader import get_all_plugins, plugin_for
 
 # ── Band ordering (used by _generic_qso_value_estimate) ──────────────────────
-_BAND_ORDER = ["160M", "80M", "60M", "40M", "30M", "20M", "17M", "15M",
-               "12M", "10M", "6M", "2M", "70CM"]
+_BAND_ORDER = [
+    "160M",
+    "80M",
+    "60M",
+    "40M",
+    "30M",
+    "20M",
+    "17M",
+    "15M",
+    "12M",
+    "10M",
+    "6M",
+    "2M",
+    "70CM",
+]
 
 # ── Compiled regex (used by ContestLog.load) ──────────────────────────────────
-_VK_PREFIX_RE   = re.compile(r'^(VK|VJ|VL|AX)')
+_VK_PREFIX_RE = re.compile(r"^(VK|VJ|VL|AX)")
 _PACKED_MULT_RE = re.compile(
-    r'(?:^|[\s,/])(ACT|NSW|VIC|QLD|SA|WA|TAS|NT)-([A-Z]{2})([1-8])'
-    r'(?:$|[\s,/]|$)', re.IGNORECASE)
-_SHORT2_RE = re.compile(r'([A-Z]{2})([1-8])', re.IGNORECASE)
+    r"(?:^|[\s,/])(ACT|NSW|VIC|QLD|SA|WA|TAS|NT)-([A-Z]{2})([1-8])"
+    r"(?:$|[\s,/]|$)",
+    re.IGNORECASE,
+)
+_SHORT2_RE = re.compile(r"([A-Z]{2})([1-8])", re.IGNORECASE)
+
 
 def _freq_to_band(freq_raw):
     f = float(freq_raw)
-    if f > 1_000_000:    f = f / 1_000_000
-    elif f > 30_000:     f = f / 1_000
+    if f > 1_000_000:
+        f = f / 1_000_000
+    elif f > 30_000:
+        f = f / 1_000
 
-    if   1.8  <= f < 2.0:   return "160M"
-    elif 3.5  <= f < 4.0:   return "80M"
-    elif 5.3  <= f < 5.4:   return "60M"
-    elif 7.0  <= f < 7.3:   return "40M"
-    elif 10.1 <= f < 10.15: return "30M"
-    elif 14.0 <= f < 14.35: return "20M"
-    elif 18.0 <= f < 18.17: return "17M"
-    elif 21.0 <= f < 21.45: return "15M"
-    elif 24.8 <= f < 25.0:  return "12M"
-    elif 28.0 <= f < 29.7:  return "10M"
-    elif 50.0 <= f < 54.0:  return "6M"
-    elif 144  <= f < 148:   return "2M"
-    else:                    return f"{f:.2f}MHz"
+    if 1.8 <= f < 2.0:
+        return "160M"
+    elif 3.5 <= f < 4.0:
+        return "80M"
+    elif 5.3 <= f < 5.4:
+        return "60M"
+    elif 7.0 <= f < 7.3:
+        return "40M"
+    elif 10.1 <= f < 10.15:
+        return "30M"
+    elif 14.0 <= f < 14.35:
+        return "20M"
+    elif 18.0 <= f < 18.17:
+        return "17M"
+    elif 21.0 <= f < 21.45:
+        return "15M"
+    elif 24.8 <= f < 25.0:
+        return "12M"
+    elif 28.0 <= f < 29.7:
+        return "10M"
+    elif 50.0 <= f < 54.0:
+        return "6M"
+    elif 144 <= f < 148:
+        return "2M"
+    else:
+        return f"{f:.2f}MHz"
 
 
 # ── VK call area / state helpers ─────────────────────────────────────────────
 
 VK_AREA_TO_STATE = {
-    1: "ACT", 2: "NSW", 3: "VIC", 4: "QLD",
-    5: "SA",  6: "WA",  7: "TAS", 8: "NT",
+    1: "ACT",
+    2: "NSW",
+    3: "VIC",
+    4: "QLD",
+    5: "SA",
+    6: "WA",
+    7: "TAS",
+    8: "NT",
 }
-VK_AREA_TO_CQZ = {1:29, 2:29, 3:29, 4:30, 5:29, 6:29, 7:29, 8:29}
+VK_AREA_TO_CQZ = {1: 29, 2: 29, 3: 29, 4: 30, 5: 29, 6: 29, 7: 29, 8: 29}
 PREFIX_TO_CQZ = {
-    "VK":29, "ZL":32, "JA":25, "W":5,  "K":5,  "N":5,  "AA":5,
-    "VE":3,  "G":14,  "DL":14, "F":14, "I":15, "SP":15,
-    "UA9":17,"UA0":18,"BY":24, "HL":25,"BV":24,
-    "9V":28, "HS":26, "VU":26, "ZS":38,"PY":11, "LU":13,
+    "VK": 29,
+    "ZL": 32,
+    "JA": 25,
+    "W": 5,
+    "K": 5,
+    "N": 5,
+    "AA": 5,
+    "VE": 3,
+    "G": 14,
+    "DL": 14,
+    "F": 14,
+    "I": 15,
+    "SP": 15,
+    "UA9": 17,
+    "UA0": 18,
+    "BY": 24,
+    "HL": 25,
+    "BV": 24,
+    "9V": 28,
+    "HS": 26,
+    "VU": 26,
+    "ZS": 38,
+    "PY": 11,
+    "LU": 13,
 }
 
 
@@ -107,8 +165,8 @@ def state_from_call(call):
 # ── ContestLog — contest-agnostic data loader ────────────────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class ContestLog:
 
+class ContestLog:
     @staticmethod
     def available_contests(db_path):
         """
@@ -129,12 +187,11 @@ class ContestLog:
             # Ensure index exists — fast no-op if already present
             try:
                 c.execute(
-                    "CREATE INDEX IF NOT EXISTS "
-                    "_vkca_idx_dxlog_contestnr ON DXLOG(ContestNR)"
+                    "CREATE INDEX IF NOT EXISTS _vkca_idx_dxlog_contestnr ON DXLOG(ContestNR)"
                 )
                 conn.commit()
             except Exception:
-                pass   # read-only DB or DXLOG doesn't exist yet — harmless
+                pass  # read-only DB or DXLOG doesn't exist yet — harmless
 
             rows = c.execute("""
                 SELECT  ci.ContestNR,
@@ -157,10 +214,10 @@ class ContestLog:
             conn.close()
 
     def __init__(self, db_path, contest_nr=None, plugin: ContestPlugin = None):
-        self.db_path    = db_path
+        self.db_path = db_path
         self.contest_nr = contest_nr
-        self.plugin     = plugin or GenericPlugin()
-        self.qsos       = []
+        self.plugin = plugin or GenericPlugin()
+        self.qsos = []
         self.load()
 
     # ── Loading ──────────────────────────────────────────────────────────────
@@ -171,8 +228,9 @@ class ContestLog:
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
 
-        tables = [r[0] for r in c.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+        tables = [
+            r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        ]
         logging.info("Discovered tables: %s", tables)
 
         # ── Read contest start date ───────────────────────────────────────────
@@ -180,8 +238,7 @@ class ContestLog:
         try:
             if self.contest_nr is not None:
                 row = c.execute(
-                    "SELECT StartDate FROM ContestInstance WHERE ContestNR=?",
-                    (self.contest_nr,)
+                    "SELECT StartDate FROM ContestInstance WHERE ContestNR=?", (self.contest_nr,)
                 ).fetchone()
             else:
                 row = c.execute(
@@ -234,22 +291,39 @@ class ContestLog:
                     return name
             return None
 
-        call_col  = col(["call","Callsign","callsign","CALL"])
-        band_col  = col(["band","Band","BAND"])
-        freq_col  = col(["freq","Freq","FREQ","frequency","qsxfreq"])
-        mode_col  = col(["mode","Mode","MODE"])
-        time_col  = col(["ts","QSOTime","qsotime","datetime","time","TIME"])
-        mult_col  = col([
-            "Exchange1","exchange1","EXCHANGE1",
-            "Section","section","SECTION",
-            "APP_N1MM_EXCHANGE1",
-            "comment","COMMENT","Comment",
-            "rcv","RCV",
-            "Mult1","mult1",
-            "srx_string","SRX_STRING",
-            "exch","Exch","EXCH",
-            "srx","SRX","rcvexch","RcvExch","RCVEXCH",
-        ])
+        call_col = col(["call", "Callsign", "callsign", "CALL"])
+        band_col = col(["band", "Band", "BAND"])
+        freq_col = col(["freq", "Freq", "FREQ", "frequency", "qsxfreq"])
+        mode_col = col(["mode", "Mode", "MODE"])
+        time_col = col(["ts", "QSOTime", "qsotime", "datetime", "time", "TIME"])
+        mult_col = col(
+            [
+                "Exchange1",
+                "exchange1",
+                "EXCHANGE1",
+                "Section",
+                "section",
+                "SECTION",
+                "APP_N1MM_EXCHANGE1",
+                "comment",
+                "COMMENT",
+                "Comment",
+                "rcv",
+                "RCV",
+                "Mult1",
+                "mult1",
+                "srx_string",
+                "SRX_STRING",
+                "exch",
+                "Exch",
+                "EXCH",
+                "srx",
+                "SRX",
+                "rcvexch",
+                "RcvExch",
+                "RCVEXCH",
+            ]
+        )
         # Use plugin-declared column preference when available; otherwise heuristic.
         # When the plugin declares a preference list, keep EVERY candidate
         # that actually exists as a column (not just the first) — some
@@ -270,53 +344,89 @@ class ContestLog:
                     sect_pref_cols.append(name)
             sect_col = sect_pref_cols[0] if sect_pref_cols else None
         else:
-            sect_col = col(["Sect","sect","SECT","Section","section","SECTION"])
+            sect_col = col(["Sect", "sect", "SECT", "Section", "section", "SECTION"])
             sect_pref_cols = [sect_col] if sect_col else []
-        dupe_col  = col(["IsDupe","isDupe","isdupe","ISDUPE",
-                          "Dupe","dupe","DUPE",
-                          "ContactType","contacttype","CONTACTTYPE",
-                          "APP_N1MM_CONTACTTYPE",
-                          "IsRunQSO","isrunqso"])
-        pts_col   = col(["points","Points","POINTS","APP_N1MM_POINTS"])
-        id_col    = col(["ID","id","CLAIMEDQSO","rowid"])
-        zone_col  = col(["CQZone","cqzone","CQZONE","CQ_Zone","cq_zone",
-                          "ZN","zn","Zone","zone","ZONE"])
-        m1_col    = col(["IsMultiplier1","ismultiplier1"])
-        m2_col    = col(["IsMultiplier2","ismultiplier2"])
-        op_col    = col(["Operator","operator","OPERATOR"])
-        continent_col = col(["Continent","continent","CONTINENT"])
+        dupe_col = col(
+            [
+                "IsDupe",
+                "isDupe",
+                "isdupe",
+                "ISDUPE",
+                "Dupe",
+                "dupe",
+                "DUPE",
+                "ContactType",
+                "contacttype",
+                "CONTACTTYPE",
+                "APP_N1MM_CONTACTTYPE",
+                "IsRunQSO",
+                "isrunqso",
+            ]
+        )
+        pts_col = col(["points", "Points", "POINTS", "APP_N1MM_POINTS"])
+        id_col = col(["ID", "id", "CLAIMEDQSO", "rowid"])
+        zone_col = col(
+            ["CQZone", "cqzone", "CQZONE", "CQ_Zone", "cq_zone", "ZN", "zn", "Zone", "zone", "ZONE"]
+        )
+        m1_col = col(["IsMultiplier1", "ismultiplier1"])
+        m2_col = col(["IsMultiplier2", "ismultiplier2"])
+        op_col = col(["Operator", "operator", "OPERATOR"])
+        continent_col = col(["Continent", "continent", "CONTINENT"])
 
         logging.info(
             "Using columns: call=%s band=%s freq=%s mode=%s time=%s "
             "mult=%s sect=%s zone=%s m1=%s m2=%s dupe=%s pts=%s op=%s",
-            call_col, band_col, freq_col, mode_col, time_col,
-            mult_col, sect_col, zone_col, m1_col, m2_col, dupe_col, pts_col, op_col
+            call_col,
+            band_col,
+            freq_col,
+            mode_col,
+            time_col,
+            mult_col,
+            sect_col,
+            zone_col,
+            m1_col,
+            m2_col,
+            dupe_col,
+            pts_col,
+            op_col,
         )
 
-        sel_cols = [call_col, band_col, freq_col, mode_col, time_col,
-                    mult_col, zone_col, m1_col, m2_col,
-                    dupe_col, pts_col, id_col, op_col, continent_col]
+        sel_cols = [
+            call_col,
+            band_col,
+            freq_col,
+            mode_col,
+            time_col,
+            mult_col,
+            zone_col,
+            m1_col,
+            m2_col,
+            dupe_col,
+            pts_col,
+            id_col,
+            op_col,
+            continent_col,
+        ]
         sel_cols += sect_pref_cols
         sel_cols = [cn for cn in sel_cols if cn]
-        seen = set(); sel_cols_dedup = []
+        seen = set()
+        sel_cols_dedup = []
         for c_ in sel_cols:
             if c_ not in seen:
-                seen.add(c_); sel_cols_dedup.append(c_)
+                seen.add(c_)
+                sel_cols_dedup.append(c_)
         sel_cols = sel_cols_dedup
         sel = ", ".join(sel_cols)
 
-        contest_nr_col = col(["ContestNR","contestnr"])
+        contest_nr_col = col(["ContestNR", "contestnr"])
         if self.contest_nr is not None and contest_nr_col:
             rows = c.execute(
-                f"SELECT {sel} FROM {target} "
-                f"WHERE {contest_nr_col} = ? ORDER BY {time_col}",
-                (self.contest_nr,)
+                f"SELECT {sel} FROM {target} WHERE {contest_nr_col} = ? ORDER BY {time_col}",
+                (self.contest_nr,),
             ).fetchall()
             logging.info("Filtering to ContestNR=%s — %d rows", self.contest_nr, len(rows))
         else:
-            rows = c.execute(
-                f"SELECT {sel} FROM {target} ORDER BY {time_col}"
-            ).fetchall()
+            rows = c.execute(f"SELECT {sel} FROM {target} ORDER BY {time_col}").fetchall()
         conn.close()
 
         # ── Multiplier parsing regexes ────────────────────────────────────────
@@ -332,7 +442,7 @@ class ContestLog:
         _dupe_is_heuristic = []
         # Hoist mult list/set and regexes outside the per-QSO loop (fixes per-row recompute)
         _plugin_mult_list = self.plugin.mult_list()
-        _plugin_mult_set  = set(_plugin_mult_list) if _plugin_mult_list else set()
+        _plugin_mult_set = set(_plugin_mult_list) if _plugin_mult_list else set()
         for r in rows:
             d = dict(zip(sel_cols, r))
 
@@ -361,7 +471,6 @@ class ContestLog:
             mult = ""
             mult_source = ""
 
-
             if _plugin_mult_set:
                 # Fixed-list contest (e.g. VK Shires): resolve raw exchange to
                 # an official multiplier code.
@@ -369,34 +478,42 @@ class ContestLog:
                 # 1) Full "STATE-XXN" form
                 match = regex_packed.search(" " + raw_mult + " ")
                 if match:
-                    reconstructed = f"{match.group(1).upper()}-{match.group(2).upper()}{match.group(3)}"
+                    reconstructed = (
+                        f"{match.group(1).upper()}-{match.group(2).upper()}{match.group(3)}"
+                    )
                     if reconstructed in _plugin_mult_set:
-                        mult = reconstructed; mult_source = "FULL"
+                        mult = reconstructed
+                        mult_source = "FULL"
 
                 # 2) Short "XXN" form — derive state from the digit
                 if not mult and raw_mult:
                     m_short = regex_short2.search(raw_mult)
                     if m_short:
                         letters = m_short.group(1).upper()
-                        digit   = int(m_short.group(2))
+                        digit = int(m_short.group(2))
                         st = VK_AREA_TO_STATE.get(digit)
                         if st:
                             candidate = f"{st}-{letters}{digit}"
                             if candidate in _plugin_mult_set:
-                                mult = candidate; mult_source = "SHORT+DIGIT"
+                                mult = candidate
+                                mult_source = "SHORT+DIGIT"
 
                 # 3) Literal match — O(1) set lookup first, then substring scan.
                 if not mult and raw_mult and len(raw_mult) >= 6:
                     if raw_mult in _plugin_mult_set:
-                        mult = raw_mult; mult_source = "LITERAL"
+                        mult = raw_mult
+                        mult_source = "LITERAL"
                     else:
                         for official in _plugin_mult_list:
                             if official in raw_mult:
-                                mult = official; mult_source = "LITERAL"; break
+                                mult = official
+                                mult_source = "LITERAL"
+                                break
 
                 # 4) Fallback (won't score as a valid mult)
                 if not mult and raw_mult:
-                    mult = raw_mult[:10]; mult_source = "FALLBACK"
+                    mult = raw_mult[:10]
+                    mult_source = "FALLBACK"
 
             else:
                 # All other contests: use the raw value directly.
@@ -483,14 +600,18 @@ class ContestLog:
             t = None
             if tstr is not None:
                 try:
-                    t = datetime.fromtimestamp(
-                        int(float(tstr)), tz=timezone.utc
-                    ).replace(tzinfo=None)
+                    t = datetime.fromtimestamp(int(float(tstr)), tz=timezone.utc).replace(
+                        tzinfo=None
+                    )
                 except Exception:
                     pass
                 if t is None:
-                    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S",
-                                "%Y-%m-%dT%H:%M:%S", "%d/%m/%Y %H:%M:%S"):
+                    for fmt in (
+                        "%Y-%m-%d %H:%M:%S",
+                        "%Y/%m/%d %H:%M:%S",
+                        "%Y-%m-%dT%H:%M:%S",
+                        "%d/%m/%Y %H:%M:%S",
+                    ):
                         try:
                             t = datetime.strptime(str(tstr)[:19], fmt)
                             break
@@ -548,38 +669,39 @@ class ContestLog:
                 mult_source = mult_source or "IS_MULT2_FALLBACK"
 
             # ── Continent (N1MM's own country-file lookup, when available) ─────
-            continent = str(d.get(continent_col) or "").strip().upper() \
-                if continent_col else ""
+            continent = str(d.get(continent_col) or "").strip().upper() if continent_col else ""
 
             if call and t:
                 _dupe_is_heuristic.append(dupe_is_heuristic)
-                self.qsos.append({
-                    "call":        call,
-                    "band":        band,
-                    "mode":        mode,
-                    "time":        t,
-                    # mult1 is the normalised primary multiplier value
-                    "mult1":       mult,
-                    # keep legacy key for backward compat with debug view
-                    "shire":       mult,
-                    "cqz":         cqz,
-                    "is_mult1":    is_mult1,
-                    "is_mult2":    is_mult2,
-                    "dupe":        dupe,
-                    "pts":         pts,
-                    "raw_mult":    raw_mult,
-                    "mult_source": mult_source,
-                    "qso_id":      str(d.get(id_col) or "") if id_col else "",
-                    "operator":    operator,
-                    "continent":   continent,
-                    "_table":      target,
-                    # Populated asynchronously by web/server.py's QRZ lookup
-                    # worker — never set here, ContestLog stays network-free.
-                    "qrz_name":    "",
-                    "qrz_grid":    "",
-                    "qrz_state":   "",
-                    "qrz_status":  "none",   # "none"|"pending"|"found"|"not_found"
-                })
+                self.qsos.append(
+                    {
+                        "call": call,
+                        "band": band,
+                        "mode": mode,
+                        "time": t,
+                        # mult1 is the normalised primary multiplier value
+                        "mult1": mult,
+                        # keep legacy key for backward compat with debug view
+                        "shire": mult,
+                        "cqz": cqz,
+                        "is_mult1": is_mult1,
+                        "is_mult2": is_mult2,
+                        "dupe": dupe,
+                        "pts": pts,
+                        "raw_mult": raw_mult,
+                        "mult_source": mult_source,
+                        "qso_id": str(d.get(id_col) or "") if id_col else "",
+                        "operator": operator,
+                        "continent": continent,
+                        "_table": target,
+                        # Populated asynchronously by web/server.py's QRZ lookup
+                        # worker — never set here, ContestLog stays network-free.
+                        "qrz_name": "",
+                        "qrz_grid": "",
+                        "qrz_state": "",
+                        "qrz_status": "none",  # "none"|"pending"|"found"|"not_found"
+                    }
+                )
 
         # ── Multiplier-flag sanity check ────────────────────────────────────
         # Some loggers (e.g. not1mm's IARU HF and ARRL 10M plugins) declare
@@ -592,12 +714,20 @@ class ContestLog:
         # count come out permanently zero for those logs. If the flag is
         # never 1 anywhere in the whole log, treat it as unset so plugins
         # fall back to their own distinct-pair counting instead.
-        if self.qsos and not any(q["is_mult1"] == 1 for q in self.qsos):
+        if self.qsos:
+            # ── Multiplier-flag sanity check ────────────────────────────────────
+            seen_m1 = seen_m2 = False
             for q in self.qsos:
-                q["is_mult1"] = None
-        if self.qsos and not any(q["is_mult2"] == 1 for q in self.qsos):
-            for q in self.qsos:
-                q["is_mult2"] = None
+                if q["is_mult1"] == 1:
+                    seen_m1 = True
+                if q["is_mult2"] == 1:
+                    seen_m2 = True
+            if not seen_m1:
+                for q in self.qsos:
+                    q["is_mult1"] = None
+            if not seen_m2:
+                for q in self.qsos:
+                    q["is_mult2"] = None
 
         # ── Mode-scoped dupe correction (issue #8) ──────────────────────────
         # For contests where a station may be worked once per band PER MODE
@@ -668,8 +798,7 @@ class ContestLog:
         return self.plugin.worked_secondary_band_mults(self.qsos)
 
     def worked_zones(self) -> set:
-        return {q["cqz"] for q in self.qsos
-                if not q["dupe"] and q["cqz"] is not None}
+        return {q["cqz"] for q in self.qsos if not q["dupe"] and q["cqz"] is not None}
 
     def mults_by_region(self) -> dict:
         return self.plugin.mults_by_region(self.qsos)
@@ -790,14 +919,14 @@ class ContestLog:
     def session_label(self, session_nr, contest_start):
         cfg = self._session_cfg
         start_min = session_nr * cfg.duration_mins
-        end_min   = start_min + cfg.duration_mins
-        s_h, s_m  = divmod(start_min, 60)
-        e_h, e_m  = divmod(end_min,   60)
-        return f"{cfg.label_prefix}{session_nr+1}  {s_h:02d}:{s_m:02d}–{e_h:02d}:{e_m:02d}"
+        end_min = start_min + cfg.duration_mins
+        s_h, s_m = divmod(start_min, 60)
+        e_h, e_m = divmod(end_min, 60)
+        return f"{cfg.label_prefix}{session_nr + 1}  {s_h:02d}:{s_m:02d}–{e_h:02d}:{e_m:02d}"
 
     def rate_by_session(self):
         cfg = self._session_cfg
-        cs  = self.contest_start()
+        cs = self.contest_start()
         if not cs or not self.qsos:
             return []
 
@@ -818,7 +947,7 @@ class ContestLog:
         # since it had no equivalent fallback to _classify_exchange()-based
         # counting the way ARRL10MPlugin.sparkline_mults() does.
         seen_mults = set()
-        running_cum_pts = 0   # accumulated to avoid O(n²) re-sum each session
+        running_cum_pts = 0  # accumulated to avoid O(n²) re-sum each session
         qsos_so_far: list = []
         result = []
 
@@ -826,7 +955,7 @@ class ContestLog:
             qs = sessions.get(sn, [])
 
             sess_start = cs + timedelta(minutes=sn * cfg.duration_mins)
-            sess_end   = cs + timedelta(minutes=(sn + 1) * cfg.duration_mins)
+            sess_end = cs + timedelta(minutes=(sn + 1) * cfg.duration_mins)
             hour_buckets = {}
             cur_h = sess_start.replace(minute=0, second=0, microsecond=0)
             while cur_h < sess_end:
@@ -839,28 +968,30 @@ class ContestLog:
             new_mults_count = sum(self.plugin.sparkline_mults(q, seen_mults) for q in qs)
             total_cum_mults = len(seen_mults)
 
-            session_pts      = sum(q["pts"] for q in qs)
-            running_cum_pts += session_pts   # O(1) accumulation replaces O(n²) re-sum
+            session_pts = sum(q["pts"] for q in qs)
+            running_cum_pts += session_pts  # O(1) accumulation replaces O(n²) re-sum
             qsos_so_far.extend(qs)
 
-            result.append({
-                "label":         self.session_label(sn, cs),
-                "session":       sn + 1,
-                "qsos":          len(qs),
-                "pts":           session_pts,
-                "new_mults":     new_mults_count,
-                "cum_mults":     total_cum_mults,
-                "running_score": self.plugin.running_score_for_sparkline(qsos_so_far),
-                "by_hour":       sorted(hour_buckets.items()),
-                "start":         sess_start,
-                "end":           sess_end,
-            })
+            result.append(
+                {
+                    "label": self.session_label(sn, cs),
+                    "session": sn + 1,
+                    "qsos": len(qs),
+                    "pts": session_pts,
+                    "new_mults": new_mults_count,
+                    "cum_mults": total_cum_mults,
+                    "running_score": self.plugin.running_score_for_sparkline(qsos_so_far),
+                    "by_hour": sorted(hour_buckets.items()),
+                    "start": sess_start,
+                    "end": sess_end,
+                }
+            )
 
         return result
 
     def sparkline_data(self):
         cfg = self._session_cfg
-        contest_hours = int(math.ceil(cfg.duration_mins * cfg.num_sessions / 60))
+        contest_hours = max(24, int(math.ceil(cfg.duration_mins * cfg.num_sessions / 60)))
 
         cs = self.contest_start()
         if self.qsos:
@@ -868,9 +999,9 @@ class ContestLog:
             if cs is None or cs > earliest:
                 cs = earliest.replace(minute=0, second=0, microsecond=0)
 
-        qso_by_hour   = [0] * contest_hours
+        qso_by_hour = [0] * contest_hours
         mults_by_hour = [0] * contest_hours
-        seen_mults    = set()
+        seen_mults = set()
 
         valid = sorted([q for q in self.qsos if not q["dupe"]], key=lambda q: q["time"])
         for q in valid:
@@ -907,9 +1038,9 @@ class ContestLog:
                 running_score[-1] = self.plugin.running_score_for_sparkline(acc)
 
         return {
-            "qsos":          qso_by_hour,
+            "qsos": qso_by_hour,
             "running_score": running_score,
-            "new_mults":     mults_by_hour,
+            "new_mults": mults_by_hour,
         }
 
     def personal_bests(self):
@@ -924,10 +1055,10 @@ class ContestLog:
         best_hour_time = max(hour_buckets, key=hour_buckets.get) if hour_buckets else None
         best_hour_rate = hour_buckets[best_hour_time] if best_hour_time else 0
 
-        now       = datetime.now(timezone.utc).replace(tzinfo=None, minute=0, second=0, microsecond=0)
+        now = datetime.now(timezone.utc).replace(tzinfo=None, minute=0, second=0, microsecond=0)
         prev_hour = now - timedelta(hours=1)
         current_hour_rate = hour_buckets.get(now, 0)
-        prev_hour_rate    = hour_buckets.get(prev_hour, 0)
+        prev_hour_rate = hour_buckets.get(prev_hour, 0)
 
         cs = self.contest_start()
         sess_qsos = defaultdict(int)
@@ -936,82 +1067,84 @@ class ContestLog:
                 if not q["dupe"]:
                     sn = self.session_number(q["time"], cs)
                     sess_qsos[sn] += 1
-        best_sess_nr   = max(sess_qsos, key=sess_qsos.get) + 1 if sess_qsos else 0
+        best_sess_nr = max(sess_qsos, key=sess_qsos.get) + 1 if sess_qsos else 0
         best_sess_qsos = sess_qsos[best_sess_nr - 1] if sess_qsos else 0
 
         return {
-            "best_hour_rate":    best_hour_rate,
-            "best_hour_time":    best_hour_time,
+            "best_hour_rate": best_hour_rate,
+            "best_hour_time": best_hour_time,
             "best_session_qsos": best_sess_qsos,
-            "best_session_nr":   best_sess_nr,
+            "best_session_nr": best_sess_nr,
             "current_hour_rate": current_hour_rate,
-            "prev_hour_rate":    prev_hour_rate,
+            "prev_hour_rate": prev_hour_rate,
         }
 
     def session_status(self, now: Optional[datetime] = None):
         cfg = self._session_cfg
-        cs  = self.contest_start()
+        cs = self.contest_start()
         if not cs:
             return {}
         if now is None:
             now = datetime.now(timezone.utc).replace(tzinfo=None)
-        total_mins    = cfg.num_sessions * cfg.duration_mins
+        total_mins = cfg.num_sessions * cfg.duration_mins
+        if total_mins <= 0:
+            total_mins = 24 * 60  # fallback to 24h if plugin didn't specify
         elapsed_total = (now - cs).total_seconds() / 60
 
         if elapsed_total < 0:
             mins_to_start = abs(elapsed_total)
             return {
-                "state":           "pre",
-                "session_nr":      0,
-                "session_label":   "Pre-Contest",
-                "elapsed_mins":    0,
-                "remaining_mins":  mins_to_start,
-                "pct_elapsed":     0,
-                "contest_over":    False,
+                "state": "pre",
+                "session_nr": 0,
+                "session_label": "Pre-Contest",
+                "elapsed_mins": 0,
+                "remaining_mins": mins_to_start,
+                "pct_elapsed": 0,
+                "contest_over": False,
                 "next_session_nr": 1,
-                "start_dt":        cs,
-                "mins_to_start":   mins_to_start,
-                "duration_mins":   cfg.duration_mins,
-                "label_prefix":    cfg.label_prefix,
+                "start_dt": cs,
+                "mins_to_start": mins_to_start,
+                "duration_mins": cfg.duration_mins,
+                "label_prefix": cfg.label_prefix,
             }
 
         if elapsed_total >= total_mins:
             return {
-                "state":           "over",
-                "session_nr":      cfg.num_sessions,
-                "session_label":   f"{cfg.label_prefix}{cfg.num_sessions} (ended)",
-                "elapsed_mins":    total_mins,
-                "remaining_mins":  0,
-                "pct_elapsed":     100,
-                "contest_over":    True,
+                "state": "over",
+                "session_nr": cfg.num_sessions,
+                "session_label": f"{cfg.label_prefix}{cfg.num_sessions} (ended)",
+                "elapsed_mins": total_mins,
+                "remaining_mins": 0,
+                "pct_elapsed": 100,
+                "contest_over": True,
                 "next_session_nr": None,
-                "start_dt":        cs,
-                "end_dt":          cs + timedelta(minutes=total_mins),
-                "duration_mins":   cfg.duration_mins,
-                "label_prefix":    cfg.label_prefix,
+                "start_dt": cs,
+                "end_dt": cs + timedelta(minutes=total_mins),
+                "duration_mins": cfg.duration_mins,
+                "label_prefix": cfg.label_prefix,
             }
 
-        sn           = int(elapsed_total // cfg.duration_mins)
+        sn = int(elapsed_total // cfg.duration_mins)
         sess_elapsed = elapsed_total - sn * cfg.duration_mins
-        sess_remain  = max(0, cfg.duration_mins - sess_elapsed)
+        sess_remain = max(0, cfg.duration_mins - sess_elapsed)
         return {
-            "state":           "live",
-            "session_nr":      sn + 1,
-            "session_label":   self.session_label(sn, cs),
-            "elapsed_mins":    sess_elapsed,
-            "remaining_mins":  sess_remain,
-            "pct_elapsed":     sess_elapsed / cfg.duration_mins * 100,
-            "contest_over":    False,
+            "state": "live",
+            "session_nr": sn + 1,
+            "session_label": self.session_label(sn, cs),
+            "elapsed_mins": sess_elapsed,
+            "remaining_mins": sess_remain,
+            "pct_elapsed": sess_elapsed / cfg.duration_mins * 100,
+            "contest_over": False,
             "next_session_nr": sn + 2 if sn + 1 < cfg.num_sessions else None,
-            "start_dt":        cs,
+            "start_dt": cs,
             # ── Whole-contest progress (used by plugins without a block
             #    structure, e.g. CQWW's single 48h session) ────────────────
-            "total_elapsed_mins":   elapsed_total,
+            "total_elapsed_mins": elapsed_total,
             "total_remaining_mins": max(0, total_mins - elapsed_total),
-            "total_pct_elapsed":    elapsed_total / total_mins * 100 if total_mins else 0,
-            "end_dt":               cs + timedelta(minutes=total_mins),
-            "duration_mins":        cfg.duration_mins,
-            "label_prefix":         cfg.label_prefix,
+            "total_pct_elapsed": elapsed_total / total_mins * 100 if total_mins else 0,
+            "end_dt": cs + timedelta(minutes=total_mins),
+            "duration_mins": cfg.duration_mins,
+            "label_prefix": cfg.label_prefix,
         }
 
     def operator_time_summary(self, gap_threshold_mins=30):
@@ -1038,9 +1171,9 @@ class ContestLog:
         for op, times in by_op.items():
             times = sorted(times)
             first, last = times[0], times[-1]
-            on_minutes  = 0.0
+            on_minutes = 0.0
             off_minutes = 0.0
-            sessions    = 1
+            sessions = 1
             for i in range(1, len(times)):
                 gap = (times[i] - times[i - 1]).total_seconds() / 60.0
                 if gap > gap_threshold_mins:
@@ -1048,16 +1181,18 @@ class ContestLog:
                     sessions += 1
                 else:
                     on_minutes += gap
-            result.append({
-                "operator":     op,
-                "qsos":         len(times),
-                "first":        first,
-                "last":         last,
-                "span_minutes": (last - first).total_seconds() / 60.0,
-                "on_minutes":   on_minutes,
-                "off_minutes":  off_minutes,
-                "sessions":     sessions,
-            })
+            result.append(
+                {
+                    "operator": op,
+                    "qsos": len(times),
+                    "first": first,
+                    "last": last,
+                    "span_minutes": (last - first).total_seconds() / 60.0,
+                    "on_minutes": on_minutes,
+                    "off_minutes": off_minutes,
+                    "sessions": sessions,
+                }
+            )
         return sorted(result, key=lambda r: r["on_minutes"], reverse=True)
 
     # ── "Next QSO" value estimate (Overview "QSO Value" panel) ───────────────
@@ -1098,7 +1233,7 @@ class ContestLog:
         "no new mult" figure is meaningful — it's simply the average points
         for that band — and the multiplier scenarios are omitted.
         """
-        valid     = [q for q in qsos if not q["dupe"]]
+        valid = [q for q in qsos if not q["dupe"]]
         total_pts = sum(q["pts"] for q in valid)
 
         try:
@@ -1127,12 +1262,12 @@ class ContestLog:
 
         bands: dict = {}
         for band, pts_list in band_pts.items():
-            n     = len(pts_list)
+            n = len(pts_list)
             avg_p = (sum(pts_list) / n) if n else overall_avg
             bands[band] = {
-                "qsos":     n,
-                "avg_pts":  avg_p,
-                "no_mult":  delta(avg_p, 0),
+                "qsos": n,
+                "avg_pts": avg_p,
+                "no_mult": delta(avg_p, 0),
                 "one_mult": delta(avg_p, 1),
                 "two_mult": delta(avg_p, 2),
             }
@@ -1144,24 +1279,24 @@ class ContestLog:
 
         scenarios = ["no_mult", "one_mult", "two_mult"] if multiplicative else ["no_mult"]
         labels = {
-            "no_mult":  "+QSO",
+            "no_mult": "+QSO",
             "one_mult": "+QSO +1 mult",
             "two_mult": "+QSO +2 mults",
         }
         return {
-            "total_pts":     total_pts,
-            "total_mults":   total_mults,
-            "overall_avg":   overall_avg,
-            "bands":         bands,
-            "band_order":    band_order,
-            "scenarios":     scenarios,
+            "total_pts": total_pts,
+            "total_mults": total_mults,
+            "overall_avg": overall_avg,
+            "bands": bands,
+            "band_order": band_order,
+            "scenarios": scenarios,
             "scenario_labels": labels,
             "multiplicative": multiplicative,
         }
 
     def compute_snapshot(self, now: Optional[datetime] = None) -> dict:
         """
-        Single-pass computation of every value needed by _refresh_overview_cards.
+        Single-pass computation of every value needed by the Overview dashboard.
 
         `now` lets a caller pin "the current time" for session_status() — used
         by compute_snapshot_at() so a historical replay's elapsed/remaining
@@ -1192,7 +1327,7 @@ class ContestLog:
         _refresh_overview_cards() consumes the returned dict directly;
         no other callers are affected.
         """
-        qsos   = self.qsos
+        qsos = self.qsos
         plugin = self.plugin
         ml_set = set(plugin.mult_list())
 
@@ -1211,7 +1346,7 @@ class ContestLog:
         # of hour-of-day, so every QSO — on any day — lands in a bucket and
         # the final "Running Score" point always matches score().
         cfg = self._session_cfg
-        contest_hours = int(math.ceil(cfg.duration_mins * cfg.num_sessions / 60))
+        contest_hours = max(24, int(math.ceil(cfg.duration_mins * cfg.num_sessions / 60)))
 
         cs = self.contest_start()
         if self.qsos:
@@ -1223,15 +1358,15 @@ class ContestLog:
                 cs = earliest.replace(minute=0, second=0, microsecond=0)
 
         # ── Single multiplier computation (replaces 3 separate plugin calls) ──
-        mr          = plugin.multipliers(qsos)
-        worked_cnt  = len(mr.primary_mults)       # unique primary mults worked
-        band_mult_cnt = len(mr.primary_mults)      # same set — kept separate key
-                                                   # for gauge labelling compat
-        zone_cnt    = len(mr.secondary_mults)
+        mr = plugin.multipliers(qsos)
+        worked_cnt = len(mr.primary_mults)
+        band_mult_cnt = worked_cnt  # same value — unique mults, not band-aware
+        # Same as worked_cnt — the primary mult set already tracks (mult, band, mode)
+        # tuples so its length is both unique and band-aware.
+        zone_cnt = len(mr.secondary_mults)
 
         # missing = full list minus worked (primary values, not band-tuples)
-        worked_primary_vals = {t[0] if isinstance(t, tuple) else t
-                               for t in mr.primary_mults}
+        worked_primary_vals = {t[0] if isinstance(t, tuple) else t for t in mr.primary_mults}
         missing_cnt = len([m for m in ml_set if m not in worked_primary_vals])
 
         total_mults = len(ml_set)
@@ -1239,12 +1374,12 @@ class ContestLog:
 
         # ── Single QSO pass: valid filter + call-prefix counts +
         #    hour buckets (personal_bests) + sparkline raw data ────────────────
-        valid        = []
-        vk_cnt       = 0
-        zl_cnt       = 0
-        hour_buckets = defaultdict(int)   # datetime(hour) → qso count
-        by_hour_cnt  = [0] * contest_hours   # index = elapsed contest hour (QSO count, not pts)
-        seen_mults   = set()
+        valid = []
+        vk_cnt = 0
+        zl_cnt = 0
+        hour_buckets = defaultdict(int)  # datetime(hour) → qso count
+        by_hour_cnt = [0] * contest_hours  # index = elapsed contest hour (QSO count, not pts)
+        seen_mults = set()
         mults_by_hour = [0] * contest_hours
 
         for q in qsos:
@@ -1282,10 +1417,10 @@ class ContestLog:
         # plugin.running_score_for_sparkline() is called once per bucket but
         # each call receives an incrementally extended list, avoiding any
         # re-scanning of earlier QSOs.
-        valid_sorted  = sorted(valid, key=lambda q: q["time"])
+        valid_sorted = sorted(valid, key=lambda q: q["time"])
         running_score = [0] * contest_hours
-        acc: list     = []
-        vi            = 0
+        acc: list = []
+        vi = 0
         for h in range(contest_hours):
             if cs is not None:
                 bucket_end = cs + timedelta(hours=h + 1)
@@ -1307,9 +1442,9 @@ class ContestLog:
                 running_score[-1] = plugin.running_score_for_sparkline(acc)
 
         sparklines = {
-            "qsos":          by_hour_cnt,
+            "qsos": by_hour_cnt,
             "running_score": running_score,
-            "new_mults":     mults_by_hour,
+            "new_mults": mults_by_hour,
         }
 
         # ── Personal bests (derived from already-built hour_buckets) ─────────
@@ -1320,12 +1455,10 @@ class ContestLog:
             best_hour_time = None
             best_hour_rate = 0
 
-        now_dt    = datetime.now(timezone.utc).replace(tzinfo=None,
-                                                       minute=0, second=0,
-                                                       microsecond=0)
+        now_dt = datetime.now(timezone.utc).replace(tzinfo=None, minute=0, second=0, microsecond=0)
         prev_hour = now_dt - timedelta(hours=1)
-        current_hour_rate = hour_buckets.get(now_dt,    0)
-        prev_hour_rate    = hour_buckets.get(prev_hour, 0)
+        current_hour_rate = hour_buckets.get(now_dt, 0)
+        prev_hour_rate = hour_buckets.get(prev_hour, 0)
 
         cs = self.contest_start()
         sess_qsos: dict = defaultdict(int)
@@ -1333,23 +1466,23 @@ class ContestLog:
             for q in valid:
                 sn = self.session_number(q["time"], cs)
                 sess_qsos[sn] += 1
-        best_sess_nr   = max(sess_qsos, key=sess_qsos.get) + 1 if sess_qsos else 0
+        best_sess_nr = max(sess_qsos, key=sess_qsos.get) + 1 if sess_qsos else 0
         best_sess_qsos = sess_qsos[best_sess_nr - 1] if sess_qsos else 0
 
         personal_bests = {
-            "best_hour_rate":    best_hour_rate,
-            "best_hour_time":    best_hour_time,
+            "best_hour_rate": best_hour_rate,
+            "best_hour_time": best_hour_time,
             "best_session_qsos": best_sess_qsos,
-            "best_session_nr":   best_sess_nr,
+            "best_session_nr": best_sess_nr,
             "current_hour_rate": current_hour_rate,
-            "prev_hour_rate":    prev_hour_rate,
+            "prev_hour_rate": prev_hour_rate,
         }
 
         # ── Gauge nice-ceiling helper ─────────────────────────────────────────
         def nice_ceil(value, min_max=10):
             if value <= 0:
                 return max(min_max, 10)
-            target    = max(value * 1.2, min_max)
+            target = max(value * 1.2, min_max)
             magnitude = 10 ** (len(str(int(target))) - 1)
             for step in [1, 2, 2.5, 5, 10]:
                 ceiling = math.ceil(target / (magnitude * step)) * magnitude * step
@@ -1358,41 +1491,41 @@ class ContestLog:
             return int(math.ceil(target / magnitude) * magnitude)
 
         return_dict = {
-            "_plugin_name":    getattr(plugin, "display_name", ""),
-            "my_call":         self.my_call,
+            "_plugin_name": getattr(plugin, "display_name", ""),
+            "my_call": self.my_call,
             # ── scalar card values ────────────────────────────────────────────
-            "total":           total_qsos_n,
-            "valid":           valid_qsos_n,
-            "score":           score,
-            "worked":          worked_cnt,
-            "band_mults":      band_mult_cnt,
-            "missing":         missing_cnt,
-            "pct":             pct,
-            "zone_cnt":        zone_cnt,
-            "zone_band_cnt":   len(mr.secondary_mults),
-            "vk_cnt":          vk_cnt,
-            "zl_cnt":          zl_cnt,
+            "total": total_qsos_n,
+            "valid": valid_qsos_n,
+            "score": score,
+            "worked": worked_cnt,
+            "band_mults": band_mult_cnt,
+            "missing": missing_cnt,
+            "pct": pct,
+            "zone_cnt": zone_cnt,
+            "zone_band_cnt": len(mr.secondary_mults),
+            "vk_cnt": vk_cnt,
+            "zl_cnt": zl_cnt,
             # ── gauge maxima ──────────────────────────────────────────────────
-            "qso_max":         nice_ceil(total_qsos_n, min_max=50),
-            "score_max":       nice_ceil(score,        min_max=500),
+            "qso_max": nice_ceil(total_qsos_n, min_max=50),
+            "score_max": nice_ceil(score, min_max=500),
             # ── richer panel data ─────────────────────────────────────────────
-            "worked_zones":    sorted({t[0] if isinstance(t, tuple) else t
-                                       for t in mr.secondary_mults}),
+            "worked_zones": sorted(
+                {t[0] if isinstance(t, tuple) else t for t in mr.secondary_mults}
+            ),
             "band_efficiency": plugin.band_efficiency(qsos),
-            "region_heat":     plugin.region_heat(qsos),
-            "personal_bests":  personal_bests,
-            "session_status":  self.session_status(now),
-            "last_worked":     sorted(valid, key=lambda q: q["time"],
-                                      reverse=True)[:5],
-            "sparklines":      sparklines,
-            "operator_times":  self.operator_time_summary(),
+            "region_heat": plugin.region_heat(qsos),
+            "personal_bests": personal_bests,
+            "session_status": self.session_status(now),
+            "last_worked": sorted(valid, key=lambda q: q["time"], reverse=True)[:5],
+            "sparklines": sparklines,
+            "operator_times": self.operator_time_summary(),
             # ── "next QSO" value estimate for the QSO Value overview panel ────
-            "qso_value":       self._qso_value_estimate(qsos, plugin),
+            "qso_value": self._qso_value_estimate(qsos, plugin),
             # ── plugin reference (consumed by overview draw helpers) ──────────
-            "_plugin":         plugin,
-            "_total_mults":    total_mults,
+            "_plugin": plugin,
+            "_total_mults": total_mults,
             # ── mult result (available if callers need deeper inspection) ─────
-            "_mult_result":    mr,
+            "_mult_result": mr,
         }
 
         # Allow the plugin to correct or augment display values (e.g. CQWW
