@@ -151,6 +151,11 @@ class ARRLDXDXPlugin(ContestPlugin):
         "ARRLDX-SSB",
         "ARRLDXCW",
         "ARRLDXSSB",
+        # web/server.py's /api/load re-resolves the plugin from its OWN
+        # display_name string (round-tripped from an earlier /api/scan),
+        # not just the raw N1MM ContestName — include it so that round
+        # trip doesn't fall through to GenericPlugin.
+        "ARRL INTERNATIONAL DX [DX STATION]",
     }
 
     preferred_exchange_columns = [

@@ -117,6 +117,11 @@ class CQWWPlugin(ContestPlugin):
 
     def identify(self, contest_name: str) -> bool:
         cn = contest_name.upper().replace(" ", "").replace("_", "").replace("-", "")
+        if "DIGI" in cn:
+            # CQ WW DIGI (plugins/cqww_digi.py) uses a completely different
+            # grid-based scoring system, not CQWW's zone/country mults —
+            # same exclusion pattern as wpx.py's RTTY guard.
+            return False
         keywords = ("CQWW", "CQWWDX", "CQWWCW", "CQWWSSB", "CQWWPH",
                     "CQ-WW", "WORLDWIDEDX")
         return any(kw.replace("-", "") in cn for kw in keywords)

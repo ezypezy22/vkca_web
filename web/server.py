@@ -74,7 +74,10 @@ from fastapi.staticfiles import StaticFiles
 
 # Direct import — no tkinter mocking needed
 from contest_log import ContestLog
-from plugins.loader import get_all_plugins, plugin_for
+from plugins.loader import plugin_for, get_all_plugins
+from plugins.generic import GenericPlugin
+import cosb
+import qrz
 
 log = logging.getLogger(__name__)
 
@@ -1030,6 +1033,27 @@ def _live_rank_state() -> dict:
 
     if result is None:
         return {"available": False, "reason": "no_live_data", "call": call}
+
+    # COSB has no real per-callsign-and-contest query (see cosb.fetch_live_
+    # rank's docstring) — it can land on a DIFFERENT contest than the one
+    # currently loaded, e.g. the loaded contest hasn't started yet (or
+    # already ended) so COSB's "featured"/other-active scan finds a
+    # separate contest the same callsign happens to be posting to. Only
+    # trust the match when the loaded plugin's own identify() would also
+    # claim the COSB-scraped contest label, so a same-callsign-but-
+    # different-contest result never gets shown as if it were live
+    # ranking for the loaded log.
+    plugin    = getattr(cl, "plugin", None)
+    cosb_name = result.get("contest_name", "")
+    if plugin is not None and not isinstance(plugin, GenericPlugin):
+        try:
+            same_contest = plugin.identify(cosb_name)
+        except Exception:
+            same_contest = True   # don't hide data over an unrelated plugin bug
+        if not same_contest:
+            return {"available": False, "reason": "different_contest",
+                     "call": call, "other_contest": cosb_name}
+
     return {"available": True, "call": call, **result}
 
 
