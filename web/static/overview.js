@@ -659,6 +659,8 @@
     if(!data || !data.available){
       const msg = data?.reason==='no_callsign'
         ? 'No callsign found in this log.'
+        : data?.reason==='different_contest'
+        ? `Not posting to this contest on COSB yet${data.other_contest ? ` (found: ${data.other_contest})` : ''}.`
         : 'Not currently posting to Contest Online ScoreBoard.';
       el.innerHTML=hdr('[ # ]',T.red,'LIVE RANKING')+
         `<div style="color:${T.muted};font-size:0.85em;padding:8px 0">${msg}</div>`;

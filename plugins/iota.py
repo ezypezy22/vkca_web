@@ -136,7 +136,16 @@ class IOTAPlugin(ContestPlugin):
 
     def identify(self, contest_name: str) -> bool:
         """Return True for any IOTA ContestName variant."""
-        return contest_name.strip().upper() in _NAMES
+        cn = contest_name.strip().upper()
+        if cn in _NAMES:
+            return True
+        # web/server.py's /api/load re-resolves the plugin from its OWN
+        # display_name string (round-tripped from an earlier /api/scan),
+        # not just the raw N1MM ContestName. display_name is dynamic
+        # ("RSGB IOTA Contest [OC-001]" / "... [World Stn]"), so a fixed
+        # _NAMES set can't enumerate every variant — fall back to a broad
+        # substring match instead.
+        return "IOTA" in cn
 
     @property
     def display_name(self) -> str:
