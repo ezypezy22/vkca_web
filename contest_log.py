@@ -407,6 +407,16 @@ class ContestLog:
 
             # ── Points and dupe ───────────────────────────────────────────────
             raw_pts = d.get(pts_col)
+            # Distinguishes "the source never recorded a points value at all"
+            # (missing/blank — a real gap the pts==0 floor below should fill)
+            # from "the source explicitly recorded zero" (a real, meaningful
+            # value some contests use deliberately — e.g. CQWW same-country
+            # contacts, or AADX's ContactType="N" non-scoring-but-logged rows
+            # — which must reach plugin.recalc_pts() unmodified so it can
+            # make the per-contest call the comment below already says it
+            # owns).
+            pts_was_missing = raw_pts is None or (
+                isinstance(raw_pts, str) and not raw_pts.strip())
             try:
                 pts = int(raw_pts or 0)
             except Exception:
@@ -457,7 +467,12 @@ class ContestLog:
                 dupe = 1 if pts == 0 else 0
                 dupe_is_heuristic = True
 
-            if pts == 0 and not dupe:
+            # Only floor to 1 when the source never gave us a points value at
+            # all — an explicit 0 is left alone so plugin.recalc_pts() (run
+            # after the whole load loop) gets the real, unmodified value and
+            # can decide for itself whether 0 is legitimately valid for this
+            # contest (see the ContactType branch's comment above).
+            if pts == 0 and not dupe and pts_was_missing:
                 pts = 1
 
             # ── Band ─────────────────────────────────────────────────────────
@@ -762,7 +777,7 @@ class ContestLog:
             elif self.qsos:
                 year = min(q["time"] for q in self.qsos).year
             else:
-                year = datetime.datetime.utcnow().year
+                year = datetime.now(timezone.utc).year
             sat = self.plugin.contest_saturday(year)
             return datetime(sat.year, sat.month, sat.day, start_h, 0, 0)
 
