@@ -2928,7 +2928,82 @@ def _bind_server_socket(port: Optional[int] = None) -> tuple[socket.socket, int]
     return s, s.getsockname()[1]
 
 
+_SINGLE_INSTANCE_MUTEX_NAME = r"Global\VKContestAnalyzer_SingleInstance_Mutex"
+_single_instance_mutex_handle = None   # keeps the mutex alive for the process lifetime
+
+
+def _is_first_instance() -> bool:
+    """True if this is the only running copy of the app; False if another
+    instance already holds the single-instance mutex.
+
+    This does NOT use _bind_server_socket()/the preferred TCP port as the
+    detection signal, even though "port already taken" looks like an
+    obvious proxy for "another instance is running" — SO_REUSEADDR (needed
+    there for the close-then-quick-relaunch TIME_WAIT case) has a
+    Windows-specific quirk, confirmed by direct testing: a SECOND socket
+    with SO_REUSEADDR set can successfully bind() AND listen() on a port
+    another process is already actively listening on, with no error at
+    all. Relying on that as a "someone else is already here" signal would
+    silently miss the case entirely (and worse — two listeners on the same
+    port on Windows can starve one of them of incoming connections, which
+    is a bigger problem than the settings.json race this was meant to
+    prevent). A named mutex has no such loophole: CreateMutexW's
+    ERROR_ALREADY_EXISTS is unambiguous.
+    """
+    global _single_instance_mutex_handle
+    if sys.platform != "win32":
+        return True   # no equivalent no-extra-dependency check on other platforms
+    try:
+        import ctypes
+        ERROR_ALREADY_EXISTS = 183
+        handle = ctypes.windll.kernel32.CreateMutexW(
+            None, False, _SINGLE_INSTANCE_MUTEX_NAME)
+        already_running = ctypes.windll.kernel32.GetLastError() == ERROR_ALREADY_EXISTS
+        _single_instance_mutex_handle = handle   # keep alive; process exit releases it
+        return not already_running
+    except Exception:
+        log.exception("Single-instance mutex check failed — proceeding as first instance")
+        return True
+
+
+def _confirm_second_instance() -> bool:
+    """Another instance is already running (see _is_first_instance(), the
+    only caller — which only returns False on win32, so this is only ever
+    reached there). Previously this was silent: a second instance would
+    just launch anyway, leaving two independent server+window stacks that
+    both read/write the same settings.json with no locking — whichever
+    closes last silently clobbers the other's saved preferences (see issue
+    #21). Ask before doing that instead of doing it silently.
+
+    Returns True if the caller should proceed launching a second instance
+    anyway, False if it should exit without launching anything.
+    """
+    message = (
+        "VK Contest Analyzer appears to already be running.\n\n"
+        "Launching a second copy will use a fresh window that doesn't "
+        "share settings (theme, layout, etc.) with the first, and the two "
+        "copies may overwrite each other's saved preferences on close.\n\n"
+        "Launch another copy anyway?"
+    )
+    try:
+        import ctypes
+        MB_YESNO = 0x04
+        MB_ICONWARNING = 0x30
+        MB_TOPMOST = 0x40000
+        IDYES = 6
+        result = ctypes.windll.user32.MessageBoxW(
+            None, message, "VK Contest Analyzer — Already Running",
+            MB_YESNO | MB_ICONWARNING | MB_TOPMOST,
+        )
+        return result == IDYES
+    except Exception:
+        log.exception("Could not show already-running dialog — proceeding anyway")
+        return True
+
+
 def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
+    if not _is_first_instance() and not _confirm_second_instance():
+        return
     sock, port = _bind_server_socket(port)
     url = f"http://127.0.0.1:{port}"
     STATE._base_url = url
@@ -2955,13 +3030,31 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
     server_thread = threading.Thread(target=_run_server, daemon=True, name="uvicorn")
     server_thread.start()
 
-    # Wait until the server is accepting connections (max 5 seconds)
-    for _ in range(50):
+    # Wait until the server is accepting connections (max 10 seconds).
+    # server_ready tracks whether the loop actually succeeded — previously
+    # discarded, so a server that was still starting up (AV scanning the
+    # freshly-extracted bundle, cold disk cache, etc.) on a slow machine
+    # would silently fall through into opening the window anyway, showing a
+    # blank/connection-refused page with nothing in the log distinguishing
+    # it from the genuinely different "WebView2 Runtime missing" failure
+    # mode below (see issue #22).
+    server_ready = False
+    for _ in range(100):
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=0.25):
+                server_ready = True
                 break
         except OSError:
             time.sleep(0.1)
+
+    if not server_ready:
+        log.warning(
+            "Local server on port %d did not start accepting connections "
+            "within 10s — opening the window anyway, but it may show a "
+            "blank or connection-refused page if the server is still "
+            "starting. Check the log above this line for the uvicorn "
+            "startup sequence.", port,
+        )
 
     # If pywebview can't start for ANY reason (missing .NET Framework,
     # missing WebView2 Runtime, etc.), log the real error and fall back to
