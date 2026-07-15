@@ -81,7 +81,11 @@ def _normalise_ref(raw: str) -> str:
     """
     if not raw:
         return ""
-    m = _REF_RE.match(raw.strip())
+    # search(), not match(): the reference isn't guaranteed to be the first
+    # thing in the field — some sources combine RST + reference into one
+    # exchange string (e.g. "599 OC001") rather than the clean N1MM+ Sect-
+    # only value this plugin was validated against (see issue #24).
+    m = _REF_RE.search(raw.strip())
     return f"{m.group(1).upper()}-{m.group(2)}" if m else ""
 
 
@@ -207,10 +211,17 @@ class IOTAPlugin(ContestPlugin):
 
         for q in qsos:
             # ── Band validation ───────────────────────────────────────────────
+            # Excluded from scoring the same way a real dupe is (dupe=1 is
+            # the only mechanism every score/count/efficiency helper in this
+            # app already respects), but this is NOT a duplicate contact —
+            # tag it with a distinct reason so the Dupes tab can say why
+            # instead of implying the operator worked the same station
+            # twice (see issue #24).
             b = _band(q.get("band") or q.get("freq") or "")
             if b not in IOTA_BANDS:
-                q["pts"]  = 0
-                q["dupe"] = 1
+                q["pts"]         = 0
+                q["dupe"]        = 1
+                q["dupe_reason"] = "Off-band — IOTA HF bands are 160/80/40/20/15/10m only"
                 continue
 
             # ── Normalise the IOTA reference (Sect column → "XX-NNN") ────────
@@ -487,12 +498,6 @@ class IOTAPlugin(ContestPlugin):
         snap["iota_world_qsos"]  = world_qsos
         snap["iota_cont_cnt"]    = len(conts)
         snap["iota_pts_per_qso"] = (total_pts / valid_count) if valid_count else 0.0
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Module-level instance — loader calls register() if defined, otherwise it
-# instantiates any concrete ContestPlugin subclass it finds in the module.
-# ══════════════════════════════════════════════════════════════════════════════
 
     # ── Cabrillo ──────────────────────────────────────────────────────────────
 

@@ -861,7 +861,7 @@ async def api_hud():
     if existing is not None:
         def _restore():
             try:
-                existing.restore()
+                existing.show()   # pairs with _HudApi.close()'s hide() — see its docstring
             except Exception:
                 pass
         await asyncio.get_event_loop().run_in_executor(None, _restore)
@@ -889,7 +889,22 @@ async def api_hud():
                     win.move(int(x), int(y))
 
             def close(self):
-                win.destroy()
+                # Deliberately does NOT call win.destroy(): this window is
+                # frameless (see create_window() below), and the main
+                # window's own _WindowApi.close() already documented that
+                # destroy() on a frameless window goes through pywebview's
+                # GTK glib.idle_add(...)/close_window() path, observed to
+                # hang indefinitely with the native 'closing'/'closed'
+                # events never firing. The main window can just hard-exit
+                # the whole process around that hang (os._exit in
+                # _start_shutdown()) — this window can't, since the app
+                # must keep running after the HUD closes. hide()/show()
+                # sidesteps the native destroy teardown entirely: the
+                # window object stays valid, so STATE._hud_window never
+                # points at a zombie, and the reuse path above (existing.
+                # show()) just un-hides the same window instead of
+                # restoring one that may never have finished closing.
+                win.hide()
 
         win = _wv.create_window(
             title="VK Contest Analyzer — HUD",

@@ -173,7 +173,8 @@
           <td style="color:${col}">${band.toLowerCase()}</td>
           <td>${q.mode||'—'}</td>
           <td style="color:var(--muted);font-size:0.85em">${String(q.time||'').substring(0,19).replace('T',' ')} UTC</td>
-          <td style="color:${col}">${q.mult1||'—'}</td>`;
+          <td style="color:${col}">${q.mult1||'—'}</td>
+          <td style="color:var(--muted);font-size:0.85em">${q.dupe_reason||'Duplicate contact'}</td>`;
         frag.appendChild(tr);
       });
       tbody.appendChild(frag);
