@@ -244,35 +244,6 @@ class VKTransTasmanPlugin(ContestPlugin):
         snap["vk_mult_cnt"] = len(vk_mults)
         snap["zl_mult_cnt"] = len(zl_mults)
 
-        # ── Mult pace: QSOs/minutes since the last NEW mult ──────────────
-        # Multipliers never reset per block (see module docstring), so in a
-        # fast 6-hour sprint a long run of QSOs without a new (prefix, band)
-        # is a genuine, actionable signal to change band/frequency rather
-        # than keep working a prefix already banked. "Now" is pinned to the
-        # latest QSO in this snapshot (not wall-clock) so this works
-        # correctly for the Overview replay scrubber too.
-        valid_sorted = sorted(
-            (q for q in qsos if not q["dupe"] and _is_vktt_workable(q.get("call", ""))),
-            key=lambda q: q["time"],
-        )
-        seen: set = set()
-        qsos_since_mult = 0
-        last_new_time = None
-        for q in valid_sorted:
-            pfx = self.mult_of_qso(q)
-            key = (pfx, q["band"]) if pfx else None
-            if key and key not in seen:
-                seen.add(key)
-                qsos_since_mult = 0
-                last_new_time = q["time"]
-            else:
-                qsos_since_mult += 1
-        mins_since_mult = 0
-        if last_new_time is not None:
-            mins_since_mult = int((valid_sorted[-1]["time"] - last_new_time).total_seconds() // 60)
-        snap["qsos_since_mult"] = qsos_since_mult
-        snap["mins_since_mult"] = mins_since_mult
-
     @property
     def preferred_exchange_columns(self):
         return ["WPXPrefix", "wpxprefix"]
@@ -362,9 +333,6 @@ class VKTransTasmanPlugin(ContestPlugin):
         vk_mult   = data.get("vk_mult_cnt", 0)
         zl_mult   = data.get("zl_mult_cnt", 0)
         mult_soft_max = max(vk_mult * 1.25, zl_mult * 1.25, 10)
-        qsos_since_mult = data.get("qsos_since_mult", 0)
-        mins_since_mult = data.get("mins_since_mult", 0)
-        pace_max = max(qsos_since_mult * 1.5, 10)
         return [
             GaugeDef("TOTAL QSOs",   "total",       "qso_max",   ACCENT(),  "{v}"),
             GaugeDef("VALID QSOs",   "valid",       "qso_max",   GREEN(),   "{v}"),
@@ -377,10 +345,6 @@ class VKTransTasmanPlugin(ContestPlugin):
                      "Distinct VK/AX/VI/VJ/VL WPX-prefix × band multipliers worked"),
             GaugeDef("ZL PREFIXES",  "zl_mult_cnt", mult_soft_max, "#64b5f6", "{v}",
                      "Distinct ZL/ZM WPX-prefix × band multipliers worked"),
-            GaugeDef("QSOs SINCE MULT", "qsos_since_mult", pace_max, "#ff5252", "{v}",
-                     f"{mins_since_mult} min since your last new prefix×band — "
-                     f"mults never reset per block, so a long run here means "
-                     f"it may be time to change band or go hunting"),
         ]
 
     def sparkline_mults(self, q: dict, seen: set) -> int:
