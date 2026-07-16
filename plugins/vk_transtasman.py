@@ -86,6 +86,34 @@ def _is_vktt_workable(call: str) -> bool:
     return False
 
 
+# ── VK/ZL call-area grouping (Overview "REGION BARS" display only) ───────────
+# The well-established mainland/ACT call areas — used purely as a reference
+# denominator for the area-coverage heat display below. Deliberately does
+# NOT feed mult_list()/score (which stay open-ended per the module
+# docstring: arbitrary special-event prefixes like VI/VJ/VL/AX/ZM with any
+# digit can't be enumerated in advance, and an incomplete "expected" list
+# there would silently misreport % complete). Rare expedition-style areas
+# (VK9/VK0 external territories, ZL7 Chatham, ZL9 Antarctica, etc.) aren't
+# pre-seeded here, but still show up dynamically in region_heat() below if
+# actually worked — nothing worked is ever hidden.
+_VKTT_AREAS = (
+    "VK1", "VK2", "VK3", "VK4", "VK5", "VK6", "VK7", "VK8",
+    "ZL1", "ZL2", "ZL3", "ZL4",
+)
+
+_AREA_RE = re.compile(r'^(AX|VI|VJ|VK|VL|ZL|ZM)(\d)')
+
+
+def _vktt_area(text: str) -> Optional[str]:
+    """Coarsen a callsign or WPX-prefix mult value (e.g. 'VI2', 'VK2ABC')
+    down to its VK/ZL call area ('VK2'). Returns None if unrecognisable."""
+    m = _AREA_RE.match(text.upper().strip())
+    if not m:
+        return None
+    letters, digit = m.group(1), m.group(2)
+    return f"{'ZL' if letters in ('ZL', 'ZM') else 'VK'}{digit}"
+
+
 class VKTransTasmanPlugin(ContestPlugin):
     """
     WIA VK Trans-Tasman Contest (VKTTRTTY / VKTTSSBCW).
@@ -141,19 +169,80 @@ class VKTransTasmanPlugin(ContestPlugin):
         return None
 
     def region_of_mult(self, m: str) -> Optional[str]:
-        return None
+        return _vktt_area(m) if m else None
 
     def region_list(self) -> list:
-        return []
+        return list(_VKTT_AREAS)
 
     def has_missing_tab(self) -> bool:
         return False
 
     def has_region_heat(self) -> bool:
-        return False
+        return True
 
     def has_state_bars(self) -> bool:
-        return False
+        return True
+
+    def region_heat(self, qsos: list) -> list:
+        # Coarsens the (prefix, band) WPX mults already tracked by
+        # multipliers() up to a VK/ZL call-area level, for the Overview
+        # "REGION BARS" panel only — see _VKTT_AREAS above for why this
+        # doesn't touch mult_list()/score. "worked" is binary (has this
+        # area been contacted at all) rather than a shire-style count,
+        # since a call area is already the finest geographic unit that
+        # makes sense for a 6-hour sprint.
+        area_qsos: dict = defaultdict(int)
+        worked_areas: set = set()
+        for q in qsos:
+            if q["dupe"]:
+                continue
+            call = q.get("call", "")
+            if not _is_vktt_workable(call):
+                continue
+            area = _vktt_area(call)
+            if not area:
+                continue
+            area_qsos[area] += 1
+            worked_areas.add(area)
+        all_areas = sorted(set(_VKTT_AREAS) | worked_areas)
+        return [
+            {
+                "state":  a,
+                "region": a,
+                "qsos":   area_qsos.get(a, 0),
+                "worked": 1 if a in worked_areas else 0,
+                "total":  1,
+                "pct":    100.0 if a in worked_areas else 0.0,
+            }
+            for a in all_areas
+        ]
+
+    def post_snapshot(self, snap: dict, qsos: list) -> None:
+        # VK vs ZL split of the WPX-prefix-band mults already counted in
+        # "WPX MULTS" — tells the op which side of the Tasman still needs
+        # more band/area diversity, since raw QSO counts (vk_cnt/zl_cnt,
+        # set generically by compute_snapshot()) don't reflect that.
+        vk_mults: set = set()
+        zl_mults: set = set()
+        for q in qsos:
+            if q["dupe"]:
+                continue
+            call = q.get("call", "")
+            if not _is_vktt_workable(call):
+                continue
+            pfx = self.mult_of_qso(q)
+            if not pfx:
+                continue
+            area = _vktt_area(call)
+            if not area:
+                continue
+            key = (pfx, q["band"])
+            if area.startswith("ZL"):
+                zl_mults.add(key)
+            else:
+                vk_mults.add(key)
+        snap["vk_mult_cnt"] = len(vk_mults)
+        snap["zl_mult_cnt"] = len(zl_mults)
 
     @property
     def preferred_exchange_columns(self):
@@ -237,18 +326,25 @@ class VKTransTasmanPlugin(ContestPlugin):
         return sorted(result, key=lambda x: x["efficiency"], reverse=True)
 
     def gauge_defs(self, data: dict, total_mults: int) -> list:
-        worked   = data.get("worked", 0)
+        worked    = data.get("worked", 0)
         band_mult = data.get("band_mults", 0)
-        soft_max = max(worked * 1.25, band_mult * 1.25, 20)
-        valid    = data.get("valid", 1) or 1
+        soft_max  = max(worked * 1.25, band_mult * 1.25, 20)
+        valid     = data.get("valid", 1) or 1
+        vk_mult   = data.get("vk_mult_cnt", 0)
+        zl_mult   = data.get("zl_mult_cnt", 0)
+        mult_soft_max = max(vk_mult * 1.25, zl_mult * 1.25, 10)
         return [
-            GaugeDef("TOTAL QSOs",  "total",      "qso_max",   ACCENT(),  "{v}"),
-            GaugeDef("VALID QSOs",  "valid",      "qso_max",   GREEN(),   "{v}"),
-            GaugeDef("TOTAL SCORE", "score",      "score_max", ACCENT3(), "{v:,}"),
-            GaugeDef("WPX WORKED",  "worked",     soft_max,    ACCENT3(), "{v}"),
-            GaugeDef("WPX MULTS",   "band_mults", soft_max,    GREEN(),   "{v}"),
-            GaugeDef("VK CONTACTS", "vk_cnt",     valid,       ACCENT2(), "{v}"),
-            GaugeDef("ZL CONTACTS", "zl_cnt",     valid,       "#64b5f6", "{v}"),
+            GaugeDef("TOTAL QSOs",   "total",       "qso_max",   ACCENT(),  "{v}"),
+            GaugeDef("VALID QSOs",   "valid",       "qso_max",   GREEN(),   "{v}"),
+            GaugeDef("TOTAL SCORE",  "score",       "score_max", ACCENT3(), "{v:,}"),
+            GaugeDef("WPX WORKED",   "worked",      soft_max,    ACCENT3(), "{v}"),
+            GaugeDef("WPX MULTS",    "band_mults",  soft_max,    GREEN(),   "{v}"),
+            GaugeDef("VK CONTACTS",  "vk_cnt",      valid,       ACCENT2(), "{v}"),
+            GaugeDef("ZL CONTACTS",  "zl_cnt",      valid,       "#64b5f6", "{v}"),
+            GaugeDef("VK PREFIXES",  "vk_mult_cnt", mult_soft_max, ACCENT2(), "{v}",
+                     "Distinct VK/AX/VI/VJ/VL WPX-prefix × band multipliers worked"),
+            GaugeDef("ZL PREFIXES",  "zl_mult_cnt", mult_soft_max, "#64b5f6", "{v}",
+                     "Distinct ZL/ZM WPX-prefix × band multipliers worked"),
         ]
 
     def sparkline_mults(self, q: dict, seen: set) -> int:
