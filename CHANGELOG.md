@@ -1,5 +1,13 @@
 # Changelog
 
+## 26.7.14
+
+### Bugfixes
+
+76c9e85 Fix worked_primary_band_mults() bypassing mult_of_qso()'s resolution (#29)
+2b304d3 Fix QRZClient credential race and resize-handle flush bug (#30, #31)
+a8a52df Fix XSS: escape log/network-derived text before innerHTML (#32-#36)
+
 ## 26.7.13
 
 ### Bugfixes
