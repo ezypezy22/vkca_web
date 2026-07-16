@@ -3353,6 +3353,18 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 # via os._exit() either way, there's nothing gained by
                 # routing through GTK's WebView-destroy machinery for this
                 # button — save geometry and shut down directly instead.
+                #
+                # hide() first, before anything else: measured directly (an
+                # /api/debug_close route calling _start_shutdown() with the
+                # graceful-wait entirely removed, os._exit(0) fired
+                # immediately) still took ~2.2s for the process to actually
+                # disappear from Task Manager — so the lag isn't in our own
+                # websocket/uvicorn teardown at all, it's WebView2's own
+                # process-tree teardown on Windows, outside what server.py
+                # can bound. Hiding the window immediately makes the CLOSE
+                # feel instant regardless — the ~2s of backend teardown
+                # then happens invisibly while the window is already gone.
+                window.hide()
                 _save_window_geometry()
                 _start_shutdown()
 
