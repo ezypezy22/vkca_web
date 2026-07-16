@@ -238,13 +238,32 @@ class ContestPlugin(ABC):
         return result
 
     def worked_primary_band_mults(self, qsos: list) -> set:
+        # Delegates to mult_of_qso() for the multiplier's identity, same as
+        # worked_primary_mults() above and for the same reason (see its
+        # comment): a plugin's mult_of_qso() may resolve a value beyond a
+        # literal mult1 match (e.g. vk_shires.py's short-form-to-full shire
+        # code resolution via callsign area). Previously this method used
+        # raw q["mult1"] directly, so any plugin relying on it (instead of
+        # overriding it, as most already do) could silently score wrong —
+        # two QSOs whose raw exchange text differs but resolve to the same
+        # true multiplier would count as two band-mults instead of one,
+        # inflating the score for any plugin whose score()/multipliers()
+        # calls this method directly (see issue #29).
+        #
+        # The is_mult1 flag (when the source's own DB provides it) is used
+        # only to decide WHETHER a QSO counts as a newly-worked band-mult,
+        # never to source the multiplier's identity string itself.
         has_m1 = any(q["is_mult1"] is not None for q in qsos)
-        ml = self.mult_list()
-        if has_m1:
-            return {(q["mult1"], q["band"], q["mode"]) for q in qsos
-                    if not q["dupe"] and q["is_mult1"] == 1 and q["mult1"]}
-        return {(q["mult1"], q["band"], q["mode"]) for q in qsos
-                if not q["dupe"] and q["mult1"] in ml}
+        result: set = set()
+        for q in qsos:
+            if q["dupe"]:
+                continue
+            if has_m1 and q["is_mult1"] != 1:
+                continue
+            m = self.mult_of_qso(q)
+            if m:
+                result.add((m, q["band"], q["mode"]))
+        return result
 
     def worked_secondary_band_mults(self, qsos: list) -> set:
         has_m2 = any(q["is_mult2"] is not None for q in qsos)
