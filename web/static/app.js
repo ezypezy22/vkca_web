@@ -214,7 +214,14 @@ Users are responsible for verifying all information against N1MM before making d
             function onUp() {
               window.removeEventListener('mousemove', onMove);
               window.removeEventListener('mouseup', onUp);
-              if (raf) cancelAnimationFrame(raf);
+              // Flush any final movement since the last animation frame —
+              // same reasoning as wireDragRegions()'s onUp() below: without
+              // this, releasing the mouse between a mousemove (which set
+              // `pending` and scheduled `raf`) and that frame actually
+              // firing cancels the resize entirely, silently dropping the
+              // last bit of the drag (see issue #31).
+              if (raf) { cancelAnimationFrame(raf); raf = null; }
+              if (pending) apply();
             }
             window.addEventListener('mousemove', onMove);
             window.addEventListener('mouseup', onUp);

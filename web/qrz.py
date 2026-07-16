@@ -126,36 +126,42 @@ def lookup(session_key: str, callsign: str) -> dict:
 
 
 class QRZClient:
-    """Stateful wrapper the background worker owns exclusively — see
-    web/server.py's QRZ worker thread. Not thread-safe by design: it's only
-    ever touched from that single thread, so no internal locking."""
+    """lookup_one() (the network-calling method) is only ever called from
+    web/server.py's dedicated QRZ worker thread — but set_credentials()/
+    has_credentials() are called from other threads too (the credential
+    endpoints, run via run_in_executor or directly on the event loop; see
+    web/server.py). Credentials are therefore stored as a single tuple,
+    swapped with one atomic attribute assignment rather than separate
+    username/password writes, so a concurrent lookup_one() can never
+    observe a torn mix of an old username paired with a new password (or
+    vice versa) — see issue #30."""
 
     def __init__(self):
-        self._username: Optional[str] = None
-        self._password: Optional[str] = None
+        self._credentials: Optional[tuple[str, str]] = None
         self._session_key: Optional[str] = None
 
     def set_credentials(self, username: Optional[str], password: Optional[str]):
-        self._username = username
-        self._password = password
+        self._credentials = (username, password) if (username and password) else None
         self._session_key = None  # force re-login on next lookup
 
     def has_credentials(self) -> bool:
-        return bool(self._username and self._password)
+        return self._credentials is not None
 
     def lookup_one(self, callsign: str) -> Optional[dict]:
         """Returns {"found": True, "name":..., "grid":..., "state":...} on a
         match, {"found": False} if QRZ has no record (cacheable), or None on
         a transient failure (network error, expired-and-re-login-also-failed,
         etc.) that the caller should NOT cache and should retry later."""
-        if not self.has_credentials():
+        creds = self._credentials  # single read — a consistent snapshot, can't tear
+        if not creds:
             return None
+        username, password = creds
 
         if not self._session_key:
             try:
-                self._session_key = login(self._username, self._password)
+                self._session_key = login(username, password)
             except QRZAuthError:
-                log.warning("QRZ login failed for %s — check credentials", self._username)
+                log.warning("QRZ login failed for %s — check credentials", username)
                 return None
             except QRZError as e:
                 log.info("QRZ login failed (transient?): %s", e)
@@ -168,7 +174,7 @@ class QRZClient:
             return {"found": False}
         except QRZSessionExpired:
             try:
-                self._session_key = login(self._username, self._password)
+                self._session_key = login(username, password)
                 result = lookup(self._session_key, callsign)
                 return {"found": True, **result}
             except QRZNotFound:
