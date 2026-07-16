@@ -7,6 +7,7 @@
                green:'#2ed573', blue:'#64b5f6', red:'#ff4757', muted:'#8b949e',
                bg3:'#21262d', fg:'#e6edf3' };
   const BAND_COLS = window.VKA.BAND_COLS;
+  const escapeHtml = window.VKA.escapeHtml;
   // Status -> row styling, mirrors the old desktop app's tree tags.
   const STATUS_STYLE = {
     NEW_MULT: { color: C.green,  weight: 'bold',   opacity: 1 },
@@ -322,14 +323,14 @@
       tr.style.opacity = style.opacity;
       tr.title = 'Double-click to copy callsign';
       tr.innerHTML=`
-        <td style="color:${style.color};font-weight:${style.weight}">${s.dx}</td>
+        <td style="color:${style.color};font-weight:${style.weight}">${escapeHtml(s.dx)}</td>
         <td style="color:${col}">${s.freq}</td>
         <td style="color:${col}">${s.band}</td>
         <td style="color:${C.muted}">${s.mode||''}</td>
-        <td style="color:${style.color}">${s.mult||''}</td>
-        <td style="color:${C.muted}">${s.region||''}</td>
-        <td style="color:${C.muted}">${s.spotter}</td>
-        <td style="color:${C.fg}">${s.comment}</td>
+        <td style="color:${style.color}">${escapeHtml(s.mult||'')}</td>
+        <td style="color:${C.muted}">${escapeHtml(s.region||'')}</td>
+        <td style="color:${C.muted}">${escapeHtml(s.spotter)}</td>
+        <td style="color:${C.fg}">${escapeHtml(s.comment)}</td>
         <td style="color:${C.muted}">${s.time}</td>`;
       tr.addEventListener('dblclick', () => {
         navigator.clipboard?.writeText(s.dx).catch(()=>{});
@@ -356,7 +357,7 @@
       const newBand = list.filter(s=>s.status==='NEW_BAND').length;
       const top = list[0];
       const tag = newMult ? `${newMult} new mult` : `${newBand} new band`;
-      return `<b style="color:${BAND_COLS[band]||C.muted}">${band}</b>: ${top.dx} (${tag})`;
+      return `<b style="color:${BAND_COLS[band]||C.muted}">${band}</b>: ${escapeHtml(top.dx)} (${tag})`;
     });
     adviceBox.style.display = '';
     adviceBox.innerHTML = `<span style="color:${C.accent}">▶ NEXT TARGETS —</span> ` + parts.join('  ·  ');

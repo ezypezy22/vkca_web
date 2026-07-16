@@ -48,7 +48,7 @@
       div.className = 'fatigue-card';
       div.style.borderTopColor = col;
       div.innerHTML = `
-        <div class="fatigue-op" style="color:${col}">${op.operator || '—'}</div>
+        <div class="fatigue-op" style="color:${col}">${escapeHtmlF(op.operator || '—')}</div>
         <div class="fatigue-stat-row">
           <div class="fatigue-stat">
             <div class="fatigue-stat-val">${(op.qsos||0).toLocaleString()}</div>

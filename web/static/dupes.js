@@ -7,6 +7,7 @@
   const C = { accent:'#00d4aa', accent2:'#ff6b35', muted:'#8b949e',
                bg3:'#21262d', fg:'#e6edf3', accent3:'#f0c040', green:'#2ed573' };
   const BAND_COLS = window.VKA.BAND_COLS;
+  const escapeHtml = window.VKA.escapeHtml;
 
   let bandChart = null;
 
@@ -169,11 +170,11 @@
         const tr   = document.createElement('tr');
         tr.style.opacity = '0.75';
         tr.innerHTML = `
-          <td style="color:var(--accent2);font-weight:bold">${q.call||'—'}</td>
+          <td style="color:var(--accent2);font-weight:bold">${escapeHtml(q.call||'—')}</td>
           <td style="color:${col}">${band.toLowerCase()}</td>
           <td>${q.mode||'—'}</td>
           <td style="color:var(--muted);font-size:0.85em">${String(q.time||'').substring(0,19).replace('T',' ')} UTC</td>
-          <td style="color:${col}">${q.mult1||'—'}</td>
+          <td style="color:${col}">${escapeHtml(q.mult1||'—')}</td>
           <td style="color:var(--muted);font-size:0.85em">${q.dupe_reason||'Duplicate contact'}</td>`;
         frag.appendChild(tr);
       });

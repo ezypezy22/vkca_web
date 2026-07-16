@@ -3,6 +3,7 @@
  */
 ;(function () {
   'use strict';
+  const escapeHtml = window.VKA.escapeHtml;
   let _allQsos = [];
   const filter = document.getElementById('debug-filter');
 
@@ -36,11 +37,11 @@
       const tr = document.createElement('tr');
       tr.style.opacity = q.dupe ? '0.45' : '1';
       tr.innerHTML = `
-        <td style="color:var(--accent);font-weight:bold">${q.call||'—'}</td>
+        <td style="color:var(--accent);font-weight:bold">${escapeHtml(q.call||'—')}</td>
         <td>${(q.band||'?').toUpperCase()}</td>
         <td>${q.mode||'—'}</td>
-        <td style="color:var(--accent3)">${q.mult1||'—'}</td>
-        <td style="color:var(--muted);font-size:0.77em">${q.raw_mult||'—'}</td>
+        <td style="color:var(--accent3)">${escapeHtml(q.mult1||'—')}</td>
+        <td style="color:var(--muted);font-size:0.77em">${escapeHtml(q.raw_mult||'—')}</td>
         <td style="color:var(--muted);font-size:0.77em">${q.mult_source||'—'}</td>
         <td>${q.pts||0}</td>
         <td style="color:var(--red);font-size:0.77em">${isDupe}</td>

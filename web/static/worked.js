@@ -123,10 +123,10 @@
       if (q.dupe) tr.style.opacity = '0.4';
       tr.innerHTML = `
         <td><input type="checkbox" class="worked-row-chk" data-qid="${q.qso_id||''}" ${_selected.has(q.qso_id) ? 'checked' : ''}></td>
-        <td style="color:var(--accent);font-weight:bold">${q.call||'—'}</td>
+        <td style="color:var(--accent);font-weight:bold">${window.VKA.escapeHtml(q.call||'—')}</td>
         <td style="color:${col}">${band.toLowerCase()}</td>
         <td>${q.mode||'—'}</td>
-        <td style="color:${col}">${q.mult1||'—'}</td>
+        <td style="color:${col}">${window.VKA.escapeHtml(q.mult1||'—')}</td>
         <td>${q.pts||0}</td>
         <td>${renderQrzCell(q.qrz_name,  q.qrz_status)}</td>
         <td>${renderQrzCell(q.qrz_grid,  q.qrz_status)}</td>

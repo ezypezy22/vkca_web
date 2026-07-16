@@ -15,6 +15,8 @@
 ;(function () {
   'use strict';
 
+  const escapeHtml = window.VKA.escapeHtml;
+
   // ── Theme-aware colour state (updated by applyTheme) ─────────────────────
   let T = {
     accent:'#00d4aa', accent2:'#ff6b35', accent3:'#f0c040',
@@ -595,10 +597,10 @@
         <tr><th>Call</th><th>Band/Mode</th><th>Mult</th></tr>
         ${rows.map(q=>{const band=(q.band||'').toUpperCase(),col=BAND_COLS[band]||T.muted;
           return `<tr class="lw-row">
-            <td><div style="color:${T.accent};font-weight:bold">${q.call||'—'}</div>
+            <td><div style="color:${T.accent};font-weight:bold">${escapeHtml(q.call||'—')}</div>
                 <div style="color:${T.muted};font-size:0.85em">${String(q.time||'').substring(11,16)}</div></td>
             <td style="color:${col}">${band.toLowerCase()} ${q.mode||'—'}</td>
-            <td style="color:${T.muted}">${q.mult1||q.prefix||'—'}</td></tr>`;
+            <td style="color:${T.muted}">${escapeHtml(q.mult1||q.prefix||'—')}</td></tr>`;
         }).join('')}
       </table>`;
 
@@ -621,7 +623,7 @@
       <table class="ip-tbl">
         <tr><th>Operator</th><th>On Air</th><th>Off</th></tr>
         ${ops.slice(0,4).map((op,i)=>`
-          <tr><td style="color:${pal[i%4]};font-weight:bold">${op.operator||'—'}</td>
+          <tr><td style="color:${pal[i%4]};font-weight:bold">${escapeHtml(op.operator||'—')}</td>
               <td style="color:${T.green}">${fmH(op.on_minutes||0)}</td>
               <td style="color:${T.muted}">${fmH(op.off_minutes||0)}</td></tr>
           <tr><td colspan="3" style="color:${T.muted};font-size:0.85em;padding-bottom:3px">
@@ -644,7 +646,7 @@
           const rate  = op.on_minutes>0 ? ((op.qsos||0)/(op.on_minutes/60)).toFixed(1) : '—';
           const pctCol = onPct>=70?T.green:onPct>=40?T.accent3:T.red;
           const flag = onPct<40 ? ' 😴' : onPct>=85 ? ' 🔥' : '';
-          return `<tr><td style="color:${pal[i%4]};font-weight:bold">${op.operator||'—'}</td>
+          return `<tr><td style="color:${pal[i%4]};font-weight:bold">${escapeHtml(op.operator||'—')}</td>
               <td style="color:${pctCol}">${onPct}%${flag}</td>
               <td style="color:${T.muted}">${rate}</td></tr>`;
         }).join('')}

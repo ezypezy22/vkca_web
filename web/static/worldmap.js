@@ -7,6 +7,7 @@
   'use strict';
 
   const BAND_COLS = window.VKA.BAND_COLS;
+  const escapeHtml = window.VKA.escapeHtml;
 
   // High-quality basemap tile URLs
   const BASEMAPS = {
@@ -408,9 +409,9 @@
             radius: r, color: col, fillColor: col, fillOpacity: 0.85, weight: 1.5,
           }).bindTooltip(() => `
             <div style="font-family:Consolas,monospace;font-size:11px;line-height:1.7">
-              <b style="color:${col}">${d.call}</b><br>
+              <b style="color:${col}">${escapeHtml(d.call)}</b><br>
               ${band.toLowerCase()} · ${d.count} QSO${d.count > 1 ? 's' : ''}
-              ${d.mult ? `<br><span style="color:#f0c040">✦ Mult: ${d.mult}</span>` : ''}
+              ${d.mult ? `<br><span style="color:#f0c040">✦ Mult: ${escapeHtml(d.mult)}</span>` : ''}
               <br><span style="color:#8b949e">SP: ${dist.toLocaleString()} km</span>
               <span style="color:#8b949e"> · LP: ${distLP.toLocaleString()} km</span>
             </div>`, { direction: 'top', offset: [0, -r], opacity: 0.97 }));
