@@ -6,6 +6,10 @@
 
 01252dd Add per-panel hide/show to the Overview tab
 
+### Bugfixes
+
+758eb83 Fix loader.py: ambiguous-match self-check, silent exceptions, TOCTOU race (#37, #38, #39)
+
 ## 26.7.15
 
 ### Enhancements
