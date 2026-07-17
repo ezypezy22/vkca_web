@@ -1034,8 +1034,17 @@ Users are responsible for verifying all information against N1MM before making d
 
   // ── Theme selector ────────────────────────────────────────────────────────
   (function(){
-    const sel = document.getElementById('theme-select');
+    const sel          = document.getElementById('theme-select');
+    const accentPicker = document.getElementById('accent-picker');
+    const accentReset  = document.getElementById('accent-reset-btn');
     if (!sel) return;
+
+    const ACCENT_KEY = 'vkca_custom_accent';
+    // The full palette last applied by applyTheme(), before any custom-accent
+    // override — onTheme() needs a complete palette every call (it has no
+    // "keep the rest as-is" merge of its own), so a custom accent is applied
+    // as this base palette with just .accent swapped out, never on its own.
+    let _basePalette = null;
 
     // "System (OS default)" resolves to Dark or Light based on the OS preference,
     // live-updating whenever the user changes their system setting.
@@ -1046,6 +1055,29 @@ Users are responsible for verifying all information against N1MM before making d
       return name;
     }
 
+    function setAccentVar(hex) {
+      document.documentElement.style.setProperty('--accent', hex);
+      if (accentPicker) accentPicker.value = hex;
+    }
+
+    // Applies (and by default persists) a custom accent on top of whatever
+    // theme is currently active. `skipPersist` is used when re-applying a
+    // saved value on load or from a cross-window 'storage' event, where
+    // writing it straight back to localStorage would be redundant.
+    function applyCustomAccent(hex, skipPersist) {
+      if (!_basePalette) return;
+      setAccentVar(hex);
+      if (window.VKA?.onTheme) window.VKA.onTheme({ ..._basePalette, accent: hex });
+      if (!skipPersist) { try { localStorage.setItem(ACCENT_KEY, hex); } catch {} }
+    }
+
+    function clearCustomAccent(skipPersist) {
+      if (!skipPersist) { try { localStorage.removeItem(ACCENT_KEY); } catch {} }
+      if (!_basePalette) return;
+      setAccentVar(_basePalette.accent);
+      if (window.VKA?.onTheme) window.VKA.onTheme(_basePalette);
+    }
+
     async function applyTheme(name) {
       const resolved = resolveThemeName(name);
       try {
@@ -1053,6 +1085,7 @@ Users are responsible for verifying all information against N1MM before making d
         const data    = await res.json();
         const palette = data.palette?.[resolved];
         if (!palette) return;
+        _basePalette = palette;
 
         // Apply CSS variables to :root
         const root = document.documentElement;
@@ -1072,8 +1105,17 @@ Users are responsible for verifying all information against N1MM before making d
         // directly.
         root.style.setProperty('color-scheme', isLight ? 'light' : 'dark');
 
-        // Notify canvas modules
-        if (window.VKA?.onTheme) window.VKA.onTheme(palette);
+        // A saved custom accent survives theme switches — re-apply it on top
+        // of the freshly-loaded palette rather than letting the theme's own
+        // accent win.
+        let customHex = null;
+        try { customHex = localStorage.getItem(ACCENT_KEY); } catch {}
+        if (customHex) {
+          applyCustomAccent(customHex, true);
+        } else {
+          if (window.VKA?.onTheme) window.VKA.onTheme(palette);
+          if (accentPicker) accentPicker.value = palette.accent;
+        }
 
         try { localStorage.setItem('vkca_theme', name); } catch {}
       } catch(e) { console.warn('Theme error:', e); }
@@ -1085,6 +1127,8 @@ Users are responsible for verifying all information against N1MM before making d
     });
 
     sel.addEventListener('change', () => applyTheme(sel.value));
+    accentPicker?.addEventListener('input', () => applyCustomAccent(accentPicker.value));
+    accentReset?.addEventListener('click', () => clearCustomAccent());
 
     // Cross-window sync: the 'storage' event fires in every other same-origin
     // window/tab (never the one that made the change) — this is what keeps
@@ -1094,6 +1138,9 @@ Users are responsible for verifying all information against N1MM before making d
       if (e.key === 'vkca_theme' && e.newValue) {
         sel.value = e.newValue;
         applyTheme(e.newValue);
+      } else if (e.key === ACCENT_KEY) {
+        if (e.newValue) applyCustomAccent(e.newValue, true);
+        else clearCustomAccent(true);
       }
     });
 

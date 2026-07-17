@@ -94,6 +94,14 @@ body{height:100%;background:var(--bg);color:var(--fg);
 .tb-btn:disabled{opacity:.5;cursor:default;}
 .tb-btn--primary{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:bold;}
 .tb-btn--primary:hover{background:#00efc0;color:var(--bg);}
+.tb-btn--icon{padding:2px 6px;font-size:0.85em;}
+
+/* Custom accent picker — a small square swatch matching the toolbar's other
+   compact controls, not the browser's default wide colour-input chrome. */
+.accent-picker{width:22px;height:22px;padding:0;border:1px solid #30363d;
+  border-radius:4px;background:transparent;cursor:pointer;flex-shrink:0;}
+.accent-picker::-webkit-color-swatch-wrapper{padding:2px;}
+.accent-picker::-webkit-color-swatch{border:none;border-radius:2px;}
 
 /* ── Frameless-window caption buttons (desktop app only — see app.js
    wireWindowControls) ─────────────────────────────────────────────────────── */
