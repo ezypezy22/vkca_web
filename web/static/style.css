@@ -489,6 +489,25 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
   width:2px;transform:translateX(-50%);background:var(--bg3);border-radius:2px;}
 .cluster-resize-handle:hover::after,.cluster-resize-handle.dragging::after{background:var(--accent);}
 
+/* New-spot "just landed" glow, colour-matched to its status — same fading
+   box-shadow language as .flash-new-qso/.flash-best on the Overview tab.
+   Row opacity (age fade, set via JS) is untouched by these. */
+.spot-flash-mult{animation:spot-flash-mult-kf 1.1s ease-out;}
+@keyframes spot-flash-mult-kf{
+  0%{box-shadow:inset 0 0 0 9999px rgba(46,213,115,.24);}
+  100%{box-shadow:inset 0 0 0 9999px rgba(46,213,115,0);}
+}
+.spot-flash-band{animation:spot-flash-band-kf 1.1s ease-out;}
+@keyframes spot-flash-band-kf{
+  0%{box-shadow:inset 0 0 0 9999px rgba(100,181,246,.22);}
+  100%{box-shadow:inset 0 0 0 9999px rgba(100,181,246,0);}
+}
+.spot-flash-plain{animation:spot-flash-plain-kf 1.1s ease-out;}
+@keyframes spot-flash-plain-kf{
+  0%{box-shadow:inset 0 0 0 9999px rgba(0,212,170,.14);}
+  100%{box-shadow:inset 0 0 0 9999px rgba(0,212,170,0);}
+}
+
 /* ── Tables ──────────────────────────────────────────────────────────────── */
 .table-wrap{overflow-y:auto;max-height:calc(100vh - 200px);
             border-radius:var(--radius);border:1px solid var(--bg3);}

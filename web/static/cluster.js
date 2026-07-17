@@ -25,6 +25,37 @@
   let filterCall = '';
   let filterMode = 'ALL';
 
+  // ── New-spot glow + spot-age fade ────────────────────────────────────────
+  // renderSpots() rebuilds the whole tbody from scratch on every single new
+  // spot (see below), so a burst of spots landing in the same tick would
+  // destroy an earlier spot's freshly-flashed row before its animation ever
+  // painted if "already flashed" were tracked as a one-shot flag. Using a
+  // freshness *window* instead means the row a burst finally settles on
+  // still gets its glow, however many rebuilds happened in between.
+  const FLASH_WINDOW_MS = 1500;
+  const FLASH_CLASS = { NEW_MULT: 'spot-flash-mult', NEW_BAND: 'spot-flash-band' };
+
+  // Rows dim in two steps as spots age out of relevance — a spot from 20
+  // minutes ago is much less actionable than one from 20 seconds ago.
+  function ageOpacityMul(receivedAt) {
+    const ageMin = (Date.now() - receivedAt) / 60000;
+    if (ageMin > 8) return 0.5;
+    if (ageMin > 2) return 0.75;
+    return 1;
+  }
+
+  function applyRowAge(tr) {
+    const base = parseFloat(tr.dataset.baseOpacity || '1');
+    const receivedAt = parseInt(tr.dataset.receivedAt || '0', 10);
+    tr.style.opacity = base * ageOpacityMul(receivedAt);
+  }
+
+  function tickSpotAges() {
+    if (!spotTbody) return;
+    for (const tr of spotTbody.children) applyRowAge(tr);
+  }
+  setInterval(tickSpotAges, 15000);
+
   // ── DOM refs ──────────────────────────────────────────────────────────────
   const statusDot  = document.getElementById('cluster-status-dot');
   const statusText = document.getElementById('cluster-status-text');
@@ -279,6 +310,7 @@
 
   // ── Spot list ─────────────────────────────────────────────────────────────
   function addSpot(spot) {
+    spot._receivedAt = Date.now();
     spots.unshift(spot);
     if (spots.length > MAX_SPOTS) spots = spots.slice(0, MAX_SPOTS);
     alertOnSpot(spot);
@@ -320,7 +352,8 @@
       const col   = BAND_COLS[s.band]||C.muted;
       const style = STATUS_STYLE[s.status] || STATUS_STYLE.NO_LOG;
       const tr=document.createElement('tr');
-      tr.style.opacity = style.opacity;
+      tr.dataset.baseOpacity = style.opacity;
+      tr.dataset.receivedAt  = s._receivedAt || Date.now();
       tr.title = 'Double-click to copy callsign';
       tr.innerHTML=`
         <td style="color:${style.color};font-weight:${style.weight}">${escapeHtml(s.dx)}</td>
@@ -335,6 +368,10 @@
       tr.addEventListener('dblclick', () => {
         navigator.clipboard?.writeText(s.dx).catch(()=>{});
       });
+      applyRowAge(tr);
+      if (s._receivedAt && Date.now() - s._receivedAt < FLASH_WINDOW_MS) {
+        tr.classList.add(FLASH_CLASS[s.status] || 'spot-flash-plain');
+      }
       frag.appendChild(tr);
     });
     spotTbody.appendChild(frag);
