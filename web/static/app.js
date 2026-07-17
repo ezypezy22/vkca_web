@@ -364,7 +364,7 @@ Users are responsible for verifying all information against N1MM before making d
       if (!api || !api.move_to) return;   // browser-tab fallback — OS handles dragging
       const bar = document.getElementById('hud-bar'); if (!bar) return;
       bar.addEventListener('mousedown', (e) => {
-        if (e.button !== 0 || e.target.closest('#hud-close')) return;
+        if (e.button !== 0 || e.target.closest('#hud-close,#hud-settings,#hud-menu')) return;
         e.preventDefault();
         let lastX = e.screenX, lastY = e.screenY;
         api.get_position().then(({x, y}) => {
@@ -402,7 +402,7 @@ Users are responsible for verifying all information against N1MM before making d
       if (!api || !api.focus_main) return;   // browser-tab fallback — no such concept
       const bar = document.getElementById('hud-bar'); if (!bar) return;
       bar.addEventListener('dblclick', (e) => {
-        if (e.target.closest('#hud-close')) return;
+        if (e.target.closest('#hud-close,#hud-settings,#hud-menu')) return;
         api.focus_main();
       });
     }

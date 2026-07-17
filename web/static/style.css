@@ -202,25 +202,45 @@ body.has-session-bar #content{top:calc(var(--titlebar-h) + var(--sessbar-h) + va
   padding:8px 14px;font-family:var(--font-mono);font-size:0.77em;}
 
 /* ── Mini HUD (rendered only in its own popped-out window, /hud) ────────── */
-#hud-bar{display:none;align-items:center;justify-content:space-around;
+#hud-bar{display:none;align-items:center;justify-content:center;
   flex-wrap:wrap;position:fixed;inset:0;background:var(--bg);cursor:grab;
-  font-family:var(--font-mono);padding:6px 14px;}
+  font-family:var(--font-mono);padding:8px 36px;gap:6px 18px;}
 #hud-bar:active{cursor:grabbing;}
-.hud-item{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.hud-item{display:flex;flex-direction:column;align-items:center;gap:2px;
+  min-width:58px;}
 .hud-item.tile-hidden{display:none;}
-.hud-label{font-size:0.8em;color:var(--muted);letter-spacing:.08em;}
-.hud-val{font-size:2.3em;font-weight:bold;color:var(--accent);}
-#hud-close{display:none;position:absolute;top:4px;right:6px;z-index:1;
+.hud-label{font-size:0.75em;color:var(--muted);letter-spacing:.06em;
+  white-space:nowrap;}
+/* Was a fixed 2.3em when the HUD only ever showed 5 fields — now up to 7
+   (see hud-menu below), so a size that comfortably fits the full set
+   without overlapping takes priority over matching the old single-row
+   look; users who only want a few fields can hide the rest via the
+   field picker and get more breathing room back that way instead. */
+.hud-val{font-size:1.6em;font-weight:bold;color:var(--accent);white-space:nowrap;}
+#hud-close{display:none;position:absolute;top:4px;right:6px;z-index:2;
   width:20px;height:20px;line-height:18px;padding:0;text-align:center;
   background:transparent;border:1px solid var(--bg3);border-radius:4px;
   color:var(--muted);font-size:0.8em;cursor:pointer;}
 #hud-close:hover{background:var(--red);border-color:var(--red);color:#fff;}
+/* Settings button: opens the field-picker menu (see #hud-menu below).
+   Right-click does the same thing, but a plain right-click has no visual
+   affordance telling anyone it exists — this is the discoverable path. */
+#hud-settings{display:none;position:absolute;top:4px;left:6px;z-index:2;
+  width:20px;height:20px;line-height:18px;padding:0;text-align:center;
+  background:transparent;border:1px solid var(--bg3);border-radius:4px;
+  color:var(--muted);font-size:0.85em;cursor:pointer;}
+#hud-settings:hover{background:var(--bg3);border-color:var(--accent);color:var(--accent);}
 /* Field-picker menu: reuses .panels-menu's look, but positioned fixed +
    JS-placed at the right-click point, since #hud-bar has no position:relative
    ancestor of its own within the tiny, full-bleed HUD window — anchoring it
    to "just below the button" like the main window's Panels menu would push
    it outside the window's own small bounds entirely. */
-#hud-menu{position:fixed;top:auto;right:auto;}
+/* .panels-menu's max-height:60vh (fine in the full-size main window) comes
+   out to well under 50px in the HUD's own tiny viewport, clipping the
+   7-row checklist down to a near-unusable sliver — cap it in real pixels
+   instead, generous enough for all 7 rows at the HUD's default size while
+   still scrolling gracefully if the window is at its smaller minimum. */
+#hud-menu{position:fixed;top:auto;right:auto;max-height:260px;}
 /* Overrides the Overview gauge-row's milestone-burst placement (top:-16px,
    meant to hang just above a tile) for the HUD's own tiny full-bleed
    window, where that would land outside the window bounds entirely. */
@@ -230,6 +250,7 @@ html.hud-mode #titlebar,html.hud-mode #session-bar,html.hud-mode #tabbar,
 html.hud-mode #content{display:none!important;}
 html.hud-mode #hud-bar{display:flex;}
 html.hud-mode #hud-close{display:block;}
+html.hud-mode #hud-settings{display:block;}
 
 /* ── Drag-to-reorder tiles ───────────────────────────────────────────────── */
 .reorderable-tile{cursor:grab;}

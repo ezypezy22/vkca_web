@@ -1197,7 +1197,7 @@
   }
   setInterval(tickHudRemain,1000);
 
-  // ── HUD field picker (right-click to show/hide individual stats) ─────────
+  // ── HUD field picker: ⚙ button (discoverable) + right-click (fast path) ──
   // Same localStorage-backed show/hide pattern as the Overview "☰ Panels"
   // menu (see .tile-hidden), scoped to this tiny window's own field set
   // rather than shared with the main window's tile visibility.
@@ -1217,10 +1217,9 @@
     }
     applyHudFieldVisibility();
 
-    const hudBar  = document.getElementById('hud-bar');
     const hudMenu = document.getElementById('hud-menu');
-    hudBar?.addEventListener('contextmenu', e=>{
-      e.preventDefault();
+
+    function openHudMenu(x,y){
       if (!hudMenu) return;
       hudMenu.innerHTML='';
       document.querySelectorAll('#hud-bar .hud-item[data-hud-key]').forEach(el=>{
@@ -1237,16 +1236,33 @@
         row.appendChild(document.createTextNode(HUD_FIELD_LABELS[key]||key));
         hudMenu.appendChild(row);
       });
-      // Clamp so the menu can't render partly outside this tiny window.
-      const left=Math.max(4,Math.min(e.clientX,window.innerWidth-190));
-      const top =Math.max(4,Math.min(e.clientY,window.innerHeight-100));
+      // The CSS max-height is a generous static cap for the HUD's default
+      // size, but the window is user-resizable down to a much smaller
+      // minimum — recompute against the *actual* current window height so
+      // the menu always fits (scrolling internally via its own
+      // overflow-y:auto) instead of just getting clipped by the window's
+      // own edge, which no amount of CSS overflow can undo.
+      const availH=Math.max(60,window.innerHeight-8);
+      hudMenu.style.maxHeight=availH+'px';
+      const left=Math.max(4,Math.min(x,window.innerWidth-190));
+      const top =Math.max(4,Math.min(y,window.innerHeight-availH));
       hudMenu.style.left=left+'px';
       hudMenu.style.top =top+'px';
       hudMenu.classList.add('open');
+    }
+
+    document.getElementById('hud-settings')?.addEventListener('click', e=>{
+      e.stopPropagation();
+      const r=e.currentTarget.getBoundingClientRect();
+      openHudMenu(r.left,r.bottom+4);
+    });
+    document.getElementById('hud-bar')?.addEventListener('contextmenu', e=>{
+      e.preventDefault();
+      openHudMenu(e.clientX,e.clientY);
     });
     document.addEventListener('click', e=>{
       if (!hudMenu||!hudMenu.classList.contains('open')) return;
-      if (!hudMenu.contains(e.target)) hudMenu.classList.remove('open');
+      if (!hudMenu.contains(e.target) && e.target.id!=='hud-settings') hudMenu.classList.remove('open');
     });
   }
 
@@ -1256,7 +1272,7 @@
       const data=await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error||'failed');
     } catch {
-      window.open('/hud','vkca_hud','width=760,height=70,resizable=yes');
+      window.open('/hud','vkca_hud','width=760,height=130,resizable=yes');
     }
   });
 
