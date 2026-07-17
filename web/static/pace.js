@@ -128,18 +128,45 @@
 
     if (trajChart) { trajChart.destroy(); trajChart = null; }
 
-    trajChart = new Chart(canvas.getContext('2d'), {
+    // Same glowing-sparkline technique as overview.js's makeSparkline() /
+    // rate.js's Mults-per-hour chart: canvas drop-shadow filter + gradient
+    // fill under a monotone line. Score only ever climbs, so the last
+    // actual-data point doubles as both "peak" and "current position" —
+    // one glowing dot showing exactly where "now" is on the trajectory.
+    canvas.style.filter = `drop-shadow(0 0 6px ${C.accent}80)`;
+    const ctx  = canvas.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height || 260);
+    grad.addColorStop(0,    C.accent + '59');
+    grad.addColorStop(0.65, C.accent + '14');
+    grad.addColorStop(1,    C.accent + '00');
+
+    const lastIdx = historical.length - 1;
+    const actualData = [...historical, ...Array(remBuckets).fill(null)];
+    const nowPointRadius = actualData.map((_, i) => i === lastIdx ? 5 : 0);
+    const nowPointColour = actualData.map((_, i) => i === lastIdx ? C.accent : 'transparent');
+    const nowPointBorder = actualData.map((_, i) => i === lastIdx ? '#fff' : 'transparent');
+
+    trajChart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: allLabels,
         datasets: [
           {
             label: 'Actual Score',
-            data: [...historical, ...Array(remBuckets).fill(null)],
+            data: actualData,
             borderColor: C.accent,
-            backgroundColor: C.accent + '22',
-            borderWidth: 2.5, fill: true, tension: 0.3,
-            pointRadius: 0,
+            backgroundColor: grad,
+            borderWidth: 2.5, fill: true, tension: 0,
+            cubicInterpolationMode: 'monotone',
+            borderCapStyle: 'round', borderJoinStyle: 'round',
+            pointRadius: nowPointRadius,
+            pointBackgroundColor: nowPointColour,
+            pointBorderColor: nowPointBorder,
+            pointBorderWidth: actualData.map((_, i) => i === lastIdx ? 2 : 0),
+            pointHoverRadius: 6,
+            pointHoverBackgroundColor: C.accent,
+            pointHoverBorderColor: '#fff',
+            pointHoverBorderWidth: 2,
           },
           {
             label: `Projected @ ${curRate}/hr`,
