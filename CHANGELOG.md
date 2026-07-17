@@ -1,5 +1,15 @@
 # Changelog
 
+## 26.7.15
+
+### Enhancements
+
+e893bd5 Add VK/ZL area coverage heat and prefix-split gauges to the Trans-Tasman Overview
+
+### Bugfixes
+
+00519b9 Fix noticeable delay when closing the app via the titlebar X
+
 ## 26.7.14
 
 ### Bugfixes
