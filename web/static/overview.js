@@ -1367,6 +1367,68 @@
     finally { whatifSimBtn.disabled = false; }
   });
 
+  // ══ COSMETIC LIVE FEEDBACK ══════════════════════════════════════════════════
+  // Personal-best flash / new-QSO pulse / score-milestone burst. Only ever
+  // called from the live vka:snapshot path (not render()'s replay/tab-switch
+  // callers) — replay scrubbing jumps around in time, which would otherwise
+  // "celebrate" past milestones out of context or fire on a scrub going
+  // backward.
+  let _celebPrevTotal=null, _celebPrevBestRate=null;
+  const _celebMilestones=new Set();
+  const SCORE_MILESTONES=[100,250,500,1000,2500,5000,10000,25000,50000,
+                           100000,250000,500000,1000000,2500000,5000000,10000000];
+
+  function resetCelebrations(){
+    _celebPrevTotal=null; _celebPrevBestRate=null; _celebMilestones.clear();
+  }
+
+  function flashEl(el,cls,ms){
+    if (!el) return;
+    el.classList.remove(cls); void el.offsetWidth;   // restart if already mid-flash
+    el.classList.add(cls);
+    setTimeout(()=>el.classList.remove(cls),ms);
+  }
+
+  function showMilestoneBurst(milestone){
+    const host=document.getElementById('gauge-row'); if (!host) return;
+    host.querySelectorAll('.milestone-burst').forEach(b=>b.remove());
+    const burst=document.createElement('div');
+    burst.className='milestone-burst';
+    burst.textContent=`🎉 ${milestone.toLocaleString()} PTS`;
+    host.appendChild(burst);
+    setTimeout(()=>burst.remove(),2300);
+  }
+
+  function checkCelebrations(snap){
+    if (!snap) return;
+    const total=snap.valid??snap.total??0;
+    const bestRate=snap.personal_bests?.best_hour_rate??0;
+    const score=snap.score??0;
+
+    if (_celebPrevTotal===null){
+      // First snapshot since load — seed the baseline so pre-existing
+      // progress (e.g. re-opening a log mid-contest) doesn't immediately
+      // "celebrate" as if it just happened.
+      _celebPrevTotal=total; _celebPrevBestRate=bestRate;
+      for (const m of SCORE_MILESTONES) if (score>=m) _celebMilestones.add(m);
+      return;
+    }
+
+    if (total>_celebPrevTotal) flashEl(document.getElementById('gauge-row'),'flash-new-qso',900);
+    // >0 guard: going from "no rate recorded yet" (0) to a first real rate
+    // isn't a broken record, just the first data point.
+    if (bestRate>_celebPrevBestRate && _celebPrevBestRate>0){
+      flashEl(document.getElementById('panel-personal-bests'),'flash-best',1400);
+    }
+    for (const m of SCORE_MILESTONES){
+      if (score>=m && !_celebMilestones.has(m)){
+        _celebMilestones.add(m);
+        showMilestoneBurst(m);
+      }
+    }
+    _celebPrevTotal=total; _celebPrevBestRate=bestRate;
+  }
+
   // ══ MAIN ═══════════════════════════════════════════════════════════════════
   function render(snap){
     updateGauges(snap); updateSparklines(snap); updateRegionBars(snap);
@@ -1390,13 +1452,14 @@
     if (_replaying) return;
     if(_firstSnap){_firstSnap=false;loadPluginMeta().then(()=>render(e.detail));}
     else render(e.detail);
+    checkCelebrations(e.detail);
   });
   window.addEventListener('vka:tabchange',e=>{
     if(e.detail.tab!=='overview') return;
     if (_replaying && _lastReplaySnap) { render(_lastReplaySnap); return; }
     const snap=window.VKA.lastSnap(); if(snap) render(snap);
   });
-  window.addEventListener('vka:loaded',()=>{_metaLoaded=false;_firstSnap=true;startLiveRankPolling();});
+  window.addEventListener('vka:loaded',()=>{_metaLoaded=false;_firstSnap=true;resetCelebrations();startLiveRankPolling();});
 
   if (!HUD_MODE) startLiveRankPolling();
 

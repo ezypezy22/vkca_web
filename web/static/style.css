@@ -284,7 +284,7 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
 
 /* ── Gauge row ───────────────────────────────────────────────────────────── */
 .gauge-row{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--gap);
-            height:264px;flex-shrink:0;}
+            height:264px;flex-shrink:0;position:relative;}
 .gauge-card{background:var(--bg2);border:1px solid var(--bg3);
   border-top:2px solid var(--accent);border-radius:var(--radius);
   overflow:hidden;position:relative;transition:border-top-color .3s,box-shadow .3s;}
@@ -294,6 +294,32 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
   font-family:Consolas,monospace;text-align:center;white-space:nowrap;pointer-events:none;}
 .gauge-value{font-weight:bold;}
 .gauge-label{color:var(--muted);}
+
+/* ── Cosmetic live-feedback: new-QSO pulse, personal-best flash, milestone burst ── */
+.flash-new-qso{animation:flash-new-qso-kf .9s ease-out;}
+@keyframes flash-new-qso-kf{
+  0%{box-shadow:0 0 0 0 rgba(0,212,170,0);}
+  25%{box-shadow:0 0 26px 3px rgba(0,212,170,.4);}
+  100%{box-shadow:0 0 0 0 rgba(0,212,170,0);}
+}
+.flash-best{animation:flash-best-kf 1.4s ease-out;}
+@keyframes flash-best-kf{
+  0%{box-shadow:0 0 0 0 rgba(240,192,64,0);border-top-color:var(--bg3);}
+  20%{box-shadow:0 0 30px 5px rgba(240,192,64,.5);border-top-color:var(--accent3);}
+  100%{box-shadow:0 0 0 0 rgba(240,192,64,0);border-top-color:var(--bg3);}
+}
+.milestone-burst{position:absolute;top:-16px;left:50%;z-index:20;
+  background:var(--accent3);color:var(--bg);font-family:var(--font-mono);
+  font-weight:bold;font-size:0.85em;padding:6px 16px;border-radius:20px;
+  white-space:nowrap;pointer-events:none;box-shadow:0 4px 16px -4px rgba(0,0,0,.5);
+  animation:milestone-pop 2.2s ease-out forwards;}
+@keyframes milestone-pop{
+  0%{opacity:0;transform:translate(-50%,10px) scale(.8);}
+  12%{opacity:1;transform:translate(-50%,-6px) scale(1.05);}
+  20%{transform:translate(-50%,-6px) scale(1);}
+  78%{opacity:1;transform:translate(-50%,-6px) scale(1);}
+  100%{opacity:0;transform:translate(-50%,-22px) scale(.95);}
+}
 
 /* ── Spark row ───────────────────────────────────────────────────────────── */
 .spark-row{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--gap);flex-shrink:0;}
