@@ -1,5 +1,21 @@
 # Changelog
 
+## 26.7.17
+
+### Enhancements
+
+2f68fe1 Add live cosmetic feedback to the Overview: new-QSO pulse, best-rate flash, score milestone bursts
+be9c89a Add current-hour marker to Rate chart, temperature tint to Bands table
+8553d61 De-emphasize low-sample band efficiency figures in the Bands tab
+d0b35d1 Expand the Mini HUD: mults, session label, field picker with descriptions, live celebrations, double-click-to-focus-main
+b19b749 Add HUD orientation toggle (horizontal ⇄ vertical) and glow-style sparklines matching the Overview
+
+### Bugfixes
+
+8553d61 Fix stale Bands chart tooltip (closed over first-render values, never refreshed on live updates)
+b217348 Fix HUD layout overlap once the field count grew to 7
+0592832 Fix HUD field-picker menu covering the window's own close/settings buttons
+
 ## 26.7.16
 
 ### Enhancements
