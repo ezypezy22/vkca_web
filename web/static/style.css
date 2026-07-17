@@ -217,6 +217,7 @@ body.has-session-bar #content{top:calc(var(--titlebar-h) + var(--sessbar-h) + va
    look; users who only want a few fields can hide the rest via the
    field picker and get more breathing room back that way instead. */
 .hud-val{font-size:1.6em;font-weight:bold;color:var(--accent);white-space:nowrap;}
+.hud-spark{width:56px;height:14px;display:block;}
 #hud-close{display:none;position:absolute;top:4px;right:6px;z-index:2;
   width:20px;height:20px;line-height:18px;padding:0;text-align:center;
   background:transparent;border:1px solid var(--bg3);border-radius:4px;
@@ -224,12 +225,29 @@ body.has-session-bar #content{top:calc(var(--titlebar-h) + var(--sessbar-h) + va
 #hud-close:hover{background:var(--red);border-color:var(--red);color:#fff;}
 /* Settings button: opens the field-picker menu (see #hud-menu below).
    Right-click does the same thing, but a plain right-click has no visual
-   affordance telling anyone it exists — this is the discoverable path. */
+   affordance telling anyone it exists. A muted icon that only lit up on
+   hover turned out to not be enough on its own either — kept a bit more
+   visible at rest (accent-coloured border/icon, not just on :hover) and
+   paired with a one-time callout bubble (#hud-hint below) that actually
+   points at it and says what it does, the first time the HUD is opened. */
 #hud-settings{display:none;position:absolute;top:4px;left:6px;z-index:2;
   width:20px;height:20px;line-height:18px;padding:0;text-align:center;
-  background:transparent;border:1px solid var(--bg3);border-radius:4px;
-  color:var(--muted);font-size:0.85em;cursor:pointer;}
-#hud-settings:hover{background:var(--bg3);border-color:var(--accent);color:var(--accent);}
+  background:transparent;border:1px solid var(--accent);border-radius:4px;
+  color:var(--accent);font-size:0.85em;cursor:pointer;}
+#hud-settings:hover{background:var(--accent);color:var(--bg);}
+/* One-time "psst, this exists" callout — see the HUD_HINT_SEEN_KEY logic
+   in overview.js. Bright/attention-grabbing on purpose (unlike the
+   button itself, which stays subdued so it doesn't compete with the
+   actual stats) since the whole point is to be impossible to miss the
+   first time, then never shown again once dismissed. */
+#hud-hint{position:fixed;top:28px;left:6px;z-index:10;
+  background:var(--accent);color:var(--bg);font-family:var(--font-mono);
+  font-size:0.72em;font-weight:bold;padding:5px 10px;border-radius:6px;
+  white-space:nowrap;cursor:pointer;box-shadow:0 4px 14px -2px rgba(0,0,0,.6);
+  animation:hud-hint-in .25s ease-out;}
+#hud-hint::before{content:'';position:absolute;top:-5px;left:9px;
+  border:5px solid transparent;border-bottom-color:var(--accent);}
+@keyframes hud-hint-in{0%{opacity:0;transform:translateY(-6px);}100%{opacity:1;transform:translateY(0);}}
 /* Field-picker menu: reuses .panels-menu's look, but positioned fixed +
    JS-placed at the right-click point, since #hud-bar has no position:relative
    ancestor of its own within the tiny, full-bleed HUD window — anchoring it

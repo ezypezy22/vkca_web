@@ -1161,6 +1161,15 @@
   let _hudState=null;    // session_status.state from the most recent snapshot
   let _hudTarget=null;   // Date — contest start (state 'pre') or end (state 'live')
 
+  // Same on-air efficiency formula as the Fatigue tile/tab: most-active
+  // operator's on-air minutes as a % of their first-to-last-QSO span.
+  // Shared by updateHud() (the big number) and trackHudSparklines() (the
+  // trend line) so the two can't silently drift out of sync.
+  function computeHudEff(snap){
+    const top=(snap?.operator_times||[])[0];
+    return top?.span_minutes>0 ? Math.round(top.on_minutes/top.span_minutes*100) : null;
+  }
+
   function updateHud(snap){
     const pb=snap?.personal_bests||{};
     const ss=snap?.session_status||{};
@@ -1174,10 +1183,7 @@
     if (rateEl)  rateEl.textContent=(pb.current_hour_rate||0)+'/hr';
     if (sessionEl) sessionEl.textContent=ss.session_label||'—';
     if (effEl){
-      // Same on-air efficiency formula as the Fatigue tile/tab: most-active
-      // operator's on-air minutes as a % of their first-to-last-QSO span.
-      const top=(snap?.operator_times||[])[0];
-      const eff=top?.span_minutes>0 ? Math.round(top.on_minutes/top.span_minutes*100) : null;
+      const eff=computeHudEff(snap);
       effEl.textContent = eff==null ? '—' : eff+'%';
       effEl.style.color = eff==null ? T.muted : (eff>=70?T.green:eff>=40?T.accent3:T.red);
     }
@@ -1185,6 +1191,57 @@
     const targetDt = ss.state==='pre' ? ss.start_dt : ss.state==='live' ? ss.end_dt : null;
     _hudTarget = targetDt ? new Date(targetDt+'Z') : null;   // naive UTC, like _lastQsoTime above
     tickHudRemain();
+  }
+
+  // ── HUD mini sparklines ────────────────────────────────────────────────
+  // Score/Mults/Rate/Eff each get a tiny trend line — Remain/Session/Last
+  // QSO are excluded since they're either a countdown (trivially always
+  // falling) or not a numeric trend at all. The server has no historical
+  // series for current_hour_rate or on-air efficiency (only Overview's
+  // hour-bucketed sparklines, which don't cover those two), so this keeps
+  // its own small rolling client-side history instead of reusing snap data.
+  const HUD_SPARK_MAX=40;
+  const HUD_SPARK_KEYS=['score','mults','rate','eff'];
+  let _hudHistory={};
+  function resetHudSparklines(){
+    _hudHistory={score:[],mults:[],rate:[],eff:[]};
+  }
+  resetHudSparklines();
+
+  function drawSparkline(canvas,values,colour){
+    if (!canvas) return;
+    const ctx=canvas.getContext('2d'); if (!ctx) return;
+    const w=canvas.width,h=canvas.height;
+    ctx.clearRect(0,0,w,h);
+    const pts=values.filter(v=>v!=null);
+    if (pts.length<2) return;
+    const min=Math.min(...pts),max=Math.max(...pts);
+    const range=(max-min)||1;
+    ctx.beginPath();
+    values.forEach((v,i)=>{
+      if (v==null) return;
+      const x=(i/(values.length-1))*(w-2)+1;
+      const y=h-1-((v-min)/range)*(h-2);
+      if (i===0||values[i-1]==null) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle=colour; ctx.lineWidth=1.4; ctx.lineJoin='round'; ctx.stroke();
+  }
+
+  function trackHudSparklines(snap){
+    if (!snap) return;
+    const pb=snap.personal_bests||{};
+    const vals={
+      score: snap.score||0,
+      mults: snap.band_mults||snap.worked||0,
+      rate:  pb.current_hour_rate||0,
+      eff:   computeHudEff(snap),
+    };
+    HUD_SPARK_KEYS.forEach(key=>{
+      const hist=_hudHistory[key];
+      hist.push(vals[key]);
+      if (hist.length>HUD_SPARK_MAX) hist.shift();
+      drawSparkline(document.getElementById('hud-spark-'+key),hist,T.accent);
+    });
   }
 
   function tickHudRemain(){
@@ -1264,6 +1321,26 @@
       if (!hudMenu||!hudMenu.classList.contains('open')) return;
       if (!hudMenu.contains(e.target) && e.target.id!=='hud-settings') hudMenu.classList.remove('open');
     });
+
+    // One-time callout: a static ⚙ icon in the corner turned out to not be
+    // enough on its own for people to discover that the field set is
+    // customisable at all. Points directly at the button, explains what it
+    // does in words, and is gone for good (this window/profile) once
+    // dismissed — by clicking it, clicking the button itself, or after 8s.
+    const HUD_HINT_SEEN_KEY='vkca_hud_hint_seen';
+    if (!localStorage.getItem(HUD_HINT_SEEN_KEY)) {
+      const hint=document.createElement('div');
+      hint.id='hud-hint';
+      hint.textContent='⚙ Click to add/remove stats';
+      document.getElementById('hud-bar')?.appendChild(hint);
+      const dismissHint=()=>{
+        hint.remove();
+        try{ localStorage.setItem(HUD_HINT_SEEN_KEY,'1'); }catch{}
+      };
+      hint.addEventListener('click', e=>{ e.stopPropagation(); dismissHint(); });
+      document.getElementById('hud-settings')?.addEventListener('click', dismissHint, {once:true});
+      setTimeout(dismissHint, 8000);
+    }
   }
 
   document.getElementById('btn-hud')?.addEventListener('click', async ()=>{
@@ -1530,7 +1607,7 @@
   let _firstSnap=true;
   window.addEventListener('vka:snapshot',e=>{
     trackLastQso(e.detail);
-    if (HUD_MODE) { updateHud(e.detail); checkCelebrations(e.detail); return; }
+    if (HUD_MODE) { updateHud(e.detail); trackHudSparklines(e.detail); checkCelebrations(e.detail); return; }
     if (_replaying) return;
     if(_firstSnap){_firstSnap=false;loadPluginMeta().then(()=>render(e.detail));}
     else render(e.detail);
@@ -1541,7 +1618,7 @@
     if (_replaying && _lastReplaySnap) { render(_lastReplaySnap); return; }
     const snap=window.VKA.lastSnap(); if(snap) render(snap);
   });
-  window.addEventListener('vka:loaded',()=>{_metaLoaded=false;_firstSnap=true;resetCelebrations();startLiveRankPolling();});
+  window.addEventListener('vka:loaded',()=>{_metaLoaded=false;_firstSnap=true;resetCelebrations();resetHudSparklines();startLiveRankPolling();});
 
   if (!HUD_MODE) startLiveRankPolling();
 

@@ -924,13 +924,14 @@ async def api_hud():
             url=f"{STATE._base_url}/hud",
             # Tall enough for the field row to wrap onto a second line
             # without clipping — the HUD grew from 5 to 7 fields (mults,
-            # session added) and doesn't all fit on one row at this width
-            # any more. height=110 measured as only ~76 CSS px on this
-            # dev machine's display scaling, which was clipping the
-            # wrapped row's bottom edge outright — sized up with that
-            # margin in mind rather than assuming 1:1 physical-to-CSS px.
-            width=780, height=170,
-            min_size=(360, 100),
+            # session added), plus 4 of those got a mini sparkline canvas
+            # under the value, and doesn't all fit on one row at this
+            # width any more. Physical height doesn't map 1:1 to CSS px
+            # (measured ~131 CSS px at height=170 on this dev machine's
+            # display scaling) — sized up further with real margin rather
+            # than chasing an exact ratio that'll differ per user anyway.
+            width=780, height=210,
+            min_size=(360, 120),
             background_color="#0d1117",
             on_top=True,
             frameless=True,
