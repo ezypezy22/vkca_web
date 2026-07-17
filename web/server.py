@@ -2966,6 +2966,117 @@ def _bind_server_socket(port: Optional[int] = None) -> tuple[socket.socket, int]
     return s, s.getsockname()[1]
 
 
+# ── Native desktop toast notifications (Windows) ────────────────────────────
+# WebView2's own Notification API (the standard web approach) is auto-denied
+# in this frameless embedded window — confirmed by direct testing:
+# Notification.requestPermission() resolves straight to "denied" with no
+# prompt ever shown, since there's no browser chrome for WebView2 to render
+# one against. This bypasses the browser API entirely and shows a real
+# Windows tray balloon notification via the same Shell_NotifyIcon technique
+# libraries like win10toast use internally — no new dependency needed,
+# since pywin32 is already pulled in by pywebview's own Windows backend.
+_TOAST_CLASS_NAME = "VKCA_ToastNotifier"
+_toast_wndclass_atom = None
+_toast_class_lock = threading.Lock()
+
+
+def _show_toast_notification(title: str, message: str, duration_secs: float = 5.0) -> None:
+    """Fire-and-forget a native Windows balloon notification. Runs its own
+    tiny message loop on a dedicated background thread (PumpMessages()
+    blocks until WM_QUIT, which the cleanup timer posts once the balloon's
+    had time to show) so this never blocks the request handling it's
+    called from."""
+    if sys.platform != "win32":
+        return
+
+    def _worker():
+        try:
+            import win32api
+            import win32con
+            import win32gui
+
+            global _toast_wndclass_atom
+            hinst = win32api.GetModuleHandle(None)
+
+            # Cleanup must run as a message handled by this window's own
+            # thread — DestroyWindow() cannot be called cross-thread (Win32
+            # forbids destroying a window from a thread that didn't create
+            # it; it fails silently rather than raising), so the Timer below
+            # posts WM_APP_CLEANUP instead of touching the window directly.
+            WM_APP_CLEANUP = win32con.WM_APP + 1
+
+            def _on_cleanup(hwnd, msg, wparam, lparam):
+                try:
+                    win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, (hwnd, 0))
+                except Exception:
+                    pass
+                win32gui.DestroyWindow(hwnd)
+                return 0
+
+            with _toast_class_lock:
+                if _toast_wndclass_atom is None:
+                    wc = win32gui.WNDCLASS()
+                    wc.hInstance = hinst
+                    wc.lpszClassName = _TOAST_CLASS_NAME
+                    wc.lpfnWndProc = {
+                        win32con.WM_DESTROY: lambda hwnd, msg, wparam, lparam: (
+                            win32gui.PostQuitMessage(0), 0)[1],
+                        WM_APP_CLEANUP: _on_cleanup,
+                    }
+                    _toast_wndclass_atom = win32gui.RegisterClass(wc)
+
+            hwnd = win32gui.CreateWindow(
+                _toast_wndclass_atom, "VKCA notify",
+                win32con.WS_OVERLAPPED, 0, 0, 0, 0, 0, 0, hinst, None,
+            )
+            win32gui.UpdateWindow(hwnd)
+
+            WM_TRAYICON = win32con.WM_USER + 20
+            hicon = win32gui.LoadIcon(0, win32con.IDI_APPLICATION)
+
+            win32gui.Shell_NotifyIcon(win32gui.NIM_ADD, (
+                hwnd, 0,
+                win32gui.NIF_ICON | win32gui.NIF_MESSAGE | win32gui.NIF_TIP,
+                WM_TRAYICON, hicon, "VK Contest Analyzer",
+            ))
+            win32gui.Shell_NotifyIcon(win32gui.NIM_MODIFY, (
+                hwnd, 0, win32gui.NIF_INFO, WM_TRAYICON, hicon,
+                "VK Contest Analyzer", message, 200, title,
+            ))
+
+            def _request_cleanup():
+                try:
+                    win32gui.PostMessage(hwnd, WM_APP_CLEANUP, 0, 0)
+                except Exception:
+                    pass
+
+            timer = threading.Timer(duration_secs, _request_cleanup)
+            timer.daemon = True
+            timer.start()
+
+            win32gui.PumpMessages()
+        except Exception:
+            log.exception("Native toast notification failed")
+
+    threading.Thread(target=_worker, daemon=True, name="toast-notify").start()
+
+
+@app.post("/api/notify")
+async def api_notify(body: dict):
+    """Show a native desktop notification. Called from the Overview/HUD's
+    own celebration logic (new personal best, score milestone) for the
+    case neither window is actually on screen — see notifyOS() in
+    overview.js. title/message are short, plugin-generated strings (a
+    milestone number, a rate) — never raw log/network-derived free text,
+    so there's no injection surface here to worry about."""
+    title = str(body.get("title") or "VK Contest Analyzer")[:200]
+    message = str(body.get("message") or "")[:400]
+    if not message:
+        return {"ok": False}
+    _show_toast_notification(title, message)
+    return {"ok": True}
+
+
 _SINGLE_INSTANCE_MUTEX_NAME = r"Global\VKContestAnalyzer_SingleInstance_Mutex"
 _single_instance_mutex_handle = None   # keeps the mutex alive for the process lifetime
 
@@ -3467,6 +3578,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 webbrowser.open(url)
 
         _window_api = _WindowApi()
+
         _create_kwargs = dict(
             title="VK Contest Analyzer",
             url=url,

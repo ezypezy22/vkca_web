@@ -1694,6 +1694,29 @@
     setTimeout(()=>burst.remove(),2300);
   }
 
+  // ── Desktop notifications ─────────────────────────────────────────────
+  // Complements the in-app celebration effects above for when neither the
+  // Overview tab nor the HUD is actually on screen — minimized, or another
+  // window has focus (the whole reason the Mini HUD exists in the first
+  // place; this closes the one remaining gap where even that isn't open).
+  // Scoped to the two "worth interrupting for" moments — a broken best-rate
+  // record and a score milestone — not every new QSO, which fires far too
+  // often to surface as a system toast. Uses fixed strings/numbers only
+  // (title, a plain "N Q/hr" or "N points" body) — no log-derived free text
+  // (callsigns, comments) ever reaches this, so there's no injection
+  // surface here the way there was with unescaped innerHTML elsewhere.
+  //
+  // Posts to /api/notify (a native Win32 balloon, see server.py) rather
+  // than calling the browser's own Notification API directly — confirmed
+  // via direct testing that WebView2 auto-denies Notification.
+  // requestPermission() in this frameless embedded window with no prompt
+  // ever shown, since there's no browser chrome to render one against.
+  function notifyOS(title,body){
+    if (!document.hidden) return;   // this window is on screen — the in-app effect already covers it
+    fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({title,message:body})}).catch(()=>{});
+  }
+
   function checkCelebrations(snap){
     if (!snap) return;
     const total=snap.valid??snap.total??0;
@@ -1723,11 +1746,13 @@
     // isn't a broken record, just the first data point.
     if (bestRate>_celebPrevBestRate && _celebPrevBestRate>0){
       flashEl(bestTarget,'flash-best',1400);
+      notifyOS('🔥 New best rate', `${bestRate} Q/hr`);
     }
     for (const m of SCORE_MILESTONES){
       if (score>=m && !_celebMilestones.has(m)){
         _celebMilestones.add(m);
         showMilestoneBurst(m,burstHost);
+        notifyOS('🎉 Milestone reached', `${m.toLocaleString()} points`);
       }
     }
     _celebPrevTotal=total; _celebPrevBestRate=bestRate;
