@@ -120,18 +120,31 @@
       const scorePct = totalScore > 0 ? (pts / totalScore * 100).toFixed(1) + '%' : '—';
       const bestRate = r.best_hour_rate ? r.best_hour_rate + '/hr' : '—';
 
-      // Band temperature — time since last QSO on this band
+      // Band temperature — time since last QSO on this band. Previously
+      // only the "Last QSO" cell text was colour-coded; extending the same
+      // signal to a subtle full-row tint + left border makes "which bands
+      // are hot right now" readable at a glance across the whole table,
+      // not just from one column.
       let lastStr = '—';
       let tempCol = C.muted;
+      let rowBg = '', rowBorder = 'transparent';
       if (r.last_qso_utc) {
         const last = new Date(r.last_qso_utc + 'Z');   // force UTC interpretation
         const minAgo = Math.floor((now - last) / 60000);
-        if (minAgo < 60)        { lastStr = minAgo + 'm ago'; tempCol = C.green; }
-        else if (minAgo < 180)  { lastStr = Math.floor(minAgo/60) + 'h ago'; tempCol = '#f0c040'; }
-        else                    { lastStr = Math.floor(minAgo/60) + 'h ago'; tempCol = C.muted; }
+        if (minAgo < 60) {
+          lastStr = minAgo + 'm ago'; tempCol = C.green;
+          rowBg = 'rgba(46,213,115,.08)'; rowBorder = C.green;
+        } else if (minAgo < 180) {
+          lastStr = Math.floor(minAgo/60) + 'h ago'; tempCol = '#f0c040';
+          rowBg = 'rgba(240,192,64,.06)'; rowBorder = '#f0c040';
+        } else {
+          lastStr = Math.floor(minAgo/60) + 'h ago'; tempCol = C.muted;
+        }
       }
 
       const tr = document.createElement('tr');
+      tr.style.background = rowBg;
+      tr.style.borderLeft = `2px solid ${rowBorder}`;
       tr.innerHTML = `
         <td style="color:${col};font-weight:bold">${r.band.toLowerCase()}</td>
         <td>${r.qsos || 0}</td>

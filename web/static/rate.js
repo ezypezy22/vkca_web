@@ -44,19 +44,37 @@
     }
   }
 
+  // r.hour is a naive-UTC full datetime ("2025-07-19T08:00:00", not just an
+  // hour-of-day — see /api/rate in server.py), so comparing it against the
+  // real current UTC time correctly identifies "this bucket is still
+  // accumulating live" across multi-day contests, and naturally comes back
+  // false for every bucket once the contest (and page) is viewed after the
+  // fact — no separate "is this replay/historical" check needed.
+  function isCurrentHourBucket(d) {
+    const now = new Date();
+    return d.getUTCFullYear() === now.getUTCFullYear()
+        && d.getUTCMonth()    === now.getUTCMonth()
+        && d.getUTCDate()     === now.getUTCDate()
+        && d.getUTCHours()    === now.getUTCHours();
+  }
+
   function renderRateChart(data) {
     if (!data.length) return;
-    const labels = data.map(r => {
-      const d = new Date(r.hour+'Z');   // server times are naive UTC
-      return `${String(d.getUTCHours()).padStart(2,'0')}:00`;
-    });
+    const dates = data.map(r => new Date(r.hour+'Z'));   // server times are naive UTC
+    const labels = dates.map(d => `${String(d.getUTCHours()).padStart(2,'0')}:00`);
     const values = data.map(r => r.qsos);
     const maxVal = Math.max(...values, 1);
+    const isCurrent = dates.map(isCurrentHourBucket);
     // Colour bars by intensity: low=muted, high=accent
     const colours = values.map(v => {
       const t = v / maxVal;
       return t > 0.7 ? C.accent : t > 0.4 ? C.accent3 : C.muted + '88';
     });
+    // The in-progress hour gets a bright green outline instead of relying
+    // on fill intensity alone — otherwise a still-accumulating hour that
+    // just started looks identical to a genuinely quiet finished one.
+    const borderColours = isCurrent.map(c => c ? C.green : 'transparent');
+    const borderWidths   = isCurrent.map(c => c ? 3 : 0);
 
     const canvas = document.getElementById('chart-rate');
     if (!canvas) return;
@@ -70,6 +88,8 @@
           label: 'QSOs',
           data: values,
           backgroundColor: colours,
+          borderColor: borderColours,
+          borderWidth: borderWidths,
           borderRadius: 3,
         }],
       },
@@ -81,7 +101,10 @@
           tooltip: {
             backgroundColor: C.bg3, bodyColor: C.fg,
             titleColor: C.accent, borderColor: C.bg3, borderWidth: 1,
-            callbacks: { title: i => `Hour ${i[0].label}`, label: i => ` ${i.raw} QSOs` }
+            callbacks: {
+              title: i => `Hour ${i[0].label}` + (isCurrent[i[0].dataIndex] ? ' (in progress)' : ''),
+              label: i => ` ${i.raw} QSOs`,
+            },
           },
         },
         scales: {
