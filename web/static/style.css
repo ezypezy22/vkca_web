@@ -640,6 +640,7 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .btn--green:hover{background:#3ee585;}
 .btn--icon{padding:6px 9px;font-size:1em;}
 .btn--sm{padding:4px 12px;font-size:0.92em;}
+.btn--muted-off{opacity:.55;}
 
 /* ── Specific tab layouts ─────────────────────────────────────────────────── */
 .bands-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--gap);align-items:start;}

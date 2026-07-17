@@ -1717,6 +1717,57 @@
       body:JSON.stringify({title,message:body})}).catch(()=>{});
   }
 
+  // ── Sound alerts ─────────────────────────────────────────────────────────
+  // Same Web Audio oscillator-beep technique as cluster.js's alertOnSpot() —
+  // unlike notifyOS() above, sound isn't gated on document.hidden: it's
+  // audible without looking either way, and doubles as a game-achievement-
+  // style flourish on top of the in-app burst when the tab IS visible.
+  const SOUND_KEY = 'vka_overview_sound';
+  const soundToggleBtn = document.getElementById('btn-sound-toggle');
+  let _soundEnabled = true;
+  {
+    const stored = localStorage.getItem(SOUND_KEY);
+    _soundEnabled = stored === null ? true : stored === '1';
+  }
+  function updateSoundToggleBtn(){
+    if (!soundToggleBtn) return;
+    soundToggleBtn.textContent = _soundEnabled ? '🔊 Sound Alerts' : '🔇 Sound Alerts';
+    soundToggleBtn.classList.toggle('btn--muted-off', !_soundEnabled);
+  }
+  updateSoundToggleBtn();
+  soundToggleBtn?.addEventListener('click', () => {
+    _soundEnabled = !_soundEnabled;
+    localStorage.setItem(SOUND_KEY, _soundEnabled ? '1' : '0');
+    updateSoundToggleBtn();
+  });
+
+  let _audioCtx = null;
+  function beep(freq,startAt,durSec,gain){
+    try {
+      _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0   = _audioCtx.currentTime + startAt;
+      const osc  = _audioCtx.createOscillator();
+      const g    = _audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(gain, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + durSec);
+      osc.connect(g).connect(_audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + durSec);
+    } catch (e) { /* Web Audio unavailable — ignore */ }
+  }
+  function playBestRateSound(){
+    if (!_soundEnabled) return;
+    beep(880, 0, 0.22, 0.15);
+  }
+  function playMilestoneSound(){
+    if (!_soundEnabled) return;
+    // Short ascending two-note "ta-da" — C6 then E6.
+    beep(1047, 0,    0.15, 0.16);
+    beep(1319, 0.12, 0.28, 0.16);
+  }
+
   function checkCelebrations(snap){
     if (!snap) return;
     const total=snap.valid??snap.total??0;
@@ -1747,12 +1798,14 @@
     if (bestRate>_celebPrevBestRate && _celebPrevBestRate>0){
       flashEl(bestTarget,'flash-best',1400);
       notifyOS('🔥 New best rate', `${bestRate} Q/hr`);
+      playBestRateSound();
     }
     for (const m of SCORE_MILESTONES){
       if (score>=m && !_celebMilestones.has(m)){
         _celebMilestones.add(m);
         showMilestoneBurst(m,burstHost);
         notifyOS('🎉 Milestone reached', `${m.toLocaleString()} points`);
+        playMilestoneSound();
       }
     }
     _celebPrevTotal=total; _celebPrevBestRate=bestRate;
