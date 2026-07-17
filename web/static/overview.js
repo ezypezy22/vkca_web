@@ -1761,11 +1761,48 @@
     if (!_soundEnabled) return;
     beep(880, 0, 0.22, 0.15);
   }
+
+  // A single "clap": a short burst of noise through a bandpass filter,
+  // rather than a tone — filtered noise is what reads as percussive/
+  // applause-like, where an oscillator only ever reads as a musical beep.
+  function clap(startAt,peakGain){
+    try {
+      _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = _audioCtx;
+      const t0  = ctx.currentTime + startAt;
+      const dur = 0.12;
+
+      const bufSize = Math.floor(ctx.sampleRate * dur);
+      const buf  = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+
+      const noise = ctx.createBufferSource();
+      noise.buffer = buf;
+
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 1600 + Math.random() * 900;   // slight pitch jitter per clap
+      bp.Q.value = 1.1;
+
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(peakGain, t0 + 0.006);   // fast attack — a hit, not a swell
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+      noise.connect(bp).connect(g).connect(ctx.destination);
+      noise.start(t0);
+      noise.stop(t0 + dur);
+    } catch (e) { /* Web Audio unavailable — ignore */ }
+  }
+
   function playMilestoneSound(){
     if (!_soundEnabled) return;
-    // Short ascending two-note "ta-da" — C6 then E6.
-    beep(1047, 0,    0.15, 0.16);
-    beep(1319, 0.12, 0.28, 0.16);
+    // A quick round of applause — five claps at an irregular (more
+    // human-sounding) cadence — capped with a short bright chime for a bit
+    // of "cheer" sparkle on top of the clap texture.
+    [0, 0.07, 0.145, 0.2, 0.29].forEach(t => clap(t, 0.3));
+    beep(1319, 0.32, 0.22, 0.14);
   }
 
   function checkCelebrations(snap){
