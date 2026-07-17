@@ -1382,6 +1382,15 @@
     const HUD_FIELDS_KEY='vkca_hud_fields';
     const HUD_FIELD_LABELS={score:'Score',mults:'Mults',rate:'Rate',eff:'On-air %',
                              remain:'Remaining',session:'Session',since:'Last QSO'};
+    const HUD_FIELD_DESC={
+      score:  'Total contest score',
+      mults:  'Multiplier count driving your score',
+      rate:   'QSOs worked in the current hour',
+      eff:    "Top operator's on-air time as % of their session span",
+      remain: 'Time left in the current session',
+      session:'Current session or block label',
+      since:  'Time since your last logged QSO',
+    };
     let _hudHidden;
     try{ _hudHidden=new Set(JSON.parse(localStorage.getItem(HUD_FIELDS_KEY)||'[]')); }
     catch{ _hudHidden=new Set(); }
@@ -1402,15 +1411,27 @@
       document.querySelectorAll('#hud-bar .hud-item[data-hud-key]').forEach(el=>{
         const key=el.dataset.hudKey;
         const row=document.createElement('label');
-        row.className='panels-menu-row';
+        row.className='panels-menu-row panels-menu-row--desc';
         const cb=document.createElement('input');
         cb.type='checkbox'; cb.checked=!_hudHidden.has(key);
         cb.addEventListener('change',()=>{
           if (cb.checked) _hudHidden.delete(key); else _hudHidden.add(key);
           saveHudHidden(); applyHudFieldVisibility();
         });
+        const text=document.createElement('div');
+        text.className='pmr-text';
+        const title=document.createElement('div');
+        title.className='pmr-title';
+        title.textContent=HUD_FIELD_LABELS[key]||key;
+        text.appendChild(title);
+        if (HUD_FIELD_DESC[key]){
+          const desc=document.createElement('div');
+          desc.className='pmr-desc';
+          desc.textContent=HUD_FIELD_DESC[key];
+          text.appendChild(desc);
+        }
         row.appendChild(cb);
-        row.appendChild(document.createTextNode(HUD_FIELD_LABELS[key]||key));
+        row.appendChild(text);
         hudMenu.appendChild(row);
       });
       // The CSS max-height/min-width are generous static values for the

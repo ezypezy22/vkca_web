@@ -344,6 +344,17 @@ html.popout-mode .hide-btn{display:none;}
   color:var(--fg);}
 .panels-menu-row:hover{background:var(--bg3);}
 .panels-menu-row input{cursor:pointer;}
+/* Two-line variant — a title plus a short explanation of what the stat
+   actually shows, used by the HUD's field picker (a bare "Eff" or
+   "Remaining" checkbox doesn't say enough on its own to decide whether
+   to turn it on). align-items:flex-start since the checkbox should sit
+   at the title's baseline, not centred against the taller two-line block. */
+.panels-menu-row--desc{align-items:flex-start;padding:6px 4px;gap:8px;}
+.panels-menu-row--desc input{margin-top:3px;flex-shrink:0;}
+.pmr-text{min-width:0;}
+.pmr-title{color:var(--fg);}
+.pmr-desc{font-size:0.85em;color:var(--muted);line-height:1.35;margin-top:2px;
+  white-space:normal;}
 
 /* ── Pop-out mode: isolate one tile, fill the window with it ───────────────── */
 html.popout-mode #titlebar,html.popout-mode #session-bar,
