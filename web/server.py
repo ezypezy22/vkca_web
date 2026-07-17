@@ -3069,8 +3069,11 @@ async def api_notify(body: dict):
     overview.js. title/message are short, plugin-generated strings (a
     milestone number, a rate) — never raw log/network-derived free text,
     so there's no injection surface here to worry about."""
-    title = str(body.get("title") or "VK Contest Analyzer")[:200]
-    message = str(body.get("message") or "")[:400]
+    # NOTIFYICONDATA caps szInfoTitle at 63 chars and szInfo at 255 (both
+    # WCHAR[N] with a null terminator) — truncate to those limits ourselves
+    # rather than let the OS reject or mangle an oversized string.
+    title = str(body.get("title") or "VK Contest Analyzer")[:63]
+    message = str(body.get("message") or "")[:255]
     if not message:
         return {"ok": False}
     _show_toast_notification(title, message)
