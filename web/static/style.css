@@ -412,6 +412,12 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
   20%{box-shadow:0 0 30px 5px rgba(240,192,64,.5);border-top-color:var(--accent3);}
   100%{box-shadow:0 0 0 0 rgba(240,192,64,0);border-top-color:var(--bg3);}
 }
+.flash-endtime{animation:flash-endtime-kf 1.4s ease-out;}
+@keyframes flash-endtime-kf{
+  0%{box-shadow:0 0 0 0 rgba(255,71,87,0);border-top-color:var(--bg3);}
+  20%{box-shadow:0 0 30px 5px rgba(255,71,87,.5);border-top-color:var(--red);}
+  100%{box-shadow:0 0 0 0 rgba(255,71,87,0);border-top-color:var(--bg3);}
+}
 .milestone-burst{position:absolute;top:-16px;left:50%;z-index:20;
   background:var(--accent3);color:var(--bg);font-family:var(--font-mono);
   font-weight:bold;font-size:0.85em;padding:6px 16px;border-radius:20px;

@@ -1759,50 +1759,44 @@
   }
   function playBestRateSound(){
     if (!_soundEnabled) return;
-    beep(880, 0, 0.22, 0.15);
+    beep(880, 0, 1.5, 0.15);
   }
 
-  // A single "clap": a short burst of noise through a bandpass filter,
-  // rather than a tone — filtered noise is what reads as percussive/
-  // applause-like, where an oscillator only ever reads as a musical beep.
-  function clap(startAt,peakGain){
+  // One chime note: a fundamental plus a quiet octave-up partial (a cheap
+  // approximation of a bell's overtone) — two stacked sines read as a
+  // "ding" rather than a flat oscillator beep.
+  function chimeNote(freq,startAt,durSec,gain){
     try {
       _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
       const ctx = _audioCtx;
       const t0  = ctx.currentTime + startAt;
-      const dur = 0.12;
-
-      const bufSize = Math.floor(ctx.sampleRate * dur);
-      const buf  = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
-
-      const noise = ctx.createBufferSource();
-      noise.buffer = buf;
-
-      const bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = 1600 + Math.random() * 900;   // slight pitch jitter per clap
-      bp.Q.value = 1.1;
-
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(peakGain, t0 + 0.006);   // fast attack — a hit, not a swell
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-
-      noise.connect(bp).connect(g).connect(ctx.destination);
-      noise.start(t0);
-      noise.stop(t0 + dur);
+      [[1,1],[2,0.25]].forEach(([mult,partialGain])=>{
+        const osc = ctx.createOscillator();
+        const g   = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq * mult;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(gain * partialGain, t0 + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + durSec);
+        osc.connect(g).connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + durSec);
+      });
     } catch (e) { /* Web Audio unavailable — ignore */ }
   }
 
   function playMilestoneSound(){
     if (!_soundEnabled) return;
-    // A quick round of applause — five claps at an irregular (more
-    // human-sounding) cadence — capped with a short bright chime for a bit
-    // of "cheer" sparkle on top of the clap texture.
-    [0, 0.07, 0.145, 0.2, 0.29].forEach(t => clap(t, 0.3));
-    beep(1319, 0.32, 0.22, 0.14);
+    // Bright ascending major arpeggio — C6, E6, G6, C7, E7, G7 — the classic
+    // "achievement unlocked" cascade, extended into a second lap up the
+    // chord an octave higher. Notes overlap into each other (staggered
+    // starts, long decay) for a sustained sparkling ring-out rather than a
+    // quick handful of beeps — the last note is held longest.
+    const notes = [1047, 1319, 1568, 2093, 2637, 3136];
+    notes.forEach((freq,i)=>{
+      const isLast = i === notes.length - 1;
+      chimeNote(freq, i*0.12, isLast ? 1.6 : 0.9, 0.13);
+    });
   }
 
   function checkCelebrations(snap){
@@ -1848,6 +1842,48 @@
     _celebPrevTotal=total; _celebPrevBestRate=bestRate;
   }
 
+  // ── Contest end-time alerts ─────────────────────────────────────────────
+  // Nothing else proactively tells the operator time's running out — the
+  // countdown on the Contest Time panel is passive, easy to miss heads-down
+  // mid-run. Unlike the milestone/best-rate celebrations above, these fire
+  // even on the very first snapshot after load: opening the app with 8
+  // minutes left, "10 minutes remaining" is useful information, not a false
+  // celebration of progress that didn't just happen — so this is a
+  // separate function, not folded into checkCelebrations()'s baseline-seed
+  // branch (which explicitly suppresses first-snapshot effects).
+  const END_TIME_THRESHOLDS = [10, 5, 1];   // minutes remaining
+  const _endTimeAlertsFired = new Set();
+
+  function resetEndTimeAlerts(){
+    _endTimeAlertsFired.clear();
+  }
+
+  function playEndTimeAlertSound(){
+    if (!_soundEnabled) return;
+    // Two short neutral pings — deliberately not the celebratory chime;
+    // this is a warning, not a reward.
+    beep(660, 0,    0.18, 0.14);
+    beep(660, 0.22, 0.18, 0.14);
+  }
+
+  function checkEndTimeAlert(snap){
+    const ss = snap?.session_status;
+    if (!ss || ss.state !== 'live') return;
+    const remMins = ss.total_remaining_mins ?? ss.remaining_mins;
+    if (remMins == null || remMins <= 0) return;
+
+    for (const t of END_TIME_THRESHOLDS){
+      if (remMins<=t && !_endTimeAlertsFired.has(t)){
+        _endTimeAlertsFired.add(t);
+        const target = HUD_MODE ? document.getElementById('hud-bar')
+                                 : document.getElementById('panel-contest-time');
+        flashEl(target,'flash-endtime',1400);
+        notifyOS('⏰ Contest ending soon', `${t} minute${t===1?'':'s'} remaining`);
+        playEndTimeAlertSound();
+      }
+    }
+  }
+
   // ══ MAIN ═══════════════════════════════════════════════════════════════════
   function render(snap){
     updateGauges(snap); updateSparklines(snap); updateRegionBars(snap);
@@ -1867,18 +1903,19 @@
   let _firstSnap=true;
   window.addEventListener('vka:snapshot',e=>{
     trackLastQso(e.detail);
-    if (HUD_MODE) { updateHud(e.detail); trackHudSparklines(e.detail); checkCelebrations(e.detail); return; }
+    if (HUD_MODE) { updateHud(e.detail); trackHudSparklines(e.detail); checkCelebrations(e.detail); checkEndTimeAlert(e.detail); return; }
     if (_replaying) return;
     if(_firstSnap){_firstSnap=false;loadPluginMeta().then(()=>render(e.detail));}
     else render(e.detail);
     checkCelebrations(e.detail);
+    checkEndTimeAlert(e.detail);
   });
   window.addEventListener('vka:tabchange',e=>{
     if(e.detail.tab!=='overview') return;
     if (_replaying && _lastReplaySnap) { render(_lastReplaySnap); return; }
     const snap=window.VKA.lastSnap(); if(snap) render(snap);
   });
-  window.addEventListener('vka:loaded',()=>{_metaLoaded=false;_firstSnap=true;resetCelebrations();resetHudSparklines();startLiveRankPolling();});
+  window.addEventListener('vka:loaded',()=>{_metaLoaded=false;_firstSnap=true;resetCelebrations();resetEndTimeAlerts();resetHudSparklines();startLiveRankPolling();});
 
   if (!HUD_MODE) startLiveRankPolling();
 
