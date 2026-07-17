@@ -12,6 +12,14 @@
     bg3: '#21262d', muted: '#8b949e', fg: '#e6edf3', green: '#2ed573',
   };
 
+  // Below this many QSOs, a band's efficiency ratio is too small a sample
+  // to trust at face value — e.g. 1.000 from 2/2 QSOs reads as "perfect"
+  // but is really just "no data yet", and would otherwise visually outrank
+  // a genuinely proven 0.742 built on 30 QSOs. Bands under this threshold
+  // get dimmed instead of full-strength colour, both in the table and the
+  // chart, so the eye isn't drawn to a number the sample size can't back up.
+  const LOW_SAMPLE_QSOS = 5;
+
   let bandChart = null;
   let _be = [];   // current band_efficiency rows — kept in sync for tooltip callbacks
 
@@ -38,10 +46,14 @@
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
+    // Low-sample bands get a faint fill (still visible, but clearly
+    // receding) instead of the normal ~80% opacity — see LOW_SAMPLE_QSOS.
+    const fillColours = colours.map((c, i) => c + (qsos[i] < LOW_SAMPLE_QSOS ? '40' : 'cc'));
+
     if (bandChart) {
       bandChart.data.labels = labels;
       bandChart.data.datasets[0].data = effic;
-      bandChart.data.datasets[0].backgroundColor = colours.map(c => c + 'cc');
+      bandChart.data.datasets[0].backgroundColor = fillColours;
       bandChart.data.datasets[0].borderColor = colours;
       bandChart.update();
       return;
@@ -54,7 +66,7 @@
         datasets: [{
           label: 'Mult efficiency (new mults / QSO)',
           data: effic,
-          backgroundColor: colours.map(c => c + 'cc'),
+          backgroundColor: fillColours,
           borderColor: colours,
           borderWidth: 1,
           borderRadius: 4,
@@ -73,14 +85,24 @@
             borderWidth: 1,
             callbacks: {
               title: items => items[0].label.toUpperCase(),
+              // Reads from _be (module-level, re-synced at the top of every
+              // updateChart() call) rather than this closure's own effic/
+              // qsos/mults parameters — those are captured once when the
+              // Chart instance is first constructed and never refreshed on
+              // the update-in-place path below, so tooltips on an
+              // already-existing chart were silently showing whatever the
+              // very first render's numbers were, no matter how stale.
               label: item => {
-                const i = item.dataIndex;
-                return [
-                  ` Efficiency: ${effic[i].toFixed(3)}`,
-                  ` QSOs: ${qsos[i]}`,
-                  ` New mults: ${mults[i]}`,
-                  ` Best hr rate: ${_be[i]?.best_hour_rate ?? '—'} Q/hr`,
+                const r = _be[item.dataIndex]; if (!r) return '';
+                const rowQsos = r.qsos || 0;
+                const lines = [
+                  ` Efficiency: ${(r.efficiency || 0).toFixed(3)}`,
+                  ` QSOs: ${rowQsos}`,
+                  ` New mults: ${r.new_shires || 0}`,
+                  ` Best hr rate: ${r.best_hour_rate ?? '—'} Q/hr`,
                 ];
+                if (rowQsos < LOW_SAMPLE_QSOS) lines.push(' ⚠ Low sample — too few QSOs to trust yet');
+                return lines;
               },
             },
           },
@@ -142,6 +164,14 @@
         }
       }
 
+      // A ratio built on very few QSOs (e.g. 1.000 from 2/2) isn't wrong,
+      // just not yet trustworthy — dim it and explain why on hover instead
+      // of letting it visually outrank a proven efficiency from a much
+      // larger sample. See LOW_SAMPLE_QSOS above.
+      const lowSample  = (r.qsos || 0) < LOW_SAMPLE_QSOS;
+      const effStyle   = lowSample ? `color:${C.muted};font-style:italic` : '';
+      const effTitle   = lowSample ? ` title="Only ${r.qsos || 0} QSO${r.qsos===1?'':'s'} so far — too few to trust this ratio yet"` : '';
+
       const tr = document.createElement('tr');
       tr.style.background = rowBg;
       tr.style.borderLeft = `2px solid ${rowBorder}`;
@@ -151,7 +181,7 @@
         <td style="color:${col}">${pts.toLocaleString()}</td>
         <td style="color:${C.muted}">${scorePct}</td>
         <td>${r.new_shires || 0}</td>
-        <td>${(r.efficiency || 0).toFixed(3)}</td>
+        <td style="${effStyle}"${effTitle}>${(r.efficiency || 0).toFixed(3)}${lowSample ? ' ⚠' : ''}</td>
         <td style="color:${C.muted}">${bestRate}</td>
         <td style="color:${tempCol}">${lastStr}</td>`;
       frag.appendChild(tr);
