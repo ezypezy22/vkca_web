@@ -394,6 +394,20 @@ Users are responsible for verifying all information against N1MM before making d
     }
     if (window.pywebview) wireHudDrag(window.pywebview.api);
     else window.addEventListener('pywebviewready', () => wireHudDrag(window.pywebview.api));
+
+    // Double-click brings the main window to the front — useful since the
+    // whole point of this HUD is staying visible while some other window
+    // (the radio's logging software, etc.) has focus.
+    function wireHudFocusMain(api) {
+      if (!api || !api.focus_main) return;   // browser-tab fallback — no such concept
+      const bar = document.getElementById('hud-bar'); if (!bar) return;
+      bar.addEventListener('dblclick', (e) => {
+        if (e.target.closest('#hud-close')) return;
+        api.focus_main();
+      });
+    }
+    if (window.pywebview) wireHudFocusMain(window.pywebview.api);
+    else window.addEventListener('pywebviewready', () => wireHudFocusMain(window.pywebview.api));
   })();
 
   // ── Tab routing ───────────────────────────────────────────────────────────

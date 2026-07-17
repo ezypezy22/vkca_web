@@ -203,10 +203,11 @@ body.has-session-bar #content{top:calc(var(--titlebar-h) + var(--sessbar-h) + va
 
 /* ── Mini HUD (rendered only in its own popped-out window, /hud) ────────── */
 #hud-bar{display:none;align-items:center;justify-content:space-around;
-  position:fixed;inset:0;background:var(--bg);cursor:grab;
-  font-family:var(--font-mono);padding:0 14px;}
+  flex-wrap:wrap;position:fixed;inset:0;background:var(--bg);cursor:grab;
+  font-family:var(--font-mono);padding:6px 14px;}
 #hud-bar:active{cursor:grabbing;}
 .hud-item{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.hud-item.tile-hidden{display:none;}
 .hud-label{font-size:0.8em;color:var(--muted);letter-spacing:.08em;}
 .hud-val{font-size:2.3em;font-weight:bold;color:var(--accent);}
 #hud-close{display:none;position:absolute;top:4px;right:6px;z-index:1;
@@ -214,6 +215,16 @@ body.has-session-bar #content{top:calc(var(--titlebar-h) + var(--sessbar-h) + va
   background:transparent;border:1px solid var(--bg3);border-radius:4px;
   color:var(--muted);font-size:0.8em;cursor:pointer;}
 #hud-close:hover{background:var(--red);border-color:var(--red);color:#fff;}
+/* Field-picker menu: reuses .panels-menu's look, but positioned fixed +
+   JS-placed at the right-click point, since #hud-bar has no position:relative
+   ancestor of its own within the tiny, full-bleed HUD window — anchoring it
+   to "just below the button" like the main window's Panels menu would push
+   it outside the window's own small bounds entirely. */
+#hud-menu{position:fixed;top:auto;right:auto;}
+/* Overrides the Overview gauge-row's milestone-burst placement (top:-16px,
+   meant to hang just above a tile) for the HUD's own tiny full-bleed
+   window, where that would land outside the window bounds entirely. */
+html.hud-mode .milestone-burst{position:fixed;top:auto;bottom:6px;left:50%;}
 html.hud-mode body{padding:0;overflow:hidden;}
 html.hud-mode #titlebar,html.hud-mode #session-bar,html.hud-mode #tabbar,
 html.hud-mode #content{display:none!important;}

@@ -1164,11 +1164,15 @@
   function updateHud(snap){
     const pb=snap?.personal_bests||{};
     const ss=snap?.session_status||{};
-    const scoreEl=document.getElementById('hud-score');
-    const rateEl =document.getElementById('hud-rate');
-    const effEl  =document.getElementById('hud-eff');
+    const scoreEl  =document.getElementById('hud-score');
+    const multsEl  =document.getElementById('hud-mults');
+    const rateEl   =document.getElementById('hud-rate');
+    const effEl    =document.getElementById('hud-eff');
+    const sessionEl=document.getElementById('hud-session');
     if (scoreEl) scoreEl.textContent=(snap?.score||0).toLocaleString('en-AU');
+    if (multsEl) multsEl.textContent=(snap?.band_mults||snap?.worked||0).toLocaleString('en-AU');
     if (rateEl)  rateEl.textContent=(pb.current_hour_rate||0)+'/hr';
+    if (sessionEl) sessionEl.textContent=ss.session_label||'—';
     if (effEl){
       // Same on-air efficiency formula as the Fatigue tile/tab: most-active
       // operator's on-air minutes as a % of their first-to-last-QSO span.
@@ -1192,6 +1196,59 @@
     remEl.style.color = secs<600?T.red:secs<1800?T.accent3:T.accent;
   }
   setInterval(tickHudRemain,1000);
+
+  // ── HUD field picker (right-click to show/hide individual stats) ─────────
+  // Same localStorage-backed show/hide pattern as the Overview "☰ Panels"
+  // menu (see .tile-hidden), scoped to this tiny window's own field set
+  // rather than shared with the main window's tile visibility.
+  if (HUD_MODE) {
+    const HUD_FIELDS_KEY='vkca_hud_fields';
+    const HUD_FIELD_LABELS={score:'Score',mults:'Mults',rate:'Rate',eff:'On-air %',
+                             remain:'Remaining',session:'Session',since:'Last QSO'};
+    let _hudHidden;
+    try{ _hudHidden=new Set(JSON.parse(localStorage.getItem(HUD_FIELDS_KEY)||'[]')); }
+    catch{ _hudHidden=new Set(); }
+    const saveHudHidden=()=>{ try{ localStorage.setItem(HUD_FIELDS_KEY,JSON.stringify(Array.from(_hudHidden))); }catch{} };
+
+    function applyHudFieldVisibility(){
+      document.querySelectorAll('#hud-bar .hud-item[data-hud-key]').forEach(el=>{
+        el.classList.toggle('tile-hidden',_hudHidden.has(el.dataset.hudKey));
+      });
+    }
+    applyHudFieldVisibility();
+
+    const hudBar  = document.getElementById('hud-bar');
+    const hudMenu = document.getElementById('hud-menu');
+    hudBar?.addEventListener('contextmenu', e=>{
+      e.preventDefault();
+      if (!hudMenu) return;
+      hudMenu.innerHTML='';
+      document.querySelectorAll('#hud-bar .hud-item[data-hud-key]').forEach(el=>{
+        const key=el.dataset.hudKey;
+        const row=document.createElement('label');
+        row.className='panels-menu-row';
+        const cb=document.createElement('input');
+        cb.type='checkbox'; cb.checked=!_hudHidden.has(key);
+        cb.addEventListener('change',()=>{
+          if (cb.checked) _hudHidden.delete(key); else _hudHidden.add(key);
+          saveHudHidden(); applyHudFieldVisibility();
+        });
+        row.appendChild(cb);
+        row.appendChild(document.createTextNode(HUD_FIELD_LABELS[key]||key));
+        hudMenu.appendChild(row);
+      });
+      // Clamp so the menu can't render partly outside this tiny window.
+      const left=Math.max(4,Math.min(e.clientX,window.innerWidth-190));
+      const top =Math.max(4,Math.min(e.clientY,window.innerHeight-100));
+      hudMenu.style.left=left+'px';
+      hudMenu.style.top =top+'px';
+      hudMenu.classList.add('open');
+    });
+    document.addEventListener('click', e=>{
+      if (!hudMenu||!hudMenu.classList.contains('open')) return;
+      if (!hudMenu.contains(e.target)) hudMenu.classList.remove('open');
+    });
+  }
 
   document.getElementById('btn-hud')?.addEventListener('click', async ()=>{
     try {
@@ -1389,8 +1446,8 @@
     setTimeout(()=>el.classList.remove(cls),ms);
   }
 
-  function showMilestoneBurst(milestone){
-    const host=document.getElementById('gauge-row'); if (!host) return;
+  function showMilestoneBurst(milestone,host){
+    if (!host) return;
     host.querySelectorAll('.milestone-burst').forEach(b=>b.remove());
     const burst=document.createElement('div');
     burst.className='milestone-burst';
@@ -1414,16 +1471,25 @@
       return;
     }
 
-    if (total>_celebPrevTotal) flashEl(document.getElementById('gauge-row'),'flash-new-qso',900);
+    // The HUD has no "gauges"/"personal bests panel" of its own — the whole
+    // bar stands in for the pulse, and the Rate item (the closest analogue
+    // to a rate record) stands in for the flash.
+    const pulseTarget = HUD_MODE ? document.getElementById('hud-bar')
+                                  : document.getElementById('gauge-row');
+    const bestTarget   = HUD_MODE ? document.getElementById('hud-rate')?.closest('.hud-item')
+                                  : document.getElementById('panel-personal-bests');
+    const burstHost    = pulseTarget;
+
+    if (total>_celebPrevTotal) flashEl(pulseTarget,'flash-new-qso',900);
     // >0 guard: going from "no rate recorded yet" (0) to a first real rate
     // isn't a broken record, just the first data point.
     if (bestRate>_celebPrevBestRate && _celebPrevBestRate>0){
-      flashEl(document.getElementById('panel-personal-bests'),'flash-best',1400);
+      flashEl(bestTarget,'flash-best',1400);
     }
     for (const m of SCORE_MILESTONES){
       if (score>=m && !_celebMilestones.has(m)){
         _celebMilestones.add(m);
-        showMilestoneBurst(m);
+        showMilestoneBurst(m,burstHost);
       }
     }
     _celebPrevTotal=total; _celebPrevBestRate=bestRate;
@@ -1448,7 +1514,7 @@
   let _firstSnap=true;
   window.addEventListener('vka:snapshot',e=>{
     trackLastQso(e.detail);
-    if (HUD_MODE) { updateHud(e.detail); return; }
+    if (HUD_MODE) { updateHud(e.detail); checkCelebrations(e.detail); return; }
     if (_replaying) return;
     if(_firstSnap){_firstSnap=false;loadPluginMeta().then(()=>render(e.detail));}
     else render(e.detail);

@@ -906,6 +906,19 @@ async def api_hud():
                 # restoring one that may never have finished closing.
                 win.hide()
 
+            def focus_main(self):
+                # Double-click brings the main window back to the front —
+                # .show() on an already-visible window still calls the
+                # underlying WinForms .Activate() (see winforms.py's own
+                # show()), so this works whether the main window is merely
+                # behind other apps or was minimized.
+                main_win = STATE._webview_window
+                if main_win is not None:
+                    try:
+                        main_win.show()
+                    except Exception:
+                        pass
+
         win = _wv.create_window(
             title="VK Contest Analyzer — HUD",
             url=f"{STATE._base_url}/hud",
