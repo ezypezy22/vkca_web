@@ -919,6 +919,19 @@ async def api_hud():
                     except Exception:
                         pass
 
+            def resize(self, width, height):
+                # Backs the horizontal/vertical orientation toggle — snaps
+                # the window to a shape that actually suits the requested
+                # layout instead of just rearranging content inside
+                # whatever shape the window already happened to be.
+                # fix_point defaults to NORTH|WEST (top-left stays put),
+                # which is what you want here: the window doesn't jump to
+                # a different screen position just because its size changed.
+                try:
+                    win.resize(int(width), int(height))
+                except Exception:
+                    pass
+
         win = _wv.create_window(
             title="VK Contest Analyzer — HUD",
             url=f"{STATE._base_url}/hud",
@@ -931,7 +944,11 @@ async def api_hud():
             # display scaling) — sized up further with real margin rather
             # than chasing an exact ratio that'll differ per user anyway.
             width=780, height=210,
-            min_size=(360, 120),
+            # Lowered from (360, 120): the vertical orientation resizes
+            # this window down to a genuinely narrow column (see resize()
+            # above and HUD_ORIENTATIONS in overview.js), which needs a
+            # smaller floor than the horizontal layout ever did on its own.
+            min_size=(150, 120),
             background_color="#0d1117",
             on_top=True,
             frameless=True,

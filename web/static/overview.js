@@ -1208,23 +1208,81 @@
   }
   resetHudSparklines();
 
+  // One identity colour per stat, matching Overview's own sparkline
+  // palette exactly (makeSparkline() above: qsos=accent, score=accent3,
+  // mults=accent2) so a user who already knows that colour language reads
+  // the HUD's trends the same way. Eff has no Overview sparkline
+  // equivalent to match, so it gets green — distinct from the other three
+  // and consistent with eff's own "healthy" value-colour convention.
+  const HUD_SPARK_COLOURS={score:()=>T.accent3,mults:()=>T.accent2,rate:()=>T.accent,eff:()=>T.green};
+
+  // Same visual language as Overview's makeSparkline(): a soft drop-shadow
+  // glow on the canvas element itself, a gradient fill fading out under a
+  // smoothed line, and a highlighted endpoint. Hand-rolled rather than a
+  // Chart.js instance per stat — four Chart.js instances in a window this
+  // size is unnecessary overhead for what's a ~50×14px line, and this also
+  // needs to resize on the fly when the HUD switches orientation (see
+  // HUD_ORIENTATIONS below), which is simpler to do by hand than by
+  // re-instantiating four chart objects on every layout change.
   function drawSparkline(canvas,values,colour){
     if (!canvas) return;
+    // Canvas size is CSS-driven (.hud-spark / html.hud-vertical .hud-spark)
+    // so it can change shape when the orientation toggle flips — read the
+    // rendered box size fresh each draw rather than trusting the width/
+    // height HTML attributes, which only reflect the very first layout.
+    const dpr=window.devicePixelRatio||1;
+    const cssW=canvas.clientWidth||56, cssH=canvas.clientHeight||14;
+    canvas.width=cssW*dpr; canvas.height=cssH*dpr;
     const ctx=canvas.getContext('2d'); if (!ctx) return;
-    const w=canvas.width,h=canvas.height;
-    ctx.clearRect(0,0,w,h);
-    const pts=values.filter(v=>v!=null);
-    if (pts.length<2) return;
-    const min=Math.min(...pts),max=Math.max(...pts);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,cssW,cssH);
+    canvas.style.filter=`drop-shadow(0 0 3px ${colour}80)`;
+
+    const idx=values.map((v,i)=>({v,i})).filter(p=>p.v!=null);
+    if (idx.length<2) return;
+    const vals=idx.map(p=>p.v);
+    const min=Math.min(...vals),max=Math.max(...vals);
     const range=(max-min)||1;
+    const coords=idx.map(({v,i})=>[
+      (i/(values.length-1))*(cssW-2)+1,
+      cssH-1-((v-min)/range)*(cssH-3)-1,
+    ]);
+
+    const tracePath=()=>{
+      ctx.beginPath();
+      ctx.moveTo(coords[0][0],coords[0][1]);
+      for (let i=1;i<coords.length-1;i++){
+        const [x0,y0]=coords[i],[x1,y1]=coords[i+1];
+        ctx.quadraticCurveTo(x0,y0,(x0+x1)/2,(y0+y1)/2);
+      }
+      const last=coords[coords.length-1];
+      ctx.lineTo(last[0],last[1]);
+    };
+
+    // Gradient fill under the curve — same stop pattern as Overview's
+    // makeSparkline() (colour+alpha at top fading to transparent).
+    tracePath();
+    const last=coords[coords.length-1];
+    ctx.lineTo(last[0],cssH);
+    ctx.lineTo(coords[0][0],cssH);
+    ctx.closePath();
+    const grad=ctx.createLinearGradient(0,0,0,cssH);
+    grad.addColorStop(0,   colour+'59');
+    grad.addColorStop(0.65,colour+'14');
+    grad.addColorStop(1,   colour+'00');
+    ctx.fillStyle=grad; ctx.fill();
+
+    // Stroke the line itself on top (the fill above closed the path down
+    // to the bottom edge, so it's redrawn here rather than reused).
+    tracePath();
+    ctx.strokeStyle=colour; ctx.lineWidth=1.4;
+    ctx.lineCap='round'; ctx.lineJoin='round'; ctx.stroke();
+
+    // Endpoint dot — same "only the meaningful point gets emphasis"
+    // convention as Overview's peak-hour marker on the Mults/Hour chart.
     ctx.beginPath();
-    values.forEach((v,i)=>{
-      if (v==null) return;
-      const x=(i/(values.length-1))*(w-2)+1;
-      const y=h-1-((v-min)/range)*(h-2);
-      if (i===0||values[i-1]==null) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-    });
-    ctx.strokeStyle=colour; ctx.lineWidth=1.4; ctx.lineJoin='round'; ctx.stroke();
+    ctx.arc(last[0],last[1],1.6,0,Math.PI*2);
+    ctx.fillStyle=colour; ctx.fill();
   }
 
   function trackHudSparklines(snap){
@@ -1240,7 +1298,7 @@
       const hist=_hudHistory[key];
       hist.push(vals[key]);
       if (hist.length>HUD_SPARK_MAX) hist.shift();
-      drawSparkline(document.getElementById('hud-spark-'+key),hist,T.accent);
+      drawSparkline(document.getElementById('hud-spark-'+key),hist,HUD_SPARK_COLOURS[key]());
     });
   }
 
@@ -1253,6 +1311,68 @@
     remEl.style.color = secs<600?T.red:secs<1800?T.accent3:T.accent;
   }
   setInterval(tickHudRemain,1000);
+
+  // ── HUD orientation toggle (horizontal ⇄ vertical) ────────────────────────
+  // The window's *initial* size still comes from create_window() in
+  // server.py, which has no way to know this client-side preference before
+  // the window exists — so a HUD reopened in vertical mode briefly shows
+  // at the horizontal window size until this script runs and calls
+  // api.resize(). Not perfectly seamless, but a one-frame pop beats
+  // threading the preference through settings.json just to avoid it.
+  if (HUD_MODE) {
+    const HUD_ORIENTATION_KEY='vkca_hud_orientation';
+    const HUD_ORIENTATIONS={
+      horizontal:{width:780,height:210,next:'vertical',  icon:'⇕',title:'Switch to vertical layout'},
+      vertical:  {width:190,height:560,next:'horizontal',icon:'⇔',title:'Switch to horizontal layout'},
+    };
+    let _hudOrientation='horizontal';
+    try{ _hudOrientation=localStorage.getItem(HUD_ORIENTATION_KEY)||'horizontal'; }catch{}
+
+    function applyHudOrientation(mode){
+      document.documentElement.classList.toggle('hud-vertical',mode==='vertical');
+      const btn=document.getElementById('hud-orientation');
+      const cfg=HUD_ORIENTATIONS[mode];
+      if (btn && cfg){ btn.textContent=cfg.icon; btn.title=cfg.title; }
+      // Sparkline canvases are sized by CSS, which just changed — redraw
+      // against the new box size rather than leaving them stretched/tiny
+      // until the next snapshot happens to tick in.
+      HUD_SPARK_KEYS.forEach(key=>{
+        drawSparkline(document.getElementById('hud-spark-'+key),_hudHistory[key],HUD_SPARK_COLOURS[key]());
+      });
+    }
+    applyHudOrientation(_hudOrientation);
+
+    function wireHudOrientationToggle(api){
+      document.getElementById('hud-orientation')?.addEventListener('click', async e=>{
+        e.stopPropagation();
+        const next=HUD_ORIENTATIONS[_hudOrientation].next;
+        const cfg=HUD_ORIENTATIONS[next];
+        _hudOrientation=next;
+        try{ localStorage.setItem(HUD_ORIENTATION_KEY,next); }catch{}
+        applyHudOrientation(next);
+        if (api && api.resize) { try{ await api.resize(cfg.width,cfg.height); }catch{} }
+      });
+    }
+    if (window.pywebview) wireHudOrientationToggle(window.pywebview.api);
+    else window.addEventListener('pywebviewready', ()=>wireHudOrientationToggle(window.pywebview.api));
+
+    // The window's *actual current* size is just whatever it was last
+    // left at (create_window()'s own default, or a previous session's
+    // toggle) — not necessarily whatever this session's persisted
+    // preference says it should be. Resize to match on every open,
+    // regardless of which orientation that turns out to be, once the API
+    // is ready — otherwise a stale mismatch (e.g. content re-flowed to
+    // horizontal CSS but the window itself still narrow from a previous
+    // vertical session) leaves the layout looking broken until the next
+    // manual toggle.
+    const doInitialResize=api=>{
+      if (!api || !api.resize) return;
+      const cfg=HUD_ORIENTATIONS[_hudOrientation];
+      api.resize(cfg.width,cfg.height).catch?.(()=>{});
+    };
+    if (window.pywebview) doInitialResize(window.pywebview.api);
+    else window.addEventListener('pywebviewready', ()=>doInitialResize(window.pywebview.api));
+  }
 
   // ── HUD field picker: ⚙ button (discoverable) + right-click (fast path) ──
   // Same localStorage-backed show/hide pattern as the Overview "☰ Panels"
