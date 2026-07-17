@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.7.16
+
+### Enhancements
+
+01252dd Add per-panel hide/show to the Overview tab
+
 ## 26.7.15
 
 ### Enhancements

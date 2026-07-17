@@ -426,7 +426,7 @@ FONT_S    = (UI_FONT,    9)
 FONT_MONO = (MONO_FONT, 10)
 FONT_MONO_S = (MONO_FONT, 9)
 
-VERSION = "26.7.15"   # year.month.patch — displayed in title bar and header label
+VERSION = "26.7.16"   # year.month.patch — displayed in title bar and header label
 
 # GitHub repo used by Help → Report Issue / Request Feature
 GITHUB_REPO = "ezypezy22/vkca_web"

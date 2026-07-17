@@ -93,7 +93,7 @@ Users are responsible for verifying all information against N1MM before making d
   ctx.fillStyle='#8b949e'; ctx.font='13px Consolas,monospace';
   ctx.fillText('by VK2YI', W/2, 178);
   ctx.fillStyle='#00d4aa'; ctx.font='bold 13px Consolas,monospace';
-  ctx.fillText('v26.7.15', W/2, 202);
+  ctx.fillText('v26.7.16', W/2, 202);
 
   // ── Progress bar animation ─────────────────────────────────────────────────
   const bar = document.getElementById('splash-bar');
