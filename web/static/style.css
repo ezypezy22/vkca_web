@@ -218,7 +218,13 @@ body.has-session-bar #content{top:calc(var(--titlebar-h) + var(--sessbar-h) + va
    field picker and get more breathing room back that way instead. */
 .hud-val{font-size:1.6em;font-weight:bold;color:var(--accent);white-space:nowrap;}
 .hud-spark{width:56px;height:14px;display:block;}
-#hud-close{display:none;position:absolute;top:4px;right:6px;z-index:2;
+/* z-index:70 on all three corner buttons — see #hud-menu below: at 220px
+   wide (its own min-width) inside a vertical HUD that's often narrower
+   than that, the open field-picker menu can span the *entire* window and
+   would otherwise render on top of these, leaving no way to close the
+   window (or re-toggle the menu) while it's open. Window chrome should
+   never become unreachable just because some other overlay is showing. */
+#hud-close{display:none;position:absolute;top:4px;right:6px;z-index:70;
   width:20px;height:20px;line-height:18px;padding:0;text-align:center;
   background:transparent;border:1px solid var(--bg3);border-radius:4px;
   color:var(--muted);font-size:0.8em;cursor:pointer;}
@@ -230,7 +236,7 @@ body.has-session-bar #content{top:calc(var(--titlebar-h) + var(--sessbar-h) + va
    visible at rest (accent-coloured border/icon, not just on :hover) and
    paired with a one-time callout bubble (#hud-hint below) that actually
    points at it and says what it does, the first time the HUD is opened. */
-#hud-settings{display:none;position:absolute;top:4px;left:6px;z-index:2;
+#hud-settings{display:none;position:absolute;top:4px;left:6px;z-index:70;
   width:20px;height:20px;line-height:18px;padding:0;text-align:center;
   background:transparent;border:1px solid var(--accent);border-radius:4px;
   color:var(--accent);font-size:0.85em;cursor:pointer;}
@@ -238,7 +244,7 @@ body.has-session-bar #content{top:calc(var(--titlebar-h) + var(--sessbar-h) + va
 /* Orientation toggle: bottom-right, mirroring the top row's corner
    buttons — see HUD_ORIENTATIONS in overview.js for the actual
    layout-switch + window-resize logic this triggers. */
-#hud-orientation{display:none;position:absolute;bottom:4px;right:6px;z-index:2;
+#hud-orientation{display:none;position:absolute;bottom:4px;right:6px;z-index:70;
   width:20px;height:20px;line-height:18px;padding:0;text-align:center;
   background:transparent;border:1px solid var(--bg3);border-radius:4px;
   color:var(--muted);font-size:0.8em;cursor:pointer;}
@@ -266,7 +272,11 @@ body.has-session-bar #content{top:calc(var(--titlebar-h) + var(--sessbar-h) + va
    7-row checklist down to a near-unusable sliver — cap it in real pixels
    instead, generous enough for all 7 rows at the HUD's default size while
    still scrolling gracefully if the window is at its smaller minimum. */
-#hud-menu{position:fixed;top:auto;right:auto;max-height:260px;}
+/* min-width:0 overrides .panels-menu's own 220px floor, which would
+   otherwise win over the dynamic max-width JS sets on open (min-width
+   beats a smaller max-width per the CSS spec) and blow out past a
+   narrow vertical-orientation window's own edge regardless. */
+#hud-menu{position:fixed;top:auto;right:auto;min-width:0;max-height:260px;}
 /* Overrides the Overview gauge-row's milestone-burst placement (top:-16px,
    meant to hang just above a tile) for the HUD's own tiny full-bleed
    window, where that would land outside the window bounds entirely. */

@@ -1413,15 +1413,19 @@
         row.appendChild(document.createTextNode(HUD_FIELD_LABELS[key]||key));
         hudMenu.appendChild(row);
       });
-      // The CSS max-height is a generous static cap for the HUD's default
-      // size, but the window is user-resizable down to a much smaller
-      // minimum — recompute against the *actual* current window height so
-      // the menu always fits (scrolling internally via its own
-      // overflow-y:auto) instead of just getting clipped by the window's
-      // own edge, which no amount of CSS overflow can undo.
+      // The CSS max-height/min-width are generous static values for the
+      // HUD's default horizontal size, but both the vertical orientation
+      // (as narrow as 150px) and manual resizing can make the window
+      // smaller than that in either dimension — recompute against the
+      // *actual* current window size so the menu always fits inside it
+      // (scrolling internally via its own overflow-y:auto) instead of
+      // getting clipped by the window's own edge, which no amount of CSS
+      // overflow can undo.
+      const availW=Math.max(120,window.innerWidth-8);
       const availH=Math.max(60,window.innerHeight-8);
+      hudMenu.style.maxWidth=availW+'px';
       hudMenu.style.maxHeight=availH+'px';
-      const left=Math.max(4,Math.min(x,window.innerWidth-190));
+      const left=Math.max(4,Math.min(x,window.innerWidth-availW-4));
       const top =Math.max(4,Math.min(y,window.innerHeight-availH));
       hudMenu.style.left=left+'px';
       hudMenu.style.top =top+'px';
