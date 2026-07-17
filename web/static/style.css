@@ -234,6 +234,32 @@ html.hud-mode #hud-close{display:block;}
 .info-panel:hover .popout-btn,.ea-card:hover .popout-btn{opacity:1;}
 .popout-btn:hover{color:var(--fg);border-color:var(--accent);}
 
+/* ── Hide-tile button + hidden state ─────────────────────────────────────── */
+.tile-hidden{display:none!important;}
+.hide-btn{position:absolute;top:4px;right:24px;z-index:5;width:18px;height:18px;
+  line-height:16px;text-align:center;font-size:11px;color:var(--muted);
+  background:var(--bg3);border:1px solid var(--bg3);border-radius:4px;cursor:pointer;
+  opacity:0;transition:opacity .15s,color .15s,border-color .15s;}
+.spark-card:hover .hide-btn,.info-panel:hover .hide-btn,.ea-card:hover .hide-btn{opacity:1;}
+.hide-btn:hover{color:var(--red);border-color:var(--red);}
+html.popout-mode .hide-btn{display:none;}
+
+/* ── "☰ Panels" show/hide menu ───────────────────────────────────────────── */
+.panels-menu-wrap{position:relative;}
+.panels-menu{position:absolute;top:calc(100% + 4px);right:0;z-index:50;
+  background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);
+  padding:8px;min-width:220px;max-height:60vh;overflow-y:auto;
+  box-shadow:0 8px 24px -8px rgba(0,0,0,.5);display:none;}
+.panels-menu.open{display:block;}
+.panels-menu-group{font-family:var(--font-mono);font-size:0.75em;color:var(--muted);
+  letter-spacing:.06em;text-transform:uppercase;margin:8px 4px 4px;}
+.panels-menu-group:first-child{margin-top:2px;}
+.panels-menu-row{display:flex;align-items:center;gap:6px;padding:3px 4px;
+  border-radius:4px;cursor:pointer;font-family:var(--font-mono);font-size:0.85em;
+  color:var(--fg);}
+.panels-menu-row:hover{background:var(--bg3);}
+.panels-menu-row input{cursor:pointer;}
+
 /* ── Pop-out mode: isolate one tile, fill the window with it ───────────────── */
 html.popout-mode #titlebar,html.popout-mode #session-bar,
 html.popout-mode #tabbar,html.popout-mode .layout-hint{display:none!important;}

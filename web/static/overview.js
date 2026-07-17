@@ -1016,6 +1016,113 @@
     },60);
   }
 
+  // ══ HIDE/SHOW INDIVIDUAL PANELS ═════════════════════════════════════════════
+  // Brings back the old desktop app's per-panel collapse toggle (lost in the
+  // web rewrite — only the pop-out half survived). Scoped to the three
+  // static, tile-based rows (spark/info/ea cards) plus the standalone Region
+  // Completion panel; gauges are excluded since gauge-row is rebuilt fresh
+  // per plugin/snapshot with positional ids, not stable per-gauge keys.
+  const HIDDEN_TILES_KEY='vkca_hidden_tiles';
+
+  function loadHiddenTiles(){
+    try{ return new Set(JSON.parse(localStorage.getItem(HIDDEN_TILES_KEY)||'[]')); }
+    catch{ return new Set(); }
+  }
+  let _hiddenTiles=loadHiddenTiles();
+  function saveHiddenTiles(){
+    try{ localStorage.setItem(HIDDEN_TILES_KEY,JSON.stringify(Array.from(_hiddenTiles))); }catch{}
+  }
+
+  function applyHiddenTiles(){
+    document.querySelectorAll('.spark-card,.info-panel,.ea-card').forEach(el=>{
+      el.classList.toggle('tile-hidden',_hiddenTiles.has(tileKey(el)));
+    });
+    const bars=document.getElementById('bars-row');
+    if (bars) bars.classList.toggle('tile-hidden',_hiddenTiles.has('bars-row'));
+  }
+
+  function setTileHidden(key,hidden){
+    if (hidden) _hiddenTiles.add(key); else _hiddenTiles.delete(key);
+    saveHiddenTiles();
+    applyHiddenTiles();
+    buildPanelsMenu();   // keep the open menu's checkboxes in sync
+  }
+
+  function addHideButton(el){
+    if (POPOUT_KEY || el.querySelector('.hide-btn')) return;
+    const btn=document.createElement('button');
+    btn.className='hide-btn';
+    btn.type='button';
+    btn.title='Hide this panel (bring back via ☰ Panels)';
+    btn.textContent='✕';
+    btn.setAttribute('draggable','false');
+    btn.addEventListener('mousedown',e=>e.stopPropagation());
+    btn.addEventListener('click',e=>{
+      e.stopPropagation();
+      const key=tileKey(el); if(!key) return;
+      setTileHidden(key,true);
+    });
+    el.appendChild(btn);
+  }
+
+  function panelLabel(el){
+    const raw=el.querySelector('.ip-title,.spark-title,.ea-label')?.textContent?.trim()||tileKey(el);
+    // Strips a leading "[ T ]"/"[»]"-style icon prefix some panel titles
+    // carry (e.g. the Contest Time panel) — the menu just wants plain text.
+    return raw.replace(/^\[[^\]]*\]\s*/,'');
+  }
+
+  const PANEL_MENU_GROUPS=[
+    {label:'Sparklines',  sel:'.spark-row > *'},
+    {label:'Info Panels', sel:'.info-panels-row > *'},
+    {label:'Analytics',   sel:'.extra-analytics-row > *'},
+  ];
+
+  function buildPanelsMenu(){
+    const menu=document.getElementById('panels-menu'); if(!menu) return;
+    menu.innerHTML='';
+    const addRow=(key,label)=>{
+      const row=document.createElement('label');
+      row.className='panels-menu-row';
+      const cb=document.createElement('input');
+      cb.type='checkbox'; cb.checked=!_hiddenTiles.has(key);
+      cb.addEventListener('change',()=>setTileHidden(key,!cb.checked));
+      row.appendChild(cb);
+      row.appendChild(document.createTextNode(label));
+      menu.appendChild(row);
+    };
+    PANEL_MENU_GROUPS.forEach(({label,sel})=>{
+      const items=Array.from(document.querySelectorAll(sel));
+      if (!items.length) return;
+      const h=document.createElement('div');
+      h.className='panels-menu-group'; h.textContent=label;
+      menu.appendChild(h);
+      items.forEach(el=>{ const key=tileKey(el); if(key) addRow(key,panelLabel(el)); });
+    });
+    // Region Completion — standalone panel, only offered when the current
+    // plugin's own has_state_bars gate (set elsewhere) has actually shown it.
+    const bars=document.getElementById('bars-row');
+    if (bars && bars.style.display!=='none'){
+      const h=document.createElement('div');
+      h.className='panels-menu-group'; h.textContent='Other';
+      menu.appendChild(h);
+      addRow('bars-row','Region Completion');
+    }
+  }
+
+  document.getElementById('btn-panels-toggle')?.addEventListener('click',e=>{
+    e.stopPropagation();
+    const menu=document.getElementById('panels-menu'); if(!menu) return;
+    const opening=!menu.classList.contains('open');
+    menu.classList.toggle('open',opening);
+    if (opening) buildPanelsMenu();
+  });
+  document.addEventListener('click',e=>{
+    const menu=document.getElementById('panels-menu');
+    if (!menu||!menu.classList.contains('open')) return;
+    if (!menu.contains(e.target) && e.target.id!=='btn-panels-toggle') menu.classList.remove('open');
+  });
+
   const REORDER_SECTIONS=[
     {sel:'.spark-row',          key:'vkca_layout_spark'},
     {sel:'.info-panels-row',    key:'vkca_layout_info'},
@@ -1027,17 +1134,20 @@
     REORDER_SECTIONS.forEach(({sel,key})=>{
       const el=document.querySelector(sel); if(!el) return;
       Array.from(el.children).forEach(addPopoutButton);
+      Array.from(el.children).forEach(addHideButton);
       markDraggable(el);
       applyTileOrder(el,key);
       setupReorder(el,key);
     });
     applyPopoutFilter();
+    applyHiddenTiles();
   }
   initReorder();
 
   document.getElementById('btn-reset-layout')?.addEventListener('click',()=>{
     REORDER_SECTIONS.forEach(({key})=>{ try{ localStorage.removeItem(key); }catch{} });
     try{ localStorage.removeItem(GAUGE_LAYOUT_KEY); }catch{}
+    try{ localStorage.removeItem(HIDDEN_TILES_KEY); }catch{}
     location.reload();
   });
 
