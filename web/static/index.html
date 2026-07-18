@@ -119,8 +119,8 @@
 
     <div class="tb-sep"></div>
 
-    <!-- QRZ.com lookup settings -->
-    <button id="btn-qrz-settings" class="tb-btn" title="QRZ.com lookup settings">🔍 QRZ Lookup</button>
+    <!-- App settings (QRZ.com lookup, log search folders) -->
+    <button id="btn-settings" class="tb-btn" title="Settings — QRZ.com lookup, log search folders">⚙ Settings</button>
     <span id="qrz-progress-badge" class="badge qrz-progress-badge hidden" title="QRZ lookups in progress"></span>
 
     <!-- Trailing drag handle — row 2 is otherwise wall-to-wall interactive
@@ -1035,28 +1035,6 @@
         </div>
         <div class="contest-list-wrap"><div id="contest-list" class="contest-list"></div></div>
       </div>
-      <div id="step-folders" class="hidden">
-        <div class="picker-header">
-          <button id="btn-folders-back" class="btn btn--ghost btn--sm">← Back</button>
-          <span class="dialog-label" style="margin:0">Manage Search Folders</span>
-        </div>
-        <div class="dialog-hint" style="margin:2px 0 10px">
-          VK Contest Analyzer always searches N1MM's default folder
-          (<code id="default-log-dir"></code>).
-          <span id="not1mm-log-dir-row" class="hidden">Also searched: not1mm's default folder (<code id="not1mm-log-dir"></code>).</span>
-          Add other folders below to also search elsewhere — e.g. where
-          another logger keeps its <code>.db</code>/<code>.sqlite</code> files.
-        </div>
-        <div class="contest-list-wrap" style="max-height:160px">
-          <div id="log-dirs-list" class="contest-list"></div>
-        </div>
-        <div class="path-row" style="margin-top:10px">
-          <input id="add-folder-input" class="dialog-input" placeholder="/home/user/notn1mm/databases" type="text">
-          <button id="btn-browse-folder" class="btn btn--ghost btn--icon" title="Browse…">📁</button>
-        </div>
-        <div id="folder-error" class="dialog-error hidden"></div>
-        <button id="btn-add-folder" class="btn btn--primary" style="margin-top:12px;width:100%">+ Add Folder</button>
-      </div>
     </div>
     <div class="dialog-footer">
       <button id="btn-load-cancel" class="btn btn--ghost">Cancel</button>
@@ -1106,31 +1084,59 @@
   </div>
 </div>
 
-<!-- ── QRZ.com Lookup settings dialog ──────────────────────────────────────── -->
-<div id="qrz-settings-dialog" class="dialog-overlay hidden">
-  <div class="dialog">
-    <div class="dialog-title">🔍 QRZ.com Lookup</div>
-    <div class="dialog-body">
-      <div class="dialog-hint">Looks up Name / Grid / State for worked calls via the QRZ.com XML API. Requires a QRZ.com XML subscription.</div>
-      <div id="qrz-status-line" class="dialog-hint">Not configured.</div>
+<!-- ── Settings dialog (QRZ.com lookup + log search folders) ────────────────── -->
+<div id="settings-dialog" class="dialog-overlay hidden">
+  <div class="dialog dialog--wide">
+    <div class="dialog-title">⚙ Settings</div>
+    <div class="dialog-body dialog-body--scroll">
+      <div class="settings-tabs">
+        <button id="settings-tab-qrz" class="btn btn--ghost btn--sm active" type="button">🔍 QRZ Lookup</button>
+        <button id="settings-tab-logdirs" class="btn btn--ghost btn--sm" type="button">📁 Log Folders</button>
+      </div>
 
-      <label class="dialog-label">QRZ.com username</label>
-      <input id="qrz-username" class="dialog-input" type="text" autocomplete="off">
-      <label class="dialog-label">QRZ.com password</label>
-      <input id="qrz-password" class="dialog-input" type="password" autocomplete="off">
-      <div id="qrz-cred-error" class="dialog-error hidden"></div>
+      <div id="settings-step-qrz">
+        <div class="dialog-hint">Looks up Name / Grid / State for worked calls via the QRZ.com XML API. Requires a QRZ.com XML subscription.</div>
+        <div id="qrz-status-line" class="dialog-hint">Not configured.</div>
 
-      <div class="dialog-section-label" style="margin-top:14px">Batch enrich</div>
-      <div class="dialog-hint" id="qrz-enrich-status">Fills in Name/Grid/State for every worked call not already looked up.</div>
-      <div id="qrz-progress-wrap" class="qrz-progress-wrap hidden">
-        <div id="qrz-progress-bar" class="qrz-progress-bar"></div>
+        <label class="dialog-label">QRZ.com username</label>
+        <input id="qrz-username" class="dialog-input" type="text" autocomplete="off">
+        <label class="dialog-label">QRZ.com password</label>
+        <input id="qrz-password" class="dialog-input" type="password" autocomplete="off">
+        <div id="qrz-cred-error" class="dialog-error hidden"></div>
+
+        <div class="dialog-section-label" style="margin-top:14px">Batch enrich</div>
+        <div class="dialog-hint" id="qrz-enrich-status">Fills in Name/Grid/State for every worked call not already looked up.</div>
+        <div id="qrz-progress-wrap" class="qrz-progress-wrap hidden">
+          <div id="qrz-progress-bar" class="qrz-progress-bar"></div>
+        </div>
+      </div>
+
+      <div id="settings-step-logdirs" class="hidden">
+        <div class="dialog-hint" style="margin:2px 0 10px">
+          VK Contest Analyzer always searches N1MM's default folder
+          (<code id="default-log-dir"></code>).
+          <span id="not1mm-log-dir-row" class="hidden">Also searched: not1mm's default folder (<code id="not1mm-log-dir"></code>).</span>
+          Add other folders below to also search elsewhere — e.g. where
+          another logger keeps its <code>.db</code>/<code>.sqlite</code> files.
+        </div>
+        <div class="contest-list-wrap" style="max-height:160px">
+          <div id="log-dirs-list" class="contest-list"></div>
+        </div>
+        <div class="path-row" style="margin-top:10px">
+          <input id="add-folder-input" class="dialog-input" placeholder="/home/user/notn1mm/databases" type="text">
+          <button id="btn-browse-folder" class="btn btn--ghost btn--icon" title="Browse…">📁</button>
+        </div>
+        <div id="folder-error" class="dialog-error hidden"></div>
+        <button id="btn-add-folder" class="btn btn--primary" style="margin-top:12px;width:100%">+ Add Folder</button>
       </div>
     </div>
     <div class="dialog-footer">
-      <button id="btn-qrz-remove" class="btn btn--ghost">Remove Credentials</button>
-      <button id="btn-qrz-enrich-all" class="btn btn--ghost">Enrich All</button>
-      <button id="btn-qrz-save" class="btn btn--primary">Save &amp; Test</button>
-      <button id="btn-qrz-close" class="btn btn--ghost">Close</button>
+      <div id="settings-footer-qrz" style="display:flex;gap:8px">
+        <button id="btn-qrz-remove" class="btn btn--ghost">Remove Credentials</button>
+        <button id="btn-qrz-enrich-all" class="btn btn--ghost">Enrich All</button>
+        <button id="btn-qrz-save" class="btn btn--primary">Save &amp; Test</button>
+      </div>
+      <button id="btn-settings-close" class="btn btn--ghost">Close</button>
     </div>
   </div>
 </div>
@@ -1155,7 +1161,7 @@
 <script src="/static/worked.js"></script>
 <script src="/static/report.js"></script>
 <script src="/static/report-issue.js"></script>
-<script src="/static/qrz_settings.js"></script>
+<script src="/static/settings.js"></script>
 <script src="/static/worldmap.js"></script>
 </body>
 </html>

@@ -774,87 +774,13 @@ Users are responsible for verifying all information against N1MM before making d
   const detectedList   = document.getElementById('detected-dbs-list');
   const noDetectedHint = document.getElementById('no-detected-hint');
 
-  // ── Manage search folders ───────────────────────────────────────────────
-  const stepFolders     = document.getElementById('step-folders');
-  const btnManageFolders= document.getElementById('btn-manage-folders');
-  const btnFoldersBack  = document.getElementById('btn-folders-back');
-  const logDirsList     = document.getElementById('log-dirs-list');
-  const defaultLogDirEl = document.getElementById('default-log-dir');
-  const not1mmDirRow    = document.getElementById('not1mm-log-dir-row');
-  const not1mmDirEl     = document.getElementById('not1mm-log-dir');
-  const addFolderInput  = document.getElementById('add-folder-input');
-  const btnBrowseFolder = document.getElementById('btn-browse-folder');
-  const btnAddFolder    = document.getElementById('btn-add-folder');
-  const folderError     = document.getElementById('folder-error');
-
-  function showFolderError(msg) { folderError.textContent=msg; folderError.classList.remove('hidden'); }
-
-  async function loadLogDirs() {
-    if (!logDirsList) return;
-    try {
-      const res  = await fetch('/api/settings/log_dirs');
-      const data = await res.json();
-      if (defaultLogDirEl) defaultLogDirEl.textContent = data.default_dir || '';
-      if (not1mmDirRow) not1mmDirRow.classList.toggle('hidden', !data.not1mm_default_dir);
-      if (not1mmDirEl) not1mmDirEl.textContent = data.not1mm_default_dir || '';
-      const dirs = data.dirs || [];
-      logDirsList.innerHTML = '';
-      if (!dirs.length) {
-        logDirsList.innerHTML = `<div class="dialog-hint" style="margin:6px 2px">No custom folders added yet.</div>`;
-        return;
-      }
-      dirs.forEach(d => {
-        const row = document.createElement('div');
-        row.className = 'log-dir-row' + (d.exists ? '' : ' log-dir-missing');
-        row.innerHTML = `<span class="log-dir-path" title="${d.path}">${d.path}${d.exists ? '' : ' (not found)'}</span>
-          <button class="log-dir-remove" title="Remove">✕</button>`;
-        row.querySelector('.log-dir-remove').addEventListener('click', async () => {
-          await fetch('/api/settings/log_dirs', {
-            method: 'DELETE', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({path: d.path})
-          });
-          loadLogDirs();
-          scanKnownLocations();
-        });
-        logDirsList.appendChild(row);
-      });
-    } catch (e) { console.warn('loadLogDirs failed:', e); }
-  }
-
-  btnManageFolders?.addEventListener('click', () => {
-    folderError.classList.add('hidden');
-    addFolderInput.value = '';
-    showStep('folders');
-    loadLogDirs();
-  });
-  btnFoldersBack?.addEventListener('click', () => { showStep('path'); scanKnownLocations(); });
-
-  btnAddFolder?.addEventListener('click', async () => {
-    const path = addFolderInput.value.trim();
-    folderError.classList.add('hidden');
-    if (!path) { showFolderError('Enter or browse to a folder path.'); return; }
-    try {
-      const res  = await fetch('/api/settings/log_dirs', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({path})
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) { showFolderError(data.error || 'Failed to add folder.'); return; }
-      addFolderInput.value = '';
-      loadLogDirs();
-    } catch (e) { showFolderError(`Add failed: ${e.message}`); }
-  });
-
-  btnBrowseFolder?.addEventListener('click', async () => {
-    btnBrowseFolder.disabled=true; btnBrowseFolder.textContent='…';
-    try {
-      const res = await fetch('/api/browse_folder');
-      const data = await res.json();
-      if (res.status === 503) { showFolderError('No native browser available — enter the folder path manually.'); return; }
-      if (data.error) { showFolderError(data.error); return; }
-      if (data.path)  { addFolderInput.value = data.path; folderError.classList.add('hidden'); }
-    } catch(e) { showFolderError(`Browse failed: ${e.message}`); }
-    finally { btnBrowseFolder.disabled=false; btnBrowseFolder.textContent='📁'; }
+  // "Manage Folders" now opens the consolidated Settings dialog directly on
+  // its Log Folders step (settings.js) rather than switching to an in-dialog
+  // step here — kept as a button in this dialog too (not just the titlebar)
+  // since if your log isn't listed, you want a quick way to add a folder
+  // without abandoning the load flow.
+  document.getElementById('btn-manage-folders')?.addEventListener('click', () => {
+    window.VKA?.openSettings?.('logdirs');
   });
 
   function fmtBytes(n) {
@@ -916,6 +842,11 @@ Users are responsible for verifying all information against N1MM before making d
       detectedWrap.classList.remove('hidden');
     } catch { detectedWrap.classList.add('hidden'); noDetectedHint?.classList.remove('hidden'); }
   }
+  // Exposed for settings.js — removing a log-search folder there should
+  // refresh this dialog's detected-databases list too, since it's the same
+  // underlying search that folder feeds into.
+  window.VKA = window.VKA || {};
+  window.VKA.scanKnownLocations = scanKnownLocations;
 
   function showDialog() {
     overlay.classList.remove('hidden'); showStep('path');
@@ -926,7 +857,6 @@ Users are responsible for verifying all information against N1MM before making d
   function showStep(step) {
     stepPath.classList.toggle('hidden',step!=='path');
     stepPicker.classList.toggle('hidden',step!=='picker');
-    stepFolders?.classList.toggle('hidden',step!=='folders');
     btnConfirm.style.display=step==='picker'?'':'none';
   }
   function showError(msg) { errDiv.textContent=msg; errDiv.classList.remove('hidden'); }

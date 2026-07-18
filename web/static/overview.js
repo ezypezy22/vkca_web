@@ -572,7 +572,7 @@
       </table>`;
   }
 
-  // QRZ.com lookup enrichment (see qrz_settings.js/server.py) tags each QSO
+  // QRZ.com lookup enrichment (see settings.js/server.py) tags each QSO
   // with qrz_status ("none"|"pending"|"found"|"not_found") — last_worked
   // entries are the same dicts as ContestLog.qsos (not copies), so these
   // fields are already present with no extra fetch needed. Returns null

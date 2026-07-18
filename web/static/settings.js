@@ -1,14 +1,54 @@
-// qrz_settings.js — "QRZ.com Lookup" settings dialog + titlebar progress
-// badge. Standalone-modal pattern mirrors report-issue.js: an IIFE guarded
-// on both the overlay and the opening button existing, its own event
-// wiring, window.VKA.showToast for feedback. Credentials are stored
-// server-side (web/server.py's /api/qrz/credentials) — this file never
-// persists anything itself.
+// settings.js — Consolidated Settings dialog: QRZ.com lookup credentials +
+// log-search-folder management, both previously their own separate
+// standalone dialogs (qrz_settings.js, and a step inside the "Open Contest
+// Log" dialog in app.js). Neither backing API changed — /api/qrz/credentials
+// and /api/settings/log_dirs are untouched; this is purely a UI relocation.
+// Standalone-modal pattern mirrors report-issue.js: an IIFE guarded on both
+// the overlay and the opening button existing, its own event wiring,
+// window.VKA.showToast for feedback.
 (function () {
-  const overlay = document.getElementById('qrz-settings-dialog');
-  const btnOpen = document.getElementById('btn-qrz-settings');
+  const overlay = document.getElementById('settings-dialog');
+  const btnOpen = document.getElementById('btn-settings');
   if (!overlay || !btnOpen) return;
 
+  // ── Step switching ─────────────────────────────────────────────────────
+  // Same plain .hidden-toggling idiom as the load-dialog's own showStep()
+  // (app.js) — not the main window's vka:tabchange, which is a global event
+  // ~14 other modules already listen for by name; reusing it inside a modal
+  // would fire spurious handlers elsewhere in the app.
+  const stepQrz     = document.getElementById('settings-step-qrz');
+  const stepLogDirs = document.getElementById('settings-step-logdirs');
+  const tabQrz      = document.getElementById('settings-tab-qrz');
+  const tabLogDirs  = document.getElementById('settings-tab-logdirs');
+  const footerQrz   = document.getElementById('settings-footer-qrz');
+
+  function showSettingsStep(step) {
+    stepQrz?.classList.toggle('hidden', step !== 'qrz');
+    stepLogDirs?.classList.toggle('hidden', step !== 'logdirs');
+    tabQrz?.classList.toggle('active', step === 'qrz');
+    tabLogDirs?.classList.toggle('active', step === 'logdirs');
+    footerQrz?.classList.toggle('hidden', step !== 'qrz');
+    if (step === 'qrz') { refreshStatus(); pollTick(); }
+    else if (step === 'logdirs') { loadLogDirs(); }
+  }
+
+  function openSettings(step) {
+    overlay.classList.remove('hidden');
+    showSettingsStep(step || 'qrz');
+  }
+  function closeSettings() {
+    overlay.classList.add('hidden');
+  }
+
+  tabQrz?.addEventListener('click', () => showSettingsStep('qrz'));
+  tabLogDirs?.addEventListener('click', () => showSettingsStep('logdirs'));
+  btnOpen.addEventListener('click', () => openSettings('qrz'));
+  document.getElementById('btn-settings-close')?.addEventListener('click', closeSettings);
+
+  window.VKA = window.VKA || {};
+  window.VKA.openSettings = openSettings;
+
+  // ── QRZ.com lookup (ported unchanged from qrz_settings.js) ─────────────
   const statusLine    = document.getElementById('qrz-status-line');
   const userInput     = document.getElementById('qrz-username');
   const passInput     = document.getElementById('qrz-password');
@@ -30,7 +70,7 @@
 
   // Titlebar badge: "N left" for ANY outstanding QRZ lookup — live
   // per-QSO enrichment as well as an Enrich All batch — visible next to
-  // the QRZ Lookup button, gone the instant everything's synced. in_flight
+  // the Settings button, gone the instant everything's synced. in_flight
   // (not queue_depth) is the right count here: it's incremented when a
   // call is enqueued and only cleared once the worker finishes it, so it
   // already covers the one lookup actively in progress that queue_depth
@@ -116,18 +156,6 @@
     }
   }
 
-  async function openDialog() {
-    passInput.value = '';
-    credError.classList.add('hidden');
-    await refreshStatus();
-    pollTick(); // refresh the progress bar/text immediately rather than waiting for the next tick
-    overlay.classList.remove('hidden');
-  }
-
-  function closeDialog() {
-    overlay.classList.add('hidden');
-  }
-
   async function save() {
     const username = userInput.value.trim(), password = passInput.value;
     credError.classList.add('hidden');
@@ -194,9 +222,79 @@
     // No need to (re)start polling — pollTick() already runs continuously.
   }
 
-  btnOpen.addEventListener('click', openDialog);
-  document.getElementById('btn-qrz-close')?.addEventListener('click', closeDialog);
   document.getElementById('btn-qrz-save')?.addEventListener('click', save);
   document.getElementById('btn-qrz-remove')?.addEventListener('click', removeCreds);
   document.getElementById('btn-qrz-enrich-all')?.addEventListener('click', enrichAll);
+
+  // ── Log search folders (ported unchanged from app.js) ──────────────────
+  const logDirsList     = document.getElementById('log-dirs-list');
+  const defaultLogDirEl = document.getElementById('default-log-dir');
+  const not1mmDirRow    = document.getElementById('not1mm-log-dir-row');
+  const not1mmDirEl     = document.getElementById('not1mm-log-dir');
+  const addFolderInput  = document.getElementById('add-folder-input');
+  const btnBrowseFolder = document.getElementById('btn-browse-folder');
+  const btnAddFolder    = document.getElementById('btn-add-folder');
+  const folderError     = document.getElementById('folder-error');
+
+  function showFolderError(msg) { folderError.textContent = msg; folderError.classList.remove('hidden'); }
+
+  async function loadLogDirs() {
+    if (!logDirsList) return;
+    try {
+      const res  = await fetch('/api/settings/log_dirs');
+      const data = await res.json();
+      if (defaultLogDirEl) defaultLogDirEl.textContent = data.default_dir || '';
+      if (not1mmDirRow) not1mmDirRow.classList.toggle('hidden', !data.not1mm_default_dir);
+      if (not1mmDirEl) not1mmDirEl.textContent = data.not1mm_default_dir || '';
+      const dirs = data.dirs || [];
+      logDirsList.innerHTML = '';
+      if (!dirs.length) {
+        logDirsList.innerHTML = `<div class="dialog-hint" style="margin:6px 2px">No custom folders added yet.</div>`;
+        return;
+      }
+      dirs.forEach(d => {
+        const row = document.createElement('div');
+        row.className = 'log-dir-row' + (d.exists ? '' : ' log-dir-missing');
+        row.innerHTML = `<span class="log-dir-path" title="${d.path}">${d.path}${d.exists ? '' : ' (not found)'}</span>
+          <button class="log-dir-remove" title="Remove">✕</button>`;
+        row.querySelector('.log-dir-remove').addEventListener('click', async () => {
+          await fetch('/api/settings/log_dirs', {
+            method: 'DELETE', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({path: d.path})
+          });
+          loadLogDirs();
+          window.VKA?.scanKnownLocations?.();
+        });
+        logDirsList.appendChild(row);
+      });
+    } catch (e) { console.warn('loadLogDirs failed:', e); }
+  }
+
+  btnAddFolder?.addEventListener('click', async () => {
+    const path = addFolderInput.value.trim();
+    folderError.classList.add('hidden');
+    if (!path) { showFolderError('Enter or browse to a folder path.'); return; }
+    try {
+      const res  = await fetch('/api/settings/log_dirs', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({path})
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) { showFolderError(data.error || 'Failed to add folder.'); return; }
+      addFolderInput.value = '';
+      loadLogDirs();
+    } catch (e) { showFolderError(`Add failed: ${e.message}`); }
+  });
+
+  btnBrowseFolder?.addEventListener('click', async () => {
+    btnBrowseFolder.disabled=true; btnBrowseFolder.textContent='…';
+    try {
+      const res = await fetch('/api/browse_folder');
+      const data = await res.json();
+      if (res.status === 503) { showFolderError('No native browser available — enter the folder path manually.'); return; }
+      if (data.error) { showFolderError(data.error); return; }
+      if (data.path)  { addFolderInput.value = data.path; folderError.classList.add('hidden'); }
+    } catch(e) { showFolderError(`Browse failed: ${e.message}`); }
+    finally { btnBrowseFolder.disabled=false; btnBrowseFolder.textContent='📁'; }
+  });
 })();

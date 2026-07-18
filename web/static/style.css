@@ -628,6 +628,8 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .qrz-progress-wrap.hidden{display:none;}
 .qrz-progress-bar{height:100%;width:0%;background:var(--accent);border-radius:4px;
   transition:width 0.3s ease;}
+.settings-tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--bg3);padding-bottom:10px;}
+.settings-tabs .btn.active{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:bold;}
 .missing-region-strip{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 10px;}
 .missing-region-chip{font-family:var(--font-mono);font-size:0.77em;padding:3px 9px;
   border-radius:12px;border:1px solid;cursor:pointer;background:transparent;
