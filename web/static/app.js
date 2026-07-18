@@ -340,31 +340,36 @@ Users are responsible for verifying all information against N1MM before making d
     else window.addEventListener('pywebviewready', wireWindowControls);
   })();
 
-  // ── Frameless Mini HUD window (desktop app only) ────────────────────────────
-  // The HUD is a separate, tiny pywebview window with its own dedicated
-  // _HudApi (see /api/hud in server.py) — deliberately not the same api as
-  // the main window's wireWindowControls() above (gated on api.minimize,
-  // which _HudApi has no equivalent of). Drag+close only: no minimize/
-  // maximize/resize for a fixed-size glanceable bar.
-  (function () {
-    if (location.pathname !== '/hud') return;
+  // ── Frameless glance windows (Mini HUD, Operator HUD — desktop app only) ───
+  // Both are separate, tiny pywebview windows with their own dedicated API
+  // classes (_HudApi / _OperatorHudApi, see server.py) — deliberately not the
+  // same api as the main window's wireWindowControls() above (gated on
+  // api.minimize, which neither has an equivalent of). Drag+close only: no
+  // minimize/maximize/resize for a fixed-size glanceable window. The two
+  // windows' client-side wiring is identical but for a pathname + a couple of
+  // element IDs, so this is one parameterized helper rather than two
+  // near-copies that could silently drift apart (e.g. a drag-jitter fix
+  // landing in one but not the other).
+  function wireGlanceWindow({pathname, barId, closeId, ignoreSelector}) {
+    if (location.pathname !== pathname) return;
 
-    document.getElementById('hud-close')?.addEventListener('click', () => {
+    document.getElementById(closeId)?.addEventListener('click', () => {
       const api = window.pywebview && window.pywebview.api;
       if (api && api.close) api.close();
-      else window.close();   // browser-tab fallback (see btn-hud in overview.js)
+      else window.close();   // browser-tab fallback (see btn-hud/btn-operator-hud in overview.js)
     });
 
     // Same get-snapshot-then-accumulate-deltas drag pattern as the main
     // window's wireDragRegions above (see its comments for why), thinned
     // down since there's no maximize state or drag-region class here — the
-    // whole bar is draggable except the close button.
+    // whole bar is draggable except the close (and, for the Mini HUD,
+    // settings/menu) button(s).
     const DRAG_SEND_INTERVAL_MS = 33;
-    function wireHudDrag(api) {
+    function wireDrag(api) {
       if (!api || !api.move_to) return;   // browser-tab fallback — OS handles dragging
-      const bar = document.getElementById('hud-bar'); if (!bar) return;
+      const bar = document.getElementById(barId); if (!bar) return;
       bar.addEventListener('mousedown', (e) => {
-        if (e.button !== 0 || e.target.closest('#hud-close,#hud-settings,#hud-menu')) return;
+        if (e.button !== 0 || e.target.closest(ignoreSelector)) return;
         e.preventDefault();
         let lastX = e.screenX, lastY = e.screenY;
         api.get_position().then(({x, y}) => {
@@ -392,23 +397,28 @@ Users are responsible for verifying all information against N1MM before making d
         });
       });
     }
-    if (window.pywebview) wireHudDrag(window.pywebview.api);
-    else window.addEventListener('pywebviewready', () => wireHudDrag(window.pywebview.api));
+    if (window.pywebview) wireDrag(window.pywebview.api);
+    else window.addEventListener('pywebviewready', () => wireDrag(window.pywebview.api));
 
     // Double-click brings the main window to the front — useful since the
-    // whole point of this HUD is staying visible while some other window
-    // (the radio's logging software, etc.) has focus.
-    function wireHudFocusMain(api) {
+    // whole point of these windows is staying visible while some other
+    // window (the radio's logging software, etc.) has focus.
+    function wireFocusMain(api) {
       if (!api || !api.focus_main) return;   // browser-tab fallback — no such concept
-      const bar = document.getElementById('hud-bar'); if (!bar) return;
+      const bar = document.getElementById(barId); if (!bar) return;
       bar.addEventListener('dblclick', (e) => {
-        if (e.target.closest('#hud-close,#hud-settings,#hud-menu')) return;
+        if (e.target.closest(ignoreSelector)) return;
         api.focus_main();
       });
     }
-    if (window.pywebview) wireHudFocusMain(window.pywebview.api);
-    else window.addEventListener('pywebviewready', () => wireHudFocusMain(window.pywebview.api));
-  })();
+    if (window.pywebview) wireFocusMain(window.pywebview.api);
+    else window.addEventListener('pywebviewready', () => wireFocusMain(window.pywebview.api));
+  }
+
+  wireGlanceWindow({pathname: '/hud', barId: 'hud-bar', closeId: 'hud-close',
+                     ignoreSelector: '#hud-close,#hud-settings,#hud-menu'});
+  wireGlanceWindow({pathname: '/operator_hud', barId: 'operator-hud-bar', closeId: 'operator-hud-close',
+                     ignoreSelector: '#operator-hud-close'});
 
   // ── Tab routing ───────────────────────────────────────────────────────────
   document.querySelectorAll('.tab-btn').forEach(btn => {

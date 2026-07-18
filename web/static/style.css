@@ -297,6 +297,25 @@ html.hud-mode #hud-close{display:block;}
 html.hud-mode #hud-settings{display:block;}
 html.hud-mode #hud-orientation{display:block;}
 
+/* ── Operator HUD (rendered only in its own popped-out window, /operator_hud)
+   Unlike the Mini HUD's fixed row of stats, this is a scrollable container of
+   .fatigue-card elements (reused as-is from the Fatigue tab, see .fatigue-*
+   rules above) — one per operator, so the layout needs to accommodate a
+   variable, potentially-wrapping count rather than a fixed set of fields. ── */
+#operator-hud-bar{display:none;position:fixed;inset:0;background:var(--bg);
+  cursor:grab;padding:36px 14px 14px;overflow-y:auto;}
+#operator-hud-bar:active{cursor:grabbing;}
+#operator-hud-close{display:none;position:absolute;top:4px;right:6px;z-index:70;
+  width:20px;height:20px;line-height:18px;padding:0;text-align:center;
+  background:transparent;border:1px solid var(--bg3);border-radius:4px;
+  color:var(--muted);font-size:0.8em;cursor:pointer;}
+#operator-hud-close:hover{background:var(--red);border-color:var(--red);color:#fff;}
+html.operator-hud-mode body{padding:0;overflow:hidden;}
+html.operator-hud-mode #titlebar,html.operator-hud-mode #session-bar,
+html.operator-hud-mode #tabbar,html.operator-hud-mode #content{display:none!important;}
+html.operator-hud-mode #operator-hud-bar{display:block;}
+html.operator-hud-mode #operator-hud-close{display:block;}
+
 /* ── HUD vertical orientation ─────────────────────────────────────────────
    Stacks stats in a single column instead of a wrapping row — label+value
    share a line, the sparkline (where present) takes the full width on its
@@ -664,6 +683,7 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .fatigue-stat-label{font-family:var(--font-mono);font-size:0.62em;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
 .fatigue-prog-wrap{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-bottom:4px;}
 .fatigue-prog-bar{height:100%;border-radius:2px;transition:width .6s ease-out;}
+.operator-hud-spark{width:100%;height:32px;display:block;margin-top:8px;}
 .pace-cards-row{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;}
 .pace-card{background:var(--bg2);border:1px solid var(--bg3);
   border-top:2px solid var(--accent2);border-radius:var(--radius);padding:10px 8px;text-align:center;}

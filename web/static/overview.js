@@ -1155,6 +1155,68 @@
   // Path-based, not query-string — see index.html bootstrap script for why.
   const HUD_MODE=location.pathname==='/hud';
 
+  // ══ OPERATOR HUD (own popped-out window, /operator_hud) ═════════════════════
+  const OPERATOR_HUD_MODE=location.pathname==='/operator_hud';
+
+  // Same 8-colour identity palette as fatigue.js's OP_PALETTE — an operator
+  // reads as the same colour on the Fatigue tab and this HUD.
+  const OPERATOR_HUD_PALETTE=['#00d4aa','#f0c040','#ff6b35','#a78bfa',
+                              '#60a5fa','#34d399','#f87171','#fbbf24'];
+
+  function fmtOpHudTime(m){
+    const h=Math.floor(m/60), mm=Math.round(m%60);
+    return h ? `${h}h ${mm}m` : `${mm}m`;
+  }
+
+  // Cards are rebuilt wholesale every snapshot (innerHTML='' + forEach +
+  // createElement) rather than incrementally diffed — same idiom fatigue.js's
+  // renderOpCards() and pace.js's roster tables already use for "N dynamic
+  // items"; a handful of operator cards makes a full rebuild cheap and this
+  // codebase has no precedent for anything fancier.
+  function updateOperatorHud(snap){
+    const wrap=document.getElementById('operator-hud-cards'); if (!wrap) return;
+    const ops=snap?.operator_times||[];
+    wrap.innerHTML='';
+    if (!ops.length){
+      wrap.innerHTML=`<div style="color:var(--muted);font-family:var(--font-mono);font-size:0.85em;padding:8px">
+        No operator data yet.</div>`;
+      return;
+    }
+    ops.forEach((op,i)=>{
+      const col=OPERATOR_HUD_PALETTE[i%OPERATOR_HUD_PALETTE.length];
+      const onPct=op.span_minutes>0 ? Math.round(op.on_minutes/op.span_minutes*100) : 0;
+      const div=document.createElement('div');
+      div.className='fatigue-card';
+      div.style.borderTopColor=col;
+      // op.operator is free-text from the DXLOG Operator column — same
+      // log-derived-text category as callsigns/comments elsewhere, escaped
+      // before going into innerHTML (matches fatigue.js's renderOpCards()).
+      div.innerHTML=`
+        <div class="fatigue-op" style="color:${col}">${escapeHtml(op.operator||'—')}</div>
+        <div class="fatigue-stat-row">
+          <div class="fatigue-stat">
+            <div class="fatigue-stat-val">${(op.qsos||0).toLocaleString()}</div>
+            <div class="fatigue-stat-label">QSOs</div>
+          </div>
+          <div class="fatigue-stat">
+            <div class="fatigue-stat-val" style="color:${T.accent3}">${op.current_hour_rate||0}</div>
+            <div class="fatigue-stat-label">Q/hr now</div>
+          </div>
+          <div class="fatigue-stat">
+            <div class="fatigue-stat-val" style="color:${T.green}">${fmtOpHudTime(op.on_minutes||0)}</div>
+            <div class="fatigue-stat-label">On Air</div>
+          </div>
+        </div>
+        <div class="fatigue-prog-wrap">
+          <div class="fatigue-prog-bar" style="width:${onPct}%;background:${col}"></div>
+        </div>
+        <div class="fatigue-prog-label">${onPct}% on-air efficiency</div>
+        <canvas class="operator-hud-spark"></canvas>`;
+      wrap.appendChild(div);
+      drawSparkline(div.querySelector('canvas'), op.hourly||[], col);
+    });
+  }
+
   // REMAIN ticks down live between snapshots (same "absolute target + local
   // 1s interval" approach as tickSinceLastQso above) rather than only jumping
   // in whole-minute steps whenever a snapshot happens to push in.
@@ -1495,6 +1557,16 @@
       if (!res.ok || !data.ok) throw new Error(data.error||'failed');
     } catch {
       window.open('/hud','vkca_hud','width=760,height=130,resizable=yes');
+    }
+  });
+
+  document.getElementById('btn-operator-hud')?.addEventListener('click', async ()=>{
+    try {
+      const res=await fetch('/api/operator_hud',{method:'POST'});
+      const data=await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error||'failed');
+    } catch {
+      window.open('/operator_hud','vkca_operator_hud','width=900,height=280,resizable=yes');
     }
   });
 
@@ -1903,6 +1975,7 @@
   let _firstSnap=true;
   window.addEventListener('vka:snapshot',e=>{
     trackLastQso(e.detail);
+    if (OPERATOR_HUD_MODE) { updateOperatorHud(e.detail); return; }
     if (HUD_MODE) { updateHud(e.detail); trackHudSparklines(e.detail); checkCelebrations(e.detail); checkEndTimeAlert(e.detail); return; }
     if (_replaying) return;
     if(_firstSnap){_firstSnap=false;loadPluginMeta().then(()=>render(e.detail));}

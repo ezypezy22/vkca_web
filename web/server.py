@@ -167,6 +167,7 @@ class AppState:
         self._webview_window                      = None  # set after webview starts
         self._base_url:     Optional[str]         = None  # set after webview starts; used by /api/popout
         self._hud_window                          = None  # the single Mini HUD window, if open
+        self._operator_hud_window                 = None  # the single Operator HUD window, if open
         self.yoy_extra_paths: list                = []    # extra .s3db files added on the YOY tab
         self.pace_extra_paths: list               = []    # [{"path":..., "kind":"s3db"|"adif"|"cabrillo"}]
         self.fatigue_extra_paths: list            = []    # extra .s3db files added on the Fatigue tab
@@ -505,6 +506,12 @@ async def hud_page():
     and renders hud-mode instead. A dedicated path (not a query string) is
     used because pywebview/WebView2 was observed dropping query strings
     entirely when navigating a secondary window created via create_window()."""
+    return FileResponse(str(_STATIC / "index.html"))
+
+
+@app.get("/operator_hud")
+async def operator_hud_page():
+    """Same SPA-serving trick as /hud above, for the per-operator HUD."""
     return FileResponse(str(_STATIC / "index.html"))
 
 
@@ -962,6 +969,83 @@ async def api_hud():
         return {"ok": True}
     except Exception as exc:
         log.exception("hud failed")
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.post("/api/operator_hud")
+async def api_operator_hud():
+    """Open the per-operator HUD (/operator_hud) in its own always-on-top
+    pywebview window — one card per operator (QSOs, current rate, on-air %,
+    sparkline), useful in a Multi-Multi contest where several operators are
+    running simultaneously. Mirrors /api/hud's window-lifecycle exactly
+    (reuse/restore via hide()/show(), never destroy() — see _HudApi.close()'s
+    docstring above for why) but as a separate window/API/state slot, since
+    both HUDs can reasonably be open at once."""
+    if STATE._webview_window is None or not STATE._base_url:
+        return JSONResponse({"error": "PyWebView window not ready"}, status_code=503)
+
+    existing = STATE._operator_hud_window
+    if existing is not None:
+        def _restore():
+            try:
+                existing.show()
+            except Exception:
+                pass
+        await asyncio.get_event_loop().run_in_executor(None, _restore)
+        return {"ok": True, "reused": True}
+
+    def _open():
+        import webview as _wv
+
+        # Deliberately a separate class from _HudApi above, not a
+        # parameterized shared one — _HudApi is a closure over its own `win`
+        # laced with platform-specific workarounds (Linux move offset, GTK
+        # destroy-hang), and duplicating ~50 lines here is a smaller risk
+        # than threading a second window through that fragile code.
+        class _OperatorHudApi:
+            def get_position(self):
+                return {"x": win.x, "y": win.y}
+
+            def move_to(self, x, y):
+                if sys.platform.startswith("linux") and getattr(win, "native", None) is not None:
+                    win.native.move(int(x), int(y))
+                else:
+                    win.move(int(x), int(y))
+
+            def close(self):
+                # See _HudApi.close()'s docstring above — same hide()-not-
+                # destroy() reasoning applies to every frameless window here.
+                win.hide()
+
+            def focus_main(self):
+                main_win = STATE._webview_window
+                if main_win is not None:
+                    try:
+                        main_win.show()
+                    except Exception:
+                        pass
+
+        win = _wv.create_window(
+            title="VK Contest Analyzer — Operator HUD",
+            url=f"{STATE._base_url}/operator_hud",
+            # Wider than the Mini HUD's 780x210 — this window shows N
+            # operator cards (2-6+ typical in a Multi-Multi), which need
+            # room to flex-wrap rather than a single fixed row.
+            width=900, height=280,
+            min_size=(320, 160),
+            background_color="#0d1117",
+            on_top=True,
+            frameless=True,
+            js_api=_OperatorHudApi(),
+        )
+        STATE._operator_hud_window = win
+        win.events.closed += lambda: setattr(STATE, "_operator_hud_window", None)
+
+    try:
+        await asyncio.get_event_loop().run_in_executor(None, _open)
+        return {"ok": True}
+    except Exception as exc:
+        log.exception("operator_hud failed")
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 

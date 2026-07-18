@@ -1040,14 +1040,44 @@ class ContestLog:
         span (first QSO -> last QSO) are counted as "Off" time (e.g. sleep
         breaks, band changes to listen, etc.).
 
+        Also includes an hourly QSO-count series and a current-hour rate per
+        operator — same contest-hour bucket scheme as sparkline_data() and
+        same wall-clock-hour-with-zero-default semantics as personal_bests()
+        — powers the Operator HUD's per-operator sparklines. Both are built
+        from non-dupe QSOs only (unlike "qsos" below, which counts every
+        QSO): "activity" and "productive rate" are deliberately different
+        numbers here, matching the same distinction personal_bests() already
+        draws.
+
         Returns a list of dicts, sorted by total on-time descending:
             operator, qsos, first, last, span_minutes,
-            on_minutes, off_minutes, sessions
+            on_minutes, off_minutes, sessions, hourly, current_hour_rate
         """
+        cfg = self._session_cfg
+        contest_hours = int(math.ceil(cfg.duration_mins * cfg.num_sessions / 60))
+        cs = self.contest_start()
+        if self.qsos:
+            earliest = min(q["time"] for q in self.qsos)
+            if cs is None or cs > earliest:
+                cs = earliest.replace(minute=0, second=0, microsecond=0)
+        now = datetime.now(timezone.utc).replace(tzinfo=None, minute=0, second=0, microsecond=0)
+
         by_op: dict = defaultdict(list)
         for q in self.qsos:
             op = (q.get("operator") or "").strip() or "—"
             by_op[op].append(q["time"])
+
+        hourly_by_op: dict = defaultdict(lambda: [0] * contest_hours)
+        current_rate_by_op: dict = defaultdict(int)
+        for q in self.qsos:
+            if q["dupe"]:
+                continue
+            op = (q.get("operator") or "").strip() or "—"
+            if q["time"].replace(minute=0, second=0, microsecond=0) == now:
+                current_rate_by_op[op] += 1
+            bucket = int((q["time"] - cs).total_seconds() // 3600) if cs is not None else q["time"].hour
+            if 0 <= bucket < contest_hours:
+                hourly_by_op[op][bucket] += 1
 
         result = []
         for op, times in by_op.items():
@@ -1064,14 +1094,16 @@ class ContestLog:
                 else:
                     on_minutes += gap
             result.append({
-                "operator":     op,
-                "qsos":         len(times),
-                "first":        first,
-                "last":         last,
-                "span_minutes": (last - first).total_seconds() / 60.0,
-                "on_minutes":   on_minutes,
-                "off_minutes":  off_minutes,
-                "sessions":     sessions,
+                "operator":          op,
+                "qsos":              len(times),
+                "first":             first,
+                "last":              last,
+                "span_minutes":      (last - first).total_seconds() / 60.0,
+                "on_minutes":        on_minutes,
+                "off_minutes":       off_minutes,
+                "sessions":          sessions,
+                "hourly":            hourly_by_op.get(op, [0] * contest_hours),
+                "current_hour_rate": current_rate_by_op.get(op, 0),
             })
         return sorted(result, key=lambda r: r["on_minutes"], reverse=True)
 

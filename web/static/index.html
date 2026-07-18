@@ -12,6 +12,7 @@
   // the query string entirely when navigating secondary windows to a URL
   // built from create_window(url=...), so mode is encoded in the path instead.
   if (location.pathname === '/hud') document.documentElement.classList.add('hud-mode');
+  else if (location.pathname === '/operator_hud') document.documentElement.classList.add('operator-hud-mode');
   else if (location.pathname.startsWith('/popout/')) document.documentElement.classList.add('popout-mode');
 </script>
 </head>
@@ -149,6 +150,13 @@
   <div id="hud-menu" class="panels-menu"></div>
 </div>
 
+<!-- ── Operator HUD (only shown when loaded at /operator_hud in its own
+     popped-out window — see overview.js OPERATOR_HUD_MODE) ─────────────── -->
+<div id="operator-hud-bar">
+  <button id="operator-hud-close" title="Close">✕</button>
+  <div id="operator-hud-cards" class="fatigue-cards-row"></div>
+</div>
+
 <!-- ── Tab bar ────────────────────────────────────────────────────────────── -->
 <nav id="tabbar">
   <button class="tab-btn active" data-tab="overview">
@@ -201,6 +209,7 @@
       <span>⠿ Drag any tile to rearrange this tab — your layout is remembered.</span>
       <div style="display:flex;gap:8px">
         <button id="btn-hud" class="btn btn--ghost btn--sm" title="Open a tiny always-on-top HUD with score, rate and time since last QSO">📌 Mini HUD</button>
+        <button id="btn-operator-hud" class="btn btn--ghost btn--sm" title="Open an always-on-top HUD with per-operator QSOs, rate and on-air %">👥 Operator HUD</button>
         <button id="btn-replay-toggle" class="btn btn--ghost btn--sm" title="Scrub back through the contest's progression">⏪ Replay</button>
         <button id="btn-whatif-toggle" class="btn btn--ghost btn--sm" title="Simulate working a missing multiplier">🔮 What if?</button>
         <div class="panels-menu-wrap">
