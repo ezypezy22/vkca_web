@@ -372,6 +372,13 @@
       if (s._receivedAt && Date.now() - s._receivedAt < FLASH_WINDOW_MS) {
         tr.classList.add(FLASH_CLASS[s.status] || 'spot-flash-plain');
       }
+      // Needed multipliers are the single most actionable spot on the
+      // board — a one-time arrival flash isn't enough to keep it visible
+      // once other spots start rolling in above/below it, so it also gets
+      // a continuous, gentle pulse for as long as it stays a needed mult
+      // (naturally stops the next time this spot is worked and re-renders
+      // with a different status).
+      if (s.status === 'NEW_MULT') tr.classList.add('spot-pulse-mult');
       frag.appendChild(tr);
     });
     spotTbody.appendChild(frag);
