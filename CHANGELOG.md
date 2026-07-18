@@ -1,5 +1,38 @@
 # Changelog
 
+## 26.7.19
+
+### Enhancements
+
+ff21a83 Give needed-multiplier spots a continuous pulse in the DX Cluster tab
+
+### Bugfixes
+
+Full-app code review — 34 issues found and fixed (#40-#73):
+
+eda26cc Fix ARRL DX plugin misidentification (DX vs W/VE station) and its Overview gauges showing wrong worked/missing counts (#40, #42)
+eda26cc Fix DX Cluster connect blocking the whole app for up to 30s on a slow/hung peer (#41)
+eda26cc Fix XSS: unescaped call signs, contest names, and filenames reaching innerHTML in 4 places (#43, #44, #56, #65)
+eda26cc Fix VK Shires crediting the wrong shire when the exchange digit and callsign area disagree (#45)
+eda26cc Fix JIDX missing 8K/8L/8M/8N special-event prefixes, and swapped JA0/JA9 region labels (#46, #67)
+eda26cc Fix HA Sprint and IOTA missing the once-per-mode dupe rule, incorrectly zeroing legitimate different-mode reworks (#47, #48)
+eda26cc Fix CQWW un-duping genuine N1MM-flagged dupes, and ARRL DX mislabeling non-scoring DX-DX contacts as dupes (#49, #50)
+eda26cc Fix a HUD-window creation race and /api/qsos/delete not broadcasting the updated snapshot (#51, #52)
+eda26cc Fix inconsistent contest-start clamping across session/rate calculations, band breakdown bypassing plugin multiplier resolution, and the sparkline "new mults" count going permanently to zero when a log's mult flags are unavailable (#53, #54, #55)
+eda26cc Fix ARRL 10M failing to parse a glued CW RST+state exchange like "5NNTX" (#57)
+eda26cc Fix Pace tab's trajectory chart overshooting near contest end, and its reference-comparison polling never stopping after leaving the tab (#58, #59)
+eda26cc Fix Settings dialog polling QRZ status redundantly in all 3 windows and double-firing completion toasts (#60)
+eda26cc Fix an unguarded settings-file read-modify-write race and blocking file I/O on the event loop (#61)
+eda26cc Fix a bad DX Cluster port silently killing the whole session instead of showing an error (#62)
+eda26cc Fix the titlebar showing the wrong contest name after a failed Switch Contest/load (#63)
+eda26cc Fix stale fetch responses clobbering fresher data on the Dupes/Debug/Missing/Worked tabs (#64)
+eda26cc Fix duplicate /api/os_theme and /api/save_location route registrations (dead code) (#68)
+eda26cc Fix /api/dupes error response missing the rule_text field (#69)
+eda26cc Fix World Map arc opacity never actually responding to basemap brightness (#70)
+eda26cc Fix Missing Mults tab crashing if its markup is ever conditionally absent (#71)
+eda26cc Fix Operator HUD polling a Live Rank panel it can never render (#72)
+eda26cc Rework several charts to update in place instead of destroy+recreate on every redraw (#73)
+
 ## 26.7.18
 
 ### Enhancements
