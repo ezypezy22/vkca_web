@@ -2015,6 +2015,57 @@
     }
   }
 
+  // ── Live dead-air detection ────────────────────────────────────────────
+  // Distinct from two existing checks: the Fatigue tab's dead-zone analysis
+  // is a whole-contest, 24-hour-of-day retrospective average (not live, and
+  // not usable per-band in real time); the Pace tab's rate alarm is live but
+  // whole-station only and only trips after a FULL clock-hour comes up empty.
+  // Neither can tell you "you've been parked on 40m for 15 minutes with
+  // nothing" while other bands might be open. Tracks time since the last QSO
+  // logged WHILE ON THIS BAND (not time since first tuning to it — a QSO 2
+  // minutes in shouldn't reset a clock that then runs to the threshold
+  // anyway). A QSO-count increase while the band hasn't changed is treated
+  // as a QSO on that band — a reasonable simplification for the common
+  // single-radio case; for SO2R this can occasionally miss (a QSO worked on
+  // radio 2 while radio 1 — "own" — sits idle on a dead band) since only one
+  // "own" radio is tracked, a documented narrow gap same as other known,
+  // rare-case simplifications already in this codebase.
+  const DEAD_AIR_THRESHOLD_MINS = 15;
+  let _deadAirBand=null, _deadAirClockStart=null, _deadAirBaseline=null, _deadAirFired=false;
+
+  function resetDeadAirTracking(){
+    _deadAirBand=null; _deadAirClockStart=null; _deadAirBaseline=null; _deadAirFired=false;
+  }
+
+  function playDeadAirSound(){
+    if (!_soundEnabled) return;
+    // Two short low pings — distinct from both the celebratory chime and
+    // the end-time warning's higher-pitched pings.
+    beep(440, 0,   0.25, 0.12);
+    beep(370, 0.3, 0.35, 0.12);
+  }
+
+  function checkDeadAir(snap){
+    const band  = snap?.radio_info?.own?.band;
+    const valid = snap?.valid || 0;
+    if (!band){ resetDeadAirTracking(); return; }
+    if (band !== _deadAirBand || valid > (_deadAirBaseline ?? valid)){
+      // Band changed, or a QSO just landed on this band — (re)start the clock.
+      _deadAirBand=band; _deadAirClockStart=Date.now();
+      _deadAirBaseline=valid; _deadAirFired=false;
+      return;
+    }
+    if (_deadAirFired) return;
+    if ((Date.now()-_deadAirClockStart)/60000 >= DEAD_AIR_THRESHOLD_MINS){
+      _deadAirFired = true;
+      const target = HUD_MODE ? document.getElementById('hud-radio')
+                               : document.getElementById('panel-radio');
+      flashEl(target,'flash-endtime',1400);   // reuse the existing red "needs attention" flash
+      notifyOS('📻 Dead air', `No QSOs on ${band} in ${DEAD_AIR_THRESHOLD_MINS} min — try another band?`);
+      playDeadAirSound();
+    }
+  }
+
   // ══ MAIN ═══════════════════════════════════════════════════════════════════
   function render(snap){
     updateGauges(snap); updateSparklines(snap); updateRegionBars(snap);
@@ -2036,12 +2087,13 @@
   window.addEventListener('vka:snapshot',e=>{
     trackLastQso(e.detail);
     if (OPERATOR_HUD_MODE) { updateOperatorHud(e.detail); return; }
-    if (HUD_MODE) { updateHud(e.detail); trackHudSparklines(e.detail); checkCelebrations(e.detail); checkEndTimeAlert(e.detail); return; }
+    if (HUD_MODE) { updateHud(e.detail); trackHudSparklines(e.detail); checkCelebrations(e.detail); checkEndTimeAlert(e.detail); checkDeadAir(e.detail); return; }
     if (_replaying) return;
     if(_firstSnap){_firstSnap=false;loadPluginMeta().then(()=>render(e.detail));}
     else render(e.detail);
     checkCelebrations(e.detail);
     checkEndTimeAlert(e.detail);
+    checkDeadAir(e.detail);
   });
   window.addEventListener('vka:tabchange',e=>{
     if(e.detail.tab!=='overview') return;
@@ -2049,7 +2101,7 @@
     const snap=window.VKA.lastSnap(); if(snap) render(snap);
   });
   window.addEventListener('vka:loaded',()=>{
-    _metaLoaded=false;_firstSnap=true;resetCelebrations();resetEndTimeAlerts();resetHudSparklines();
+    _metaLoaded=false;_firstSnap=true;resetCelebrations();resetEndTimeAlerts();resetHudSparklines();resetDeadAirTracking();
     // panel-live-rank doesn't exist in either HUD window's DOM — polling
     // there just fires an unnecessary COSB-scraping request every load
     // (see issue #72).

@@ -513,6 +513,16 @@ def _qrz_maybe_broadcast():
         with STATE._lock:
             STATE.last_snapshot = STATE._safe_snapshot()
             snap = dict(STATE.last_snapshot)
+            # Same overlay STATE.snapshot() itself does — this function
+            # broadcasts a manually-built snap dict instead of going
+            # through snapshot() (see the recompute note above), so it has
+            # to repeat the overlay explicitly or every radio_info-driven
+            # UI (titlebar chip, Mini HUD tile, Overview panel, Operator
+            # HUD badge, DX Cluster "on the air" board) would flicker
+            # blank on every QRZ-triggered broadcast — found live: the
+            # cluster board showed briefly on a radio-triggered broadcast,
+            # then vanished on the very next QRZ one.
+            snap["radio_info"] = STATE._own_and_all_radios()
         asyncio.run_coroutine_threadsafe(_broadcast(snap), STATE._main_loop)
 
 
@@ -1539,6 +1549,10 @@ async def api_radio_info():
     web/radio_udp.py). {"own": <entry>|None, "all": {key: entry, ...}}."""
     snap = STATE.snapshot()
     return snap.get("radio_info", {"own": None, "all": {}})
+
+
+
+
 
 
 

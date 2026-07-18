@@ -582,6 +582,14 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
   50%{box-shadow:inset 0 0 16px 3px rgba(46,213,115,.4);}
 }
 
+/* Spots on the band the radio is currently tuned to (see cluster.js's
+   vka:snapshot listener). Deliberately a steady marker, not another
+   pulse — a busy band would turn into visual noise with every row
+   animating at once, and this needs to stay legible stacked alongside
+   .spot-pulse-mult on a spot that's both. */
+.spot-current-band{border-left:3px solid var(--accent);
+  background:rgba(0,212,170,.06);}
+
 /* ── Tables ──────────────────────────────────────────────────────────────── */
 .table-wrap{overflow-y:auto;max-height:calc(100vh - 200px);
             border-radius:var(--radius);border:1px solid var(--bg3);}

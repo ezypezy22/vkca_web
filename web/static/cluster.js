@@ -24,6 +24,7 @@
   let filterBand = 'ALL';
   let filterCall = '';
   let filterMode = 'ALL';
+  let _currentBand = null;   // radio_info.own.band, from the main app's snapshot stream
 
   // ── New-spot glow + spot-age fade ────────────────────────────────────────
   // renderSpots() rebuilds the whole tbody from scratch on every single new
@@ -217,6 +218,40 @@
     renderSpots();
   });
 
+  // ── Live radio awareness — band-match highlighting + "who's on the air"
+  // board ──────────────────────────────────────────────────────────────────
+  // cluster.js runs its own separate /ws/cluster connection for spot data,
+  // so it doesn't otherwise see the main app's snapshot stream (radio_info
+  // rides on every vka:snapshot — see web/radio_udp.py / app.js's
+  // window.VKA.formatRadio()).
+  const radioBoardBox = document.getElementById('cluster-radios');
+  function renderRadioBoard(radioInfo) {
+    if (!radioBoardBox) return;
+    const all = Object.values(radioInfo?.all || {});
+    if (!all.length) { radioBoardBox.style.display = 'none'; return; }
+    radioBoardBox.style.display = '';
+    const parts = all
+      .sort((a, b) => (a.radio_nr || '').localeCompare(b.radio_nr || ''))
+      .map(r => {
+        const fr = window.VKA.formatRadio(r);
+        if (!fr) return '';
+        const op = r.op_call ? escapeHtml(r.op_call) + ' — ' : '';
+        return `<span${fr.stale ? ' style="opacity:.55"' : ''}>` +
+          `<span class="band-chip" style="background:${fr.bandColor}30;color:${fr.bandColor}">${fr.band}</span> ` +
+          `${op}${fr.freqStr} MHz${fr.modeStr ? ' ' + escapeHtml(fr.modeStr) : ''}</span>`;
+      });
+    radioBoardBox.innerHTML = `<span style="color:${C.accent}">&#9654; ON THE AIR —</span> ` + parts.join('  &middot;  ');
+  }
+
+  window.addEventListener('vka:snapshot', e => {
+    renderRadioBoard(e.detail?.radio_info);
+    // Only rebuild the (potentially 100-row) spot table when the band
+    // actually changes, not on every ~1.5-5s snapshot tick — band-hops are
+    // infrequent, unlike snapshot ticks.
+    const band = e.detail?.radio_info?.own?.band || null;
+    if (band !== _currentBand) { _currentBand = band; renderSpots(); }
+  });
+
   // ── Connect ───────────────────────────────────────────────────────────────
   function connect() {
     if (ws) { ws.close(); ws=null; }
@@ -379,6 +414,11 @@
       // (naturally stops the next time this spot is worked and re-renders
       // with a different status).
       if (s.status === 'NEW_MULT') tr.classList.add('spot-pulse-mult');
+      // Steady marker (not another pulse — a busy band would turn into
+      // visual noise with every row animating at once) for spots on the
+      // band the radio is currently tuned to (see the vka:snapshot
+      // listener above, which only re-renders on an actual band change).
+      if (_currentBand && s.band === _currentBand) tr.classList.add('spot-current-band');
       frag.appendChild(tr);
     });
     spotTbody.appendChild(frag);
