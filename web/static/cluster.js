@@ -25,6 +25,7 @@
   let filterCall = '';
   let filterMode = 'ALL';
   let _currentBand = null;   // radio_info.own.band, from the main app's snapshot stream
+  let _lastRadioInfo = null; // full {own, all} radio_info, for Band Advisor occupancy notes
 
   // ── New-spot glow + spot-age fade ────────────────────────────────────────
   // renderSpots() rebuilds the whole tbody from scratch on every single new
@@ -54,6 +55,9 @@
   function tickSpotAges() {
     if (!spotTbody) return;
     for (const tr of spotTbody.children) applyRowAge(tr);
+    // Band Advisor scores decay with spot age even when no new spot arrives
+    // to trigger a re-render — keep it ticking down on its own.
+    renderBandAdvisor();
   }
   setInterval(tickSpotAges, 15000);
 
@@ -245,11 +249,17 @@
 
   window.addEventListener('vka:snapshot', e => {
     renderRadioBoard(e.detail?.radio_info);
+    _lastRadioInfo = e.detail?.radio_info || null;
     // Only rebuild the (potentially 100-row) spot table when the band
     // actually changes, not on every ~1.5-5s snapshot tick — band-hops are
     // infrequent, unlike snapshot ticks.
     const band = e.detail?.radio_info?.own?.band || null;
     if (band !== _currentBand) { _currentBand = band; renderSpots(); }
+    // A teammate's radio (Multi-Multi) can change band without ours moving —
+    // renderSpots() (and its trailing renderBandAdvisor() call) only fires
+    // on our own band change above, so refresh the advisor's occupancy
+    // notes here too.
+    else renderBandAdvisor();
   });
 
   // ── Connect ───────────────────────────────────────────────────────────────
@@ -422,29 +432,85 @@
       frag.appendChild(tr);
     });
     spotTbody.appendChild(frag);
-    renderAdvice(filtered);
+    renderBandAdvisor();
   }
 
-  // ── "Next target" advice bar ─────────────────────────────────────────────
-  function renderAdvice(filtered) {
-    if (!adviceBox) return;
-    const actionable = filtered.filter(s => s.status === 'NEW_MULT' || s.status === 'NEW_BAND');
-    if (!actionable.length) {
-      adviceBox.style.display = 'none';
-      return;
-    }
+  // ── Band Advisor — which band to point the radio at right now ───────────
+  // Turns the DX Cluster's already-classified spots and the radio UDP
+  // occupancy board (both otherwise passive readouts) into one active
+  // recommendation: score every band by its recent needed-mult/needed-band
+  // spots, decayed by age so a 19-minute-old spot barely counts, then name
+  // the best one — annotated with who (if anyone) is already sitting there,
+  // from radio_info.all, so a Multi-Multi op doesn't get told to jump onto
+  // a band a teammate is already running.
+  const ADVISOR_WINDOW_MS = 20 * 60 * 1000;
+  const ADVISOR_WEIGHT = { NEW_MULT: 3, NEW_BAND: 1.5 };
+
+  function computeBandOpportunities() {
+    const now = Date.now();
+    const bandsOnly = !!chkBandsOnly?.checked;
     const byBand = {};
-    actionable.forEach(s => { (byBand[s.band] = byBand[s.band] || []).push(s); });
-    const parts = Object.keys(byBand).sort().map(band => {
-      const list = byBand[band];
-      const newMult = list.filter(s=>s.status==='NEW_MULT').length;
-      const newBand = list.filter(s=>s.status==='NEW_BAND').length;
-      const top = list[0];
-      const tag = newMult ? `${newMult} new mult` : `${newBand} new band`;
-      return `<b style="color:${BAND_COLS[band]||C.muted}">${band}</b>: ${escapeHtml(top.dx)} (${tag})`;
-    });
+    for (const s of spots) {
+      if (s.status !== 'NEW_MULT' && s.status !== 'NEW_BAND') continue;
+      if (!passesModeFilter(s)) continue;
+      if (bandsOnly && bandsInLog && bandsInLog.size && !bandsInLog.has(s.band)) continue;
+      const age = now - (s._receivedAt || now);
+      if (age > ADVISOR_WINDOW_MS) continue;
+      const decay = 1 - age / ADVISOR_WINDOW_MS;
+      const rec = byBand[s.band] || (byBand[s.band] = { score: 0, multCount: 0, bandCount: 0, top: s, topAge: age });
+      rec.score += (ADVISOR_WEIGHT[s.status] || 0) * decay;
+      if (s.status === 'NEW_MULT') rec.multCount++; else rec.bandCount++;
+      if (age < rec.topAge) { rec.top = s; rec.topAge = age; }
+    }
+    return byBand;
+  }
+
+  // Who else (not us) is currently parked on a given band, per the live
+  // RadioInfo UDP feed — see web/radio_udp.py for the "own"/"all" split.
+  function bandOccupants(band) {
+    if (!_lastRadioInfo) return [];
+    const own = _lastRadioInfo.own;
+    const ownKey = own ? `${own.source_ip}|${own.radio_nr}` : null;
+    return Object.entries(_lastRadioInfo.all || {})
+      .filter(([key, r]) => key !== ownKey && r.band === band)
+      .map(([, r]) => r);
+  }
+
+  function renderBandAdvisor() {
+    if (!adviceBox) return;
+    const byBand = computeBandOpportunities();
+    const bands = Object.keys(byBand).sort((a, b) => byBand[b].score - byBand[a].score);
+    if (!bands.length) { adviceBox.style.display = 'none'; return; }
     adviceBox.style.display = '';
-    adviceBox.innerHTML = `<span style="color:${C.accent}">▶ NEXT TARGETS —</span> ` + parts.join('  ·  ');
+
+    const top = bands[0];
+    const rec = byBand[top];
+    const topOccupants = bandOccupants(top);
+    const onTopAlready = _currentBand && top === _currentBand;
+
+    const verb = onTopAlready
+      ? `Stay on <b style="color:${BAND_COLS[top]||C.muted}">${top}</b> — you're already there`
+      : `Switch to <b style="color:${BAND_COLS[top]||C.muted}">${top}</b>`;
+    const tag = [
+      rec.multCount ? `${rec.multCount} new mult${rec.multCount>1?'s':''}` : '',
+      rec.bandCount ? `${rec.bandCount} new band${rec.bandCount>1?'s':''}` : '',
+    ].filter(Boolean).join(' + ');
+    const occNote = topOccupants.length
+      ? ` <span style="color:${C.muted}">(${topOccupants.map(o=>escapeHtml(o.op_call||'?')).join(', ')} already there)</span>`
+      : '';
+
+    const rest = bands.slice(1, 4).map(band => {
+      const r = byBand[band];
+      const occ = bandOccupants(band);
+      const t = r.multCount ? `${r.multCount} mult` : `${r.bandCount} band`;
+      return `<span style="color:${BAND_COLS[band]||C.muted}">${band}</span>: ${t}` +
+        (occ.length ? ` <span style="color:${C.muted}">(${escapeHtml(occ[0].op_call||'?')})</span>` : '');
+    });
+
+    adviceBox.innerHTML =
+      `<span class="advisor-pick" style="color:${C.accent}">&#9654; BAND ADVISOR —</span> ${verb}, ` +
+      `${escapeHtml(rec.top.dx)} (${tag})${occNote}` +
+      (rest.length ? `  &middot;  ${rest.join('  &middot;  ')}` : '');
   }
 
   // Band filter buttons

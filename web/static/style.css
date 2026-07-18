@@ -590,6 +590,14 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .spot-current-band{border-left:3px solid var(--accent);
   background:rgba(0,212,170,.06);}
 
+/* Band Advisor headline — a soft breathing glow marks it as a live,
+   still-current recommendation rather than static label text. */
+.advisor-pick{animation:advisor-glow-kf 2.4s ease-in-out infinite;}
+@keyframes advisor-glow-kf{
+  0%,100%{text-shadow:0 0 0 rgba(0,212,170,0);}
+  50%{text-shadow:0 0 8px rgba(0,212,170,.6);}
+}
+
 /* ── Tables ──────────────────────────────────────────────────────────────── */
 .table-wrap{overflow-y:auto;max-height:calc(100vh - 200px);
             border-radius:var(--radius);border:1px solid var(--bg3);}
