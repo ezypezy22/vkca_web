@@ -1,5 +1,26 @@
 # Changelog
 
+## 26.7.18
+
+### Enhancements
+
+7ad524f Add native desktop toast notifications for milestones/best-rate
+791cbeb Add new-spot glow and age-fade to the DX Cluster tab
+dacf339 Style the Pace tab's trajectory chart as a glowing sparkline
+e87f129 Add a custom accent colour picker, layered on top of the 5 themes
+515384f Add sound alerts for milestones and best-rate records
+eab32b5 Replace the milestone tone with a synthesized clap/cheer burst
+ba1d127 Rework milestone/best-rate sound, add contest end-time alerts
+37a5623 Add an Operator HUD pop-out window for multi-op contests
+e62ecc3 Restyle the Operator HUD: vertical card stack + visual polish
+127d73b Add a consolidated Settings panel for QRZ lookup + log search folders
+43911ad Move Settings button next to Open Log, give it a distinct colour
+
+### Bugfixes
+
+da389aa Fix /api/notify truncation limits to match Win32's actual struct caps
+ef11f57 Fix shutdown-time RuntimeError race in _poll_loop()
+
 ## 26.7.17
 
 ### Enhancements
