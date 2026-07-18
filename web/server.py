@@ -191,6 +191,7 @@ class AppState:
         self._qrz_inflight: set                   = set()   # calls queued/being looked up — dedup
         self._qrz_last_broadcast: float           = 0.0
         self._main_loop                           = None    # set in lifespan(); used by the QRZ worker to broadcast
+        self._shutting_down                       = False   # set by _start_shutdown(); tells _poll_loop() to stop
         # Enrich All batch progress — reset by _qrz_enrich_all() to the size
         # of that batch, then _qrz_batch_remaining counts down as the worker
         # finishes each item (see _qrz_worker_loop). The same worker/queue
@@ -2994,9 +2995,19 @@ async def _broadcast(data: dict):
 async def _poll_loop():
     while True:
         await asyncio.sleep(STATE.poll_interval)
-        changed = await asyncio.get_event_loop().run_in_executor(
-            None, STATE.poll_once
-        )
+        if STATE._shutting_down:
+            return
+        try:
+            changed = await asyncio.get_event_loop().run_in_executor(
+                None, STATE.poll_once
+            )
+        except RuntimeError:
+            # The flag check above closes the common case, but shutdown's
+            # executor teardown (see _start_shutdown()) can still race it by
+            # a hair — ThreadPoolExecutor.submit() raises exactly this when
+            # called after the executor's own shutdown() — so this is the
+            # same "stop cleanly" outcome as the flag check catching it.
+            return
         if changed:
             await _broadcast(STATE.snapshot())
 
@@ -3400,6 +3411,14 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
             and the actual work below — notably server_thread.join() — must
             never block that thread's event loop."""
             log.info("Window closed — shutting down")
+            # Set first, before anything else — _poll_loop() checks this after
+            # waking from its sleep and stops rather than calling
+            # run_in_executor() against a thread pool that server_thread.join()
+            # below may have already torn down (observed as a stray
+            # "RuntimeError: cannot schedule new futures after shutdown"
+            # during the up-to-2s graceful-uvicorn-stop window before the
+            # final os._exit()).
+            STATE._shutting_down = True
 
             def _shutdown():
                 # Redirect stderr to suppress the noisy WebView2/Chromium window-class
