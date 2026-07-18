@@ -47,6 +47,8 @@
     <div class="tb-spacer pywebview-drag-region"></div>
     <button id="btn-switch-contest" class="tb-btn" style="display:none" title="Switch to a different contest in the current database">⇄ <span id="switch-contest-label">Switch</span></button>
     <button id="btn-load" class="tb-btn tb-btn--primary tb-btn--open">📂 Open Log</button>
+    <button id="btn-settings" class="tb-btn tb-btn--settings" title="Settings — QRZ.com lookup, log search folders">⚙ Settings</button>
+    <span id="qrz-progress-badge" class="badge qrz-progress-badge hidden" title="QRZ lookups in progress"></span>
     <!-- Custom caption buttons for the frameless desktop window — hidden by
          default, shown only inside pywebview (see app.js wireWindowControls). -->
     <div id="window-controls" style="display:none">
@@ -116,12 +118,6 @@
 
     <!-- Report issue / request feature -->
     <button id="btn-report-issue" class="tb-btn" title="Report a bug or request a feature">🐛 Report Issue</button>
-
-    <div class="tb-sep"></div>
-
-    <!-- App settings (QRZ.com lookup, log search folders) -->
-    <button id="btn-settings" class="tb-btn" title="Settings — QRZ.com lookup, log search folders">⚙ Settings</button>
-    <span id="qrz-progress-badge" class="badge qrz-progress-badge hidden" title="QRZ lookups in progress"></span>
 
     <!-- Trailing drag handle — row 2 is otherwise wall-to-wall interactive
          controls (slider, selects, buttons), so without this the whole

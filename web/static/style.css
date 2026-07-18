@@ -95,6 +95,10 @@ body{height:100%;background:var(--bg);color:var(--fg);
 .tb-btn--primary{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:bold;}
 .tb-btn--primary:hover{background:#00efc0;color:var(--bg);}
 .tb-btn--icon{padding:2px 6px;font-size:0.85em;}
+/* Coloured outline (not filled) so it reads as distinct from — but not
+   competing with — the solid-filled Open Log primary button beside it. */
+.tb-btn--settings{border-color:var(--accent2);color:var(--accent2);}
+.tb-btn--settings:hover{background:var(--accent2);color:var(--bg);}
 
 /* Custom accent picker — a small square swatch matching the toolbar's other
    compact controls, not the browser's default wide colour-input chrome. */
