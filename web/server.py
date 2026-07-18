@@ -1028,11 +1028,14 @@ async def api_operator_hud():
         win = _wv.create_window(
             title="VK Contest Analyzer — Operator HUD",
             url=f"{STATE._base_url}/operator_hud",
-            # Wider than the Mini HUD's 780x210 — this window shows N
-            # operator cards (2-6+ typical in a Multi-Multi), which need
-            # room to flex-wrap rather than a single fixed row.
-            width=900, height=280,
-            min_size=(320, 160),
+            # Narrow and tall rather than wide — cards stack in a single
+            # vertical column (see #operator-hud-cards in style.css) full
+            # window width each, so even a 1-2 operator log fills the window
+            # instead of floating as a small box in a mostly-empty wide one.
+            # Tall enough for ~2 cards at once; more scroll via the window's
+            # own overflow-y:auto.
+            width=360, height=560,
+            min_size=(300, 240),
             background_color="#0d1117",
             on_top=True,
             frameless=True,

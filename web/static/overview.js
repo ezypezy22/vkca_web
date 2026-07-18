@@ -1188,6 +1188,7 @@
       const div=document.createElement('div');
       div.className='fatigue-card';
       div.style.borderTopColor=col;
+      div.style.boxShadow=`0 0 20px -8px ${col}, 0 2px 8px -2px rgba(0,0,0,.5)`;
       // op.operator is free-text from the DXLOG Operator column — same
       // log-derived-text category as callsigns/comments elsewhere, escaped
       // before going into innerHTML (matches fatigue.js's renderOpCards()).

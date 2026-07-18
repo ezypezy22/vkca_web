@@ -298,10 +298,14 @@ html.hud-mode #hud-settings{display:block;}
 html.hud-mode #hud-orientation{display:block;}
 
 /* ── Operator HUD (rendered only in its own popped-out window, /operator_hud)
-   Unlike the Mini HUD's fixed row of stats, this is a scrollable container of
-   .fatigue-card elements (reused as-is from the Fatigue tab, see .fatigue-*
-   rules above) — one per operator, so the layout needs to accommodate a
-   variable, potentially-wrapping count rather than a fixed set of fields. ── */
+   Unlike the Mini HUD's fixed row of stats, this is a scrollable, vertical
+   stack of .fatigue-card elements (reused from the Fatigue tab, see
+   .fatigue-* rules above) — one per operator, full window width each, so a
+   1-2 operator log doesn't read as a tiny box floating in a mostly-empty
+   window. Stat row is overridden to 3 columns (QSOs / current rate / on-air
+   time) since these cards drop the Fatigue tab's 4th "Off / Break" stat in
+   favour of the sparkline — reusing the 4-column grid as-is left an empty
+   trailing column and uneven spacing. */
 #operator-hud-bar{display:none;position:fixed;inset:0;background:var(--bg);
   cursor:grab;padding:36px 14px 14px;overflow-y:auto;}
 #operator-hud-bar:active{cursor:grabbing;}
@@ -310,6 +314,12 @@ html.hud-mode #hud-orientation{display:block;}
   background:transparent;border:1px solid var(--bg3);border-radius:4px;
   color:var(--muted);font-size:0.8em;cursor:pointer;}
 #operator-hud-close:hover{background:var(--red);border-color:var(--red);color:#fff;}
+#operator-hud-cards{display:flex;flex-direction:column;gap:var(--gap);}
+#operator-hud-cards .fatigue-card{background:linear-gradient(180deg,var(--bg2),var(--bg));
+  border-top-width:3px;border-radius:8px;padding:14px 18px 16px;}
+#operator-hud-cards .fatigue-op{font-size:1.15em;letter-spacing:.02em;}
+#operator-hud-cards .fatigue-stat-row{grid-template-columns:repeat(3,1fr);}
+#operator-hud-cards .fatigue-stat-val{font-size:1.3em;}
 html.operator-hud-mode body{padding:0;overflow:hidden;}
 html.operator-hud-mode #titlebar,html.operator-hud-mode #session-bar,
 html.operator-hud-mode #tabbar,html.operator-hud-mode #content{display:none!important;}
@@ -683,7 +693,7 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .fatigue-stat-label{font-family:var(--font-mono);font-size:0.62em;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
 .fatigue-prog-wrap{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-bottom:4px;}
 .fatigue-prog-bar{height:100%;border-radius:2px;transition:width .6s ease-out;}
-.operator-hud-spark{width:100%;height:32px;display:block;margin-top:8px;}
+.operator-hud-spark{width:100%;height:44px;display:block;margin-top:10px;}
 .pace-cards-row{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;}
 .pace-card{background:var(--bg2);border:1px solid var(--bg3);
   border-top:2px solid var(--accent2);border-radius:var(--radius);padding:10px 8px;text-align:center;}
