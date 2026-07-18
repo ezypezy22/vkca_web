@@ -682,6 +682,28 @@
     addPopoutButton(el);
   }
 
+  // ── Radio panel — driven by the same snapshot as every other Overview
+  // panel (radio_info rides along on snapshot.radio_info, no extra fetch),
+  // unlike Live Ranking above which is a slow external network call.
+  function updateRadioPanel(snap){
+    const el=ip('panel-radio'); if(!el) return;
+    const r=window.VKA.formatRadio(snap?.radio_info?.own);
+    if (!r){
+      el.innerHTML=hdr('[ &asymp; ]',T.accent3,'RADIO')+
+        `<div style="color:${T.muted};font-size:0.85em;padding:8px 0">No radio connected — enable N1MM+'s RadioInfo broadcast (Config &gt; Config Ports &gt; Broadcast Data &gt; Radio) to show this.</div>`;
+      addPopoutButton(el);
+      return;
+    }
+    el.innerHTML=hdr('[ &asymp; ]',T.accent3,'RADIO')+`
+      <table class="ip-tbl">
+        <tr><td>Freq</td><td style="color:${T.accent3};font-weight:bold;font-size:1.15em">${r.freqStr} MHz</td></tr>
+        <tr><td>Band</td><td><span class="band-chip" style="background:${r.bandColor}30;color:${r.bandColor}">${r.band}</span></td></tr>
+        <tr><td>Mode</td><td style="color:${T.muted}">${r.modeStr||'—'}</td></tr>
+        <tr><td>Radio</td><td style="color:${T.muted}">${r.radioNr}</td></tr>
+      </table>`;
+    addPopoutButton(el);
+  }
+
   async function fetchLiveRank(){
     try {
       const res = await fetch('/api/live_rank');
@@ -1182,6 +1204,18 @@
         No operator data yet.</div>`;
       return;
     }
+    // Match each operator's own card to a live radio by callsign — N1MM+'s
+    // RadioInfo OpCall field vs. the DXLOG Operator column, both already
+    // upper-cased server-side. Exact match only (no portable-suffix
+    // normalisation): a near-miss just means no badge on that card, which
+    // is a safe degradation, not a crash. Blank/placeholder operator names
+    // ("—", used when the DXLOG Operator column is empty) never match.
+    const radios=Object.values(snap?.radio_info?.all||{});
+    const radioForOp=(operator)=>{
+      const call=(operator||'').trim().toUpperCase();
+      if (!call || call==='—') return null;
+      return radios.find(r=>r.op_call===call) || null;
+    };
     ops.forEach((op,i)=>{
       const col=OPERATOR_HUD_PALETTE[i%OPERATOR_HUD_PALETTE.length];
       const onPct=op.span_minutes>0 ? Math.round(op.on_minutes/op.span_minutes*100) : 0;
@@ -1189,11 +1223,15 @@
       div.className='fatigue-card';
       div.style.borderTopColor=col;
       div.style.boxShadow=`0 0 20px -8px ${col}, 0 2px 8px -2px rgba(0,0,0,.5)`;
+      const r=window.VKA.formatRadio(radioForOp(op.operator));
+      const radioBadge=r ? `<span class="badge op-freq-badge${r.stale?' op-freq-badge--stale':''}">
+          <span class="band-chip" style="background:${r.bandColor}30;color:${r.bandColor}">${r.band}</span>
+          ${r.freqStr}${r.modeStr?' '+escapeHtml(r.modeStr):''}</span>` : '';
       // op.operator is free-text from the DXLOG Operator column — same
       // log-derived-text category as callsigns/comments elsewhere, escaped
       // before going into innerHTML (matches fatigue.js's renderOpCards()).
       div.innerHTML=`
-        <div class="fatigue-op" style="color:${col}">${escapeHtml(op.operator||'—')}</div>
+        <div class="fatigue-op" style="color:${col}">${escapeHtml(op.operator||'—')}${radioBadge}</div>
         <div class="fatigue-stat-row">
           <div class="fatigue-stat">
             <div class="fatigue-stat-val">${(op.qsos||0).toLocaleString()}</div>
@@ -1250,10 +1288,28 @@
       effEl.textContent = eff==null ? '—' : eff+'%';
       effEl.style.color = eff==null ? T.muted : (eff>=70?T.green:eff>=40?T.accent3:T.red);
     }
+    updateHudRadio(snap);
     _hudState=ss.state||null;
     const targetDt = ss.state==='pre' ? ss.start_dt : ss.state==='live' ? ss.end_dt : null;
     _hudTarget = targetDt ? new Date(targetDt+'Z') : null;   // naive UTC, like _lastQsoTime above
     tickHudRemain();
+  }
+
+  // Compact 2-line RADIO tile — band+freq on the .hud-val line (same big
+  // style as every other field), mode/radio# smaller underneath, rather
+  // than three separate tiles: one logical reading, and the HUD bar is
+  // already sized for up to 7 fields (see style.css's own comment on
+  // .hud-item) so a single combined tile keeps this the 8th without
+  // pushing the window wider.
+  function updateHudRadio(snap){
+    const valEl=document.getElementById('hud-radio');
+    const subEl=document.getElementById('hud-radio-sub');
+    if (!valEl) return;
+    const r=window.VKA.formatRadio(snap?.radio_info?.own);
+    if (!r){ valEl.textContent='—'; valEl.style.color=T.muted; if(subEl) subEl.textContent=''; return; }
+    valEl.innerHTML=`<span class="band-chip" style="background:${r.bandColor}30;color:${r.bandColor}">${r.band}</span> ${r.freqStr}`;
+    valEl.style.color=T.accent;
+    if (subEl) subEl.textContent = r.modeStr ? `${r.modeStr} · RADIO ${r.radioNr}` : `RADIO ${r.radioNr}`;
   }
 
   // ── HUD mini sparklines ────────────────────────────────────────────────
@@ -1444,7 +1500,8 @@
   if (HUD_MODE) {
     const HUD_FIELDS_KEY='vkca_hud_fields';
     const HUD_FIELD_LABELS={score:'Score',mults:'Mults',rate:'Rate',eff:'On-air %',
-                             remain:'Remaining',session:'Session',since:'Last QSO'};
+                             remain:'Remaining',session:'Session',since:'Last QSO',
+                             radio:'Radio Freq/Band'};
     const HUD_FIELD_DESC={
       score:  'Total contest score',
       mults:  'Multiplier count driving your score',
@@ -1453,6 +1510,7 @@
       remain: 'Time left in the current session',
       session:'Current session or block label',
       since:  'Time since your last logged QSO',
+      radio:  "Live band/frequency/mode from N1MM+'s RadioInfo broadcast",
     };
     let _hudHidden;
     try{ _hudHidden=new Set(JSON.parse(localStorage.getItem(HUD_FIELDS_KEY)||'[]')); }
@@ -1964,6 +2022,7 @@
     updateBandEfficiency(snap); updatePersonalBests(snap);
     updateQsoValue(snap); updateLastWorked(snap); updateOperatorTimes(snap);
     updateFatigueTile(snap);
+    updateRadioPanel(snap);
     updateInsightBar(snap);
     updateExtraAnalytics(snap);
     updateContestOverPanel(snap);

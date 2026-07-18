@@ -49,6 +49,7 @@
     <button id="btn-load" class="tb-btn tb-btn--primary tb-btn--open">📂 Open Log</button>
     <button id="btn-settings" class="tb-btn tb-btn--settings" title="Settings — QRZ.com lookup, log search folders">⚙ Settings</button>
     <span id="qrz-progress-badge" class="badge qrz-progress-badge hidden" title="QRZ lookups in progress"></span>
+    <span id="radio-freq-badge" class="badge radio-freq-badge hidden" title="Live radio frequency (from N1MM+'s RadioInfo broadcast)"></span>
     <!-- Custom caption buttons for the frameless desktop window — hidden by
          default, shown only inside pywebview (see app.js wireWindowControls). -->
     <div id="window-controls" style="display:none">
@@ -143,6 +144,7 @@
   <span class="hud-item" data-hud-key="remain"><span class="hud-label">REMAIN</span><span class="hud-val" id="hud-remain">—</span></span>
   <span class="hud-item" data-hud-key="session"><span class="hud-label">SESSION</span><span class="hud-val" id="hud-session">—</span></span>
   <span class="hud-item" data-hud-key="since"><span class="hud-label">LAST QSO</span><span class="hud-val" id="hud-since">—</span></span>
+  <span class="hud-item" data-hud-key="radio"><span class="hud-label">RADIO</span><span class="hud-val" id="hud-radio">—</span><span class="hud-radio-sub" id="hud-radio-sub"></span></span>
   <div id="hud-menu" class="panels-menu"></div>
 </div>
 
@@ -300,6 +302,11 @@
       <div class="info-panel" id="panel-live-rank">
         <div class="ip-hdr"><span style="color:var(--red)">[ # ]</span>
           <span class="ip-title" style="color:var(--red)">LIVE RANKING</span></div>
+        <div style="color:var(--muted);font-size:0.85em;padding:8px 0">Loading…</div>
+      </div>
+      <div class="info-panel" id="panel-radio">
+        <div class="ip-hdr"><span style="color:var(--accent3)">[ &asymp; ]</span>
+          <span class="ip-title" style="color:var(--accent3)">RADIO</span></div>
         <div style="color:var(--muted);font-size:0.85em;padding:8px 0">Loading…</div>
       </div>
     </div>

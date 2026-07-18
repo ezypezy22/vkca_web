@@ -65,6 +65,7 @@ from plugins.loader import plugin_for, get_all_plugins
 from plugins.generic import GenericPlugin
 import cosb
 import qrz
+import radio_udp
 
 log = logging.getLogger(__name__)
 
@@ -221,6 +222,12 @@ class AppState:
         self._qrz_last_broadcast: float           = 0.0
         self._main_loop                           = None    # set in lifespan(); used by the QRZ worker to broadcast
         self._shutting_down                       = False   # set by _start_shutdown(); tells _poll_loop() to stop
+        # Live radio state from N1MM+'s RadioInfo UDP broadcast (see
+        # web/radio_udp.py) — written by the n1mm-udp-listener thread,
+        # keyed by "<source_ip>|<radio_nr>". Guarded by self._lock like
+        # everything else shared across threads in this class.
+        self.radio_info:    dict                  = {}
+        self._radio_last_broadcast: float         = 0.0
         # Enrich All batch progress — reset by _qrz_enrich_all() to the size
         # of that batch, then _qrz_batch_remaining counts down as the worker
         # finishes each item (see _qrz_worker_loop). The same worker/queue
@@ -337,7 +344,41 @@ class AppState:
 
     def snapshot(self) -> dict:
         with self._lock:
-            return dict(self.last_snapshot)
+            snap = dict(self.last_snapshot)
+            snap["radio_info"] = self._own_and_all_radios()
+            return snap
+
+    def _own_and_all_radios(self) -> dict:
+        """Must be called with self._lock already held (same convention as
+        _enrich_qsos — see its own comment). Returns
+        {"own": <entry>|None, "all": {key: entry, ...}}:
+          - "all" is every radio seen recently, live and stale alike — the
+            Operator HUD needs the full set to match against every
+            operator's own callsign, including a since-gone-stale one it
+            can grey out rather than silently drop.
+          - "own" is this station's own best-guess radio for the
+            single-readout surfaces (Mini HUD / titlebar / Overview panel):
+            prefer a loopback-sourced entry (N1MM+'s own default broadcast
+            target) with the lowest radio_nr, or the one flagged active
+            if there's more than one (SO2R); fall back to the lowest
+            radio_nr site-wide if nothing came from loopback (covers a
+            LAN-broadcast N1MM+ setup). Only a LIVE (non-stale) entry
+            counts for "own", so a disconnected rig reads as "no radio"
+            instead of freezing on the last frequency shown.
+        """
+        now = time.time()
+        live = {k: v for k, v in self.radio_info.items()
+                if now - v.get("updated_at", 0) < radio_udp.STALE_AFTER_SECS}
+
+        own = None
+        loopback = [v for v in live.values() if v.get("source_ip") in ("127.0.0.1", "::1")]
+        candidates = loopback or list(live.values())
+        if candidates:
+            active = [v for v in candidates if v.get("active")]
+            pool = active or candidates
+            own = min(pool, key=lambda v: v.get("radio_nr", "1"))
+
+        return {"own": own, "all": dict(self.radio_info)}
 
     # ── QRZ.com lookup enrichment ─────────────────────────────────────────────
     # Called with self._lock already held (see load_db()/poll_once() above) —
@@ -475,6 +516,26 @@ def _qrz_maybe_broadcast():
         asyncio.run_coroutine_threadsafe(_broadcast(snap), STATE._main_loop)
 
 
+def _radio_info_maybe_broadcast():
+    """Same cross-thread bridge as _qrz_maybe_broadcast() just above, for
+    the n1mm-udp-listener thread (web/radio_udp.py). Without this, a live
+    frequency change only reaches connected clients (Mini HUD, titlebar,
+    etc.) by coincidence — whenever an unrelated QSO or QRZ-driven
+    broadcast happens to fire — since radio_info updates independently of
+    both (found during manual verification: the titlebar picked up a test
+    packet immediately because a QRZ broadcast happened to fire around the
+    same time, but the just-opened Mini HUD, which hadn't received that
+    broadcast, kept showing "no radio" until the next unrelated one).
+    No recompute needed here (unlike QRZ) — STATE.snapshot() already
+    overlays the freshest radio_info on every call."""
+    now = time.time()
+    if now - STATE._radio_last_broadcast < 1.5:
+        return
+    STATE._radio_last_broadcast = now
+    if STATE._main_loop is not None:
+        asyncio.run_coroutine_threadsafe(_broadcast(STATE.snapshot()), STATE._main_loop)
+
+
 def _qrz_worker_loop():
     """Single background worker — processes one callsign at a time so a
     pileup with many new unique calls at once doesn't hammer QRZ's servers
@@ -516,6 +577,15 @@ async def lifespan(application: FastAPI):
     if creds:
         STATE._qrz_client.set_credentials(creds.get("username"), creds.get("password"))
     threading.Thread(target=_qrz_worker_loop, daemon=True, name="qrz-worker").start()
+    # _freq_to_band_str is passed in rather than imported by radio_udp.py,
+    # which deliberately doesn't import anything from this module (it's
+    # imported BY this module to start this thread — importing back would
+    # be circular). See radio_udp.py's own module docstring.
+    threading.Thread(
+        target=radio_udp.run_radio_info_listener,
+        args=(STATE, _freq_to_band_str, lambda: STATE._shutting_down, _radio_info_maybe_broadcast),
+        daemon=True, name="n1mm-udp-listener",
+    ).start()
     asyncio.create_task(_poll_loop())
     yield
 
@@ -1461,6 +1531,15 @@ async def api_qsos():
 async def api_operators():
     snap = STATE.snapshot()
     return snap.get("operator_times", [])
+
+
+@app.get("/api/radio_info")
+async def api_radio_info():
+    """Live radio state from N1MM+'s RadioInfo UDP broadcast (see
+    web/radio_udp.py). {"own": <entry>|None, "all": {key: entry, ...}}."""
+    snap = STATE.snapshot()
+    return snap.get("radio_info", {"own": None, "all": {}})
+
 
 
 def _delete_qsos(qso_ids: list) -> dict:

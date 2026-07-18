@@ -463,8 +463,26 @@ Users are responsible for verifying all information against N1MM before making d
     return `${label ? label+' · ' : ''}${valid.toLocaleString()} QSOs · ${score.toLocaleString()} pts`;
   }
 
+  // Titlebar radio-frequency chip — reads d.radio_info.own (see
+  // web/radio_udp.py / AppState._own_and_all_radios()). Hidden entirely
+  // when nothing is broadcasting (N1MM+'s RadioInfo broadcast not enabled,
+  // or N1MM+/the rig isn't running) rather than showing a confusing
+  // placeholder in the titlebar's tight space.
+  const radioBadge = document.getElementById('radio-freq-badge');
+  function updateRadioBadge(d) {
+    if (!radioBadge) return;
+    const r = window.VKA.formatRadio(d && d.radio_info && d.radio_info.own);
+    if (!r) { radioBadge.classList.add('hidden'); return; }
+    radioBadge.classList.remove('hidden');
+    radioBadge.innerHTML =
+      `<span class="dot" style="background:${r.bandColor};color:${r.bandColor}"></span>` +
+      `<span class="band-chip" style="background:${r.bandColor}30;color:${r.bandColor}">${r.band}</span>` +
+      `<b>${r.freqStr}</b><span style="color:var(--muted)">MHz${r.modeStr ? ' &middot; '+window.VKA.escapeHtml(r.modeStr) : ''}</span>`;
+  }
+
   window.addEventListener('vka:snapshot', e => {
     setStatus('connected', statusFromSnapshot(e.detail));
+    updateRadioBadge(e.detail);
   });
 
   function connectWS() {
@@ -514,6 +532,32 @@ Users are responsible for verifying all information against N1MM before making d
   // (call signs, region/contest names) into innerHTML.
   window.VKA.escapeHtml = function (s) {
     return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  };
+
+  // N1MM+ RadioInfo live readout — shared by the titlebar chip, Mini HUD
+  // tile, Overview panel, and Operator HUD card badge, so frequency/band
+  // formatting and staleness detection is only written once. `entry` is
+  // one item from snapshot.radio_info.own / .all (see web/radio_udp.py's
+  // module docstring for the packet format, and AppState._own_and_all_radios()
+  // for the shape). Returns null for a missing/falsy entry.
+  window.VKA.RADIO_STALE_MS = 20000;   // matches web/radio_udp.py's STALE_AFTER_SECS
+  window.VKA.formatRadio = function (entry) {
+    if (!entry) return null;
+    const band = (entry.band || '?').toUpperCase();
+    const freqMhz = (entry.freq_hz || 0) / 1000000;
+    const stale = (Date.now() - (entry.updated_at || 0) * 1000) > window.VKA.RADIO_STALE_MS;
+    return {
+      band,
+      bandColor: window.VKA.BAND_COLS[band] || window.VKA.BAND_COLS['?'],
+      // Plain fixed-decimal, not toLocaleString — ham-radio frequency
+      // convention doesn't use a thousands separator (e.g. "3.601", not
+      // "3,601" or "3,601.000").
+      freqStr: freqMhz.toFixed(3),
+      modeStr: entry.mode || '',
+      opCall: entry.op_call || '',
+      radioNr: entry.radio_nr || '1',
+      stale,
+    };
   };
 
   // Open an external (http/https) URL. window.open() from inside pywebview's
