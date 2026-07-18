@@ -103,6 +103,18 @@ class ContestPlugin(ABC):
         """Return True when this plugin owns the given N1MM ContestName string."""
         ...
 
+    def matches_station(self, my_call: Optional[str]) -> bool:
+        """Tiebreaker used by plugin_for() only when more than one registered
+        plugin's identify() claims the same contest name — e.g. ARRL DX's
+        near-identical DX-station/W/VE-station plugins, which both recognise
+        the same raw N1MM ContestName values (see issue #40). Most plugins
+        never collide with another, so the default accepts any station and
+        this never comes into play. Override to return False when a plugin
+        should lose to a sibling plugin for a given logging station's own
+        callsign; leave the ambiguous/unknown case (my_call is None) True
+        unless there's a specific reason to prefer the alternative."""
+        return True
+
     @property
     def display_name(self) -> str:
         return self.__class__.__name__.replace("Plugin", "")
@@ -402,13 +414,25 @@ class ContestPlugin(ABC):
         return "mults/qso"
 
     def sparkline_mults(self, q: dict, seen: set) -> int:
+        # is_mult1/is_mult2 are None only when the flag is unavailable for
+        # the *entire* log (missing column, or nulled out by the loader's
+        # sanity check when the flag is never 1 anywhere — see
+        # contest_log.py) — never per-QSO. In that case fall back to
+        # counting every distinct (mult, band, mode) not already seen,
+        # same fallback worked_primary_band_mults() already uses; otherwise
+        # this sparkline silently stayed at zero forever for any log whose
+        # source never populated the flag (see issue #55).
         count = 0
-        key1 = (q["mult1"], q["band"], q["mode"])
-        if q.get("is_mult1") == 1 and key1 not in seen:
-            count += 1; seen.add(key1)
-        key2 = (q.get("cqz"), q["band"], q["mode"])
-        if q.get("is_mult2") == 1 and key2 not in seen:
-            count += 1; seen.add(key2)
+        is_m1 = q.get("is_mult1")
+        if q["mult1"] and (is_m1 == 1 or is_m1 is None):
+            key1 = (q["mult1"], q["band"], q["mode"])
+            if key1 not in seen:
+                count += 1; seen.add(key1)
+        is_m2 = q.get("is_mult2")
+        if q.get("cqz") and (is_m2 == 1 or is_m2 is None):
+            key2 = (q.get("cqz"), q["band"], q["mode"])
+            if key2 not in seen:
+                count += 1; seen.add(key2)
         return count
 
     def running_score_for_sparkline(self, qsos_up_to_hour: list) -> int:

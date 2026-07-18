@@ -222,6 +222,16 @@ def _entity_prefix_from_call(call: str) -> Optional[str]:
     return base or None
 
 
+# CW ops commonly key an RST of 599 as the shorthand "5NN" (N standing in
+# for the longer digit-9 in Morse) — and less often "0" as "T" for reports
+# like 590/509/500. When that shorthand is glued directly onto the state
+# code with no space or digit boundary (e.g. "5NNTX"), the digit '5' breaks
+# the letter run but "NN"/"NT"/"TN"/"TT" doesn't, so the whole run ("NNTX")
+# matches nothing. Strip a leading occurrence of one of these before giving
+# up on a token (see issue #57).
+_RST_LETTER_PREFIXES = ("NN", "NT", "TN", "TT")
+
+
 def _extract_code(raw_ex: str, code_set: frozenset) -> Optional[str]:
     """
     Resolve a fixed-list exchange code (US state, VE province, XE state)
@@ -237,6 +247,9 @@ def _extract_code(raw_ex: str, code_set: frozenset) -> Optional[str]:
     for token in re.findall(r"[A-Z]+", raw_ex):
         if token in code_set:
             return token
+        for prefix in _RST_LETTER_PREFIXES:
+            if token.startswith(prefix) and token[len(prefix):] in code_set:
+                return token[len(prefix):]
     return None
 
 

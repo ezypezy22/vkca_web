@@ -193,6 +193,27 @@ class IOTAPlugin(ContestPlugin):
     def contest_saturday(self, year: int) -> date:
         return _iota_saturday(year)
 
+    # ── Dupe scope ────────────────────────────────────────────────────────────
+    # Rule 6c: "CW and SSB/Digital are counted separately on every band" — a
+    # station may be worked once per band PER MODE, not once per band overall.
+    # recalc_pts() below already scopes ITS OWN dupe detection by (call, band,
+    # mode) via _mode_key(), but it still honours an incoming q["dupe"] flag
+    # unconditionally (line "already_dupe = bool(q.get('dupe'))") — if N1MM+'s
+    # own dupe-checking doesn't make the same per-mode distinction, that raw
+    # flag would wrongly zero out a legitimate different-mode rework before
+    # recalc_pts() gets a chance to re-evaluate it. mode_scoped_dupes tells
+    # ContestLog.load() to cross-check that flag per-mode before trusting it.
+    mode_scoped_dupes = True
+
+    def dupe_mode_key(self, qso: dict) -> str:
+        return _mode_key(qso.get("mode") or "")
+
+    @property
+    def dupe_rule_text(self) -> str:
+        return ("Per rule 6c: a station may be worked once per band PER MODE "
+                "(CW and SSB/Digital counted separately). Dupes score 0 pts "
+                "and are not penalised.")
+
     # ── Per-QSO points ────────────────────────────────────────────────────────
 
     def recalc_pts(self, qsos: list) -> None:

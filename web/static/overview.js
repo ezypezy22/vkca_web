@@ -662,7 +662,7 @@
       const msg = data?.reason==='no_callsign'
         ? 'No callsign found in this log.'
         : data?.reason==='different_contest'
-        ? `Not posting to this contest on COSB yet${data.other_contest ? ` (found: ${data.other_contest})` : ''}.`
+        ? `Not posting to this contest on COSB yet${data.other_contest ? ` (found: ${escapeHtml(data.other_contest)})` : ''}.`
         : 'Not currently posting to Contest Online ScoreBoard.';
       el.innerHTML=hdr('[ # ]',T.red,'LIVE RANKING')+
         `<div style="color:${T.muted};font-size:0.85em;padding:8px 0">${msg}</div>`;
@@ -672,11 +672,11 @@
     el.innerHTML=hdr('[ # ]',T.red,'LIVE RANKING')+`
       <table class="ip-tbl">
         <tr><td>Rank</td><td style="color:${T.accent};font-weight:bold">#${data.rank} of ${data.total_in_category}</td></tr>
-        <tr><td>Category</td><td style="color:${T.muted}">${data.category||'—'}</td></tr>
+        <tr><td>Category</td><td style="color:${T.muted}">${escapeHtml(data.category||'—')}</td></tr>
         <tr><td>Score</td><td style="color:${T.accent3}">${(data.score||0).toLocaleString()}</td></tr>
         <tr><td>QSOs</td><td style="color:${T.muted}">${(data.qsos||0).toLocaleString()}</td></tr>
         <tr><td colspan="2" style="color:${T.muted};font-size:0.77em;padding-top:4px">
-          ${data.contest_name||''}${data.profile_url?` — <a href="${data.profile_url}" target="_blank" style="color:${T.accent}">View on COSB &rarr;</a>`:''}
+          ${escapeHtml(data.contest_name||'')}${data.profile_url?` — <a href="${data.profile_url}" target="_blank" style="color:${T.accent}">View on COSB &rarr;</a>`:''}
         </td></tr>
       </table>`;
     addPopoutButton(el);
@@ -1989,8 +1989,14 @@
     if (_replaying && _lastReplaySnap) { render(_lastReplaySnap); return; }
     const snap=window.VKA.lastSnap(); if(snap) render(snap);
   });
-  window.addEventListener('vka:loaded',()=>{_metaLoaded=false;_firstSnap=true;resetCelebrations();resetEndTimeAlerts();resetHudSparklines();startLiveRankPolling();});
+  window.addEventListener('vka:loaded',()=>{
+    _metaLoaded=false;_firstSnap=true;resetCelebrations();resetEndTimeAlerts();resetHudSparklines();
+    // panel-live-rank doesn't exist in either HUD window's DOM — polling
+    // there just fires an unnecessary COSB-scraping request every load
+    // (see issue #72).
+    if (!HUD_MODE && !OPERATOR_HUD_MODE) startLiveRankPolling();
+  });
 
-  if (!HUD_MODE) startLiveRankPolling();
+  if (!HUD_MODE && !OPERATOR_HUD_MODE) startLiveRankPolling();
 
 })();

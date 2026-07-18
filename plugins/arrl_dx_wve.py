@@ -46,6 +46,7 @@ from datetime import date
 from typing import Optional
 
 from plugins.base import ContestPlugin, SessionConfig, MultResult, GaugeDef
+from plugins.loader import looks_like_w_ve_call
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
@@ -173,6 +174,12 @@ class ARRLDXWVEPlugin(ContestPlugin):
 
     def identify(self, contest_name: str) -> bool:
         return contest_name.strip().upper() in {k.upper() for k in self.MATCH_KEYS}
+
+    def matches_station(self, my_call: Optional[str]) -> bool:
+        # Mirror image of ARRLDXDXPlugin.matches_station() — loses the
+        # tiebreak unless my_call is confidently a mainland US/Canadian
+        # call. See issue #40.
+        return looks_like_w_ve_call(my_call)
 
     @property
     def display_name(self) -> str:

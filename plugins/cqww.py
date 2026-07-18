@@ -208,9 +208,12 @@ class CQWWPlugin(ContestPlugin):
             # ── Restore valid same-country QSOs mis-flagged as dupes ──────────
             # The loader's fallback marks any pts=0 row as dupe=1.  For CQWW
             # this incorrectly catches same-country contacts.  We un-dupe them
-            # when the raw_dupe source was the pts-based fallback (i.e. the QSO
-            # was never actually tagged D by N1MM).
-            if q.get("dupe") and q.get("pts") == 0:
+            # only when the dupe flag came from that ambiguous pts-based
+            # fallback (dupe_is_heuristic) — i.e. the QSO was never actually
+            # tagged D by an explicit IsDupe/Dupe/ContactType="D" source
+            # signal. A genuine same-continent QSO that N1MM itself
+            # authoritatively flagged as a dupe must stay a dupe (see issue #49).
+            if q.get("dupe") and q.get("pts") == 0 and q.get("dupe_is_heuristic"):
                 # Check: is the worked station's continent the same as the op?
                 worked_zone      = q.get("cqz")
                 worked_continent = _continent_of_zone(worked_zone)

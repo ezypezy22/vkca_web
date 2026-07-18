@@ -51,6 +51,7 @@ from datetime import date
 from typing import Optional
 
 from plugins.base import ContestPlugin, SessionConfig, MultResult, GaugeDef
+from plugins.loader import looks_like_w_ve_call
 
 
 # ── Contest date helpers ───────────────────────────────────────────────────────
@@ -170,6 +171,12 @@ class ARRLDXDXPlugin(ContestPlugin):
     def identify(self, contest_name: str) -> bool:
         return contest_name.strip().upper() in {k.upper() for k in self.MATCH_KEYS}
 
+    def matches_station(self, my_call: Optional[str]) -> bool:
+        # Loses the tiebreak only when my_call is confidently a mainland
+        # US/Canadian call — ARRLDXWVEPlugin.matches_station() is the
+        # mirror image of this check. See issue #40.
+        return not looks_like_w_ve_call(my_call)
+
     @property
     def display_name(self) -> str:
         return "ARRL International DX [DX Station]"
@@ -235,13 +242,16 @@ class ARRLDXDXPlugin(ContestPlugin):
             continent = q.get("continent") or ""
             key       = (call, b)
 
+            # Non-NA contacts are logged but non-scoring, not dupes — check
+            # this before the raw_pts==0 dupe heuristic below, since N1MM
+            # legitimately zeroes Points for these too (see issue #50).
+            if continent and continent != "NA":
+                q["pts"] = 0
+                continue
+
             if q.get("dupe") or raw_pts == 0 or key in seen:
                 q["pts"]  = 0
                 q["dupe"] = 1
-                continue
-
-            if continent and continent != "NA":
-                q["pts"] = 0
                 continue
 
             seen.add(key)
@@ -296,6 +306,23 @@ class ARRLDXDXPlugin(ContestPlugin):
 
     def missing_primary_mults(self, qsos: list) -> list:
         return sorted(_ALL_MULTS - self.worked_primary_mults(qsos))
+
+    def post_snapshot(self, snap: dict, qsos: list) -> None:
+        """compute_snapshot()'s generic worked/missing/pct math assumes
+        primary_mults entries are either a flat value or a (value, ...)
+        tuple, but multipliers() here returns band-scoped compound strings
+        like "NSW/40M" for the (already-correct) BAND MULTS gauge — so that
+        generic math treats every band-mult as a distinct "missing" entry
+        forever and can push pct over 100% (see issue #42). Recompute
+        worked/missing/pct from the unique-state worked_primary_mults()/
+        missing_primary_mults() helpers instead — already correct
+        elsewhere, e.g. the Missing Mults tab. band_mults is untouched:
+        the generic band-pair count is correct for that gauge."""
+        worked_states = self.worked_primary_mults(qsos)
+        total_states  = len(_ALL_MULTS)
+        snap["worked"]  = len(worked_states)
+        snap["missing"] = total_states - len(worked_states)
+        snap["pct"]     = (len(worked_states) / total_states * 100) if total_states else 0.0
 
     def has_missing_tab(self) -> bool:
         return True   # 64 defined mults — missing tab is very useful

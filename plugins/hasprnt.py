@@ -241,6 +241,23 @@ class HASprint80mPlugin(ContestPlugin):
             secondary_label="",
         )
 
+    # ── Dupe scope ────────────────────────────────────────────────────────────
+    # DupeType=3 in the UDC: a station may be worked ONCE PER MODE (once on
+    # Phone, once on CW) — not once per band overall (there's only one band
+    # here anyway). N1MM's own dupe-checking doesn't appear to make this
+    # distinction and zeroes Points for a legitimate different-mode rework
+    # the same way it would for a genuine same-mode dupe, so ContestLog.load()
+    # needs this to un-flag the false positives before recalc_pts() runs.
+    mode_scoped_dupes = True
+
+    def dupe_mode_key(self, qso: dict) -> str:
+        return "CW" if _is_cw(qso.get("mode")) else "PHONE"
+
+    @property
+    def dupe_rule_text(self) -> str:
+        return ("Each station may be worked once PER MODE (once on Phone, once "
+                "on CW). Dupes score 0 pts and are not penalised.")
+
     # ── Exchange column hint ──────────────────────────────────────────────────
 
     @property

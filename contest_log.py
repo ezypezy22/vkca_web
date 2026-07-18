@@ -156,6 +156,26 @@ class ContestLog:
         finally:
             conn.close()
 
+    @staticmethod
+    def station_call(db_path):
+        """Return the logging station's own callsign (Station.Call), or
+        None. A lightweight peek at the DB — mirrors available_contests()'s
+        pattern — used by web/server.py's /api/load to disambiguate
+        plugins whose identify() claims the same contest name (e.g. ARRL
+        DX's DX-station vs W/VE-station plugins — see issue #40) before a
+        full ContestLog (which also reads this, but only after a plugin has
+        already been chosen) is constructed."""
+        try:
+            conn = sqlite3.connect(db_path)
+            try:
+                row = conn.execute("SELECT Call FROM Station LIMIT 1").fetchone()
+                return str(row[0]).strip().upper() if row and row[0] else None
+            finally:
+                conn.close()
+        except Exception as e:
+            logging.info("station_call(%r) failed: %s", db_path, e)
+            return None
+
     def __init__(self, db_path, contest_nr=None, plugin: ContestPlugin = None):
         self.db_path    = db_path
         self.contest_nr = contest_nr
@@ -581,6 +601,13 @@ class ContestLog:
                     "is_mult1":    is_mult1,
                     "is_mult2":    is_mult2,
                     "dupe":        dupe,
+                    # True when the "dupe" value above came from the ambiguous
+                    # pts==0 fallback rather than an explicit source signal
+                    # (IsDupe/Dupe column, or ContactType=="D") — consumed by
+                    # plugins like cqww.py's recalc_pts() to avoid un-duping a
+                    # QSO the source itself authoritatively marked as a dupe
+                    # (see issue #49).
+                    "dupe_is_heuristic": dupe_is_heuristic,
                     "pts":         pts,
                     "raw_mult":    raw_mult,
                     "mult_source": mult_source,
@@ -726,7 +753,6 @@ class ContestLog:
         return sorted(buckets.items())
 
     def band_breakdown(self):
-        ml_set = set(self.plugin.mult_list())
         result = defaultdict(lambda: {"valid": 0, "dupe": 0, "mults": set()})
         for q in self.qsos:
             b = q["band"] or "?"
@@ -734,11 +760,15 @@ class ContestLog:
                 result[b]["dupe"] += 1
             else:
                 result[b]["valid"] += 1
-                if ml_set:
-                    if q["mult1"] in ml_set:
-                        result[b]["mults"].add(q["mult1"])
-                elif q["mult1"]:
-                    result[b]["mults"].add(q["mult1"])
+                # Route through the plugin's own mult_of_qso() rather than
+                # reading q["mult1"] raw — plugins like VK Shires resolve
+                # short-form exchange codes to a full multiplier value here,
+                # and reading mult1 directly bypassed that resolution,
+                # under-counting mults for any plugin whose mult_of_qso()
+                # does more than a trivial passthrough (see issue #54).
+                m = self.plugin.mult_of_qso(q)
+                if m:
+                    result[b]["mults"].add(m)
         return dict(result)
 
     def dupe_analysis(self):
@@ -798,6 +828,22 @@ class ContestLog:
             return cs
         return first.replace(hour=0, minute=0, second=0, microsecond=0)
 
+    def _clamped_contest_start(self):
+        """contest_start(), clamped forward to the first QSO's hour when the
+        stored/calculated start lands after it (N1MM sometimes sets
+        ContestStart to the log creation date rather than the actual contest
+        date). Centralised here because rate_by_session(), personal_bests(),
+        and compute_snapshot() all bucket QSOs into sessions and must agree
+        on the same anchor — using the raw contest_start() in some of them
+        and the clamped one in others silently shifted session numbers out
+        of sync between panels (see issue #53)."""
+        cs = self.contest_start()
+        if self.qsos:
+            earliest = min(q["time"] for q in self.qsos)
+            if cs is None or cs > earliest:
+                cs = earliest.replace(minute=0, second=0, microsecond=0)
+        return cs
+
     def session_number(self, t, contest_start):
         elapsed = (t - contest_start).total_seconds() / 60
         return max(0, int(elapsed // self._session_cfg.duration_mins))
@@ -812,7 +858,7 @@ class ContestLog:
 
     def rate_by_session(self):
         cfg = self._session_cfg
-        cs  = self.contest_start()
+        cs  = self._clamped_contest_start()
         if not cs or not self.qsos:
             return []
 
@@ -944,7 +990,7 @@ class ContestLog:
         current_hour_rate = hour_buckets.get(now, 0)
         prev_hour_rate    = hour_buckets.get(prev_hour, 0)
 
-        cs = self.contest_start()
+        cs = self._clamped_contest_start()
         sess_qsos = defaultdict(int)
         if cs:
             for q in self.qsos:
@@ -1260,14 +1306,7 @@ class ContestLog:
         cfg = self._session_cfg
         contest_hours = int(math.ceil(cfg.duration_mins * cfg.num_sessions / 60))
 
-        cs = self.contest_start()
-        if self.qsos:
-            earliest = min(q["time"] for q in self.qsos)
-            # StartDate sometimes lands after the first QSO (N1MM quirk) —
-            # anchor to the first QSO's hour in that case, same fallback used
-            # by _yoy_build_trajectory().
-            if cs is None or cs > earliest:
-                cs = earliest.replace(minute=0, second=0, microsecond=0)
+        cs = self._clamped_contest_start()
 
         # ── Single multiplier computation (replaces 3 separate plugin calls) ──
         mr          = plugin.multipliers(qsos)
@@ -1374,7 +1413,10 @@ class ContestLog:
         current_hour_rate = hour_buckets.get(now_dt,    0)
         prev_hour_rate    = hour_buckets.get(prev_hour, 0)
 
-        cs = self.contest_start()
+        # Reuse the already-clamped `cs` computed above — re-fetching via
+        # contest_start() here used to silently drop the clamp and shift
+        # best_session_nr/best_session_qsos out of sync with every other
+        # session-scoped value in this snapshot (see issue #53).
         sess_qsos: dict = defaultdict(int)
         if cs:
             for q in valid:

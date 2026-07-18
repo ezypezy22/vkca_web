@@ -743,7 +743,7 @@ Users are responsible for verifying all information against N1MM before making d
       const row = document.createElement('div');
       row.style.cssText = `padding:8px 14px;cursor:pointer;transition:background .1s;
         ${idx < _scannedContests.length-1 ? 'border-bottom:1px solid var(--bg3)' : ''}`;
-      row.innerHTML = `<div style="color:var(--fg);font-weight:bold">${ct.display_name||ct.contest_name}</div>
+      row.innerHTML = `<div style="color:var(--fg);font-weight:bold">${window.VKA.escapeHtml(ct.display_name||ct.contest_name||'')}</div>
         <div style="color:var(--muted);font-size:0.85em">${ct.qso_count||0} QSOs · ${(ct.start_date||'').substring(0,10)}
         ${!ct.qso_count ? '<span class="badge" style="color:#f0c040">Empty</span>' : ''}</div>`;
       row.addEventListener('mouseover', ()=>row.style.background='var(--bg3)');
@@ -751,8 +751,13 @@ Users are responsible for verifying all information against N1MM before making d
       row.addEventListener('click', async () => {
         menu.remove();
         try {
-          _currentContestName = ct.display_name||'';
           await doLoad(_scannedPath, ct.contest_nr, ct.plugin);
+          // Only assign after a successful load — doLoad() throws on
+          // failure, and setting this beforehand left the titlebar
+          // permanently labelled with the failed target's name while the
+          // previous (still-loaded) contest's live data kept displaying
+          // (see issue #63).
+          _currentContestName = ct.display_name||'';
           _updateSwitchBtn(_scannedContests, ct);
           emit('vka:loaded',{}); doRefresh(); resetCountdown();
         } catch(e) { console.warn('Switch contest failed:', e); }
@@ -820,8 +825,8 @@ Users are responsible for verifying all information against N1MM before making d
         row.className = 'contest-row';
         row.innerHTML = `<div class="contest-row-accent" style="background:var(--accent)"></div>
           <div class="contest-row-body">
-            <div class="contest-row-name">${db.name}</div>
-            <div class="contest-row-path" title="${dirOf(db.path)}">${dirOf(db.path)}</div>
+            <div class="contest-row-name">${window.VKA.escapeHtml(db.name||'')}</div>
+            <div class="contest-row-path" title="${window.VKA.escapeHtml(dirOf(db.path))}">${window.VKA.escapeHtml(dirOf(db.path))}</div>
             <div class="contest-row-meta">
               <span>${fmtAgo(db.mtime)}</span>
               <span>${fmtBytes(db.size)}</span>
@@ -898,7 +903,7 @@ Users are responsible for verifying all information against N1MM before making d
       const contests=data.contests||[];
       if (!contests.length) { showError('No contests with QSOs found in this database.'); return; }
       _scannedContests=contests; _scannedPath=data.path;
-	  if (!alwaysShowPicker && contests.length===1) { _currentContestName=contests[0].display_name||''; await doLoad(data.path,contests[0].contest_nr,contests[0].plugin); _updateSwitchBtn(contests,contests[0]); hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown(); return; }
+	  if (!alwaysShowPicker && contests.length===1) { await doLoad(data.path,contests[0].contest_nr,contests[0].plugin); _currentContestName=contests[0].display_name||''; _updateSwitchBtn(contests,contests[0]); hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown(); return; }
       pickerLabel.textContent=data.path.split(/[\\\/]/).pop();
       buildContestList(contests);
       showStep('picker');
@@ -926,7 +931,7 @@ Users are responsible for verifying all information against N1MM before making d
       row.className='contest-row';
       row.innerHTML=`<div class="contest-row-accent" style="background:${col}"></div>
         <div class="contest-row-body">
-          <div class="contest-row-name">${ct.display_name}</div>
+          <div class="contest-row-name">${window.VKA.escapeHtml(ct.display_name||'')}</div>
           <div class="contest-row-meta">
             <span style="color:${col};font-weight:bold">${ct.plugin}</span>
             <span>${ct.start_date}</span>
@@ -952,8 +957,9 @@ Users are responsible for verifying all information against N1MM before making d
     if (!_selectedContest) return;
     btnConfirm.disabled=true; btnConfirm.textContent='Loading…';
     try {
-      _currentContestName = _selectedContest.display_name || '';
       await doLoad(_scannedPath||pathInput.value.trim(), _selectedContest.contest_nr, _selectedContest.plugin);
+      // Only assign after a successful load — see issue #63.
+      _currentContestName = _selectedContest.display_name || '';
       _updateSwitchBtn(_scannedContests, _selectedContest);
       hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown();
     } catch {}

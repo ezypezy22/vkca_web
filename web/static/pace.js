@@ -115,7 +115,14 @@
     const projScores = [];
     let running = lastScore;
     for (let i = 0; i < remBuckets; i++) {
-      const addQsos  = curRate;
+      // Scale by the bucket's actual fractional remaining minutes, matching
+      // updateKPIs()'s projQsos calculation — previously every bucket added
+      // a full hour of curRate even for a partial final bucket, so with
+      // e.g. 1 minute left in the contest the trajectory line jumped by a
+      // whole hour's worth of points while the KPI tile right next to it
+      // barely moved (see issue #58).
+      const bucketMins = Math.min(60, remMins - i * 60);
+      const addQsos  = curRate * (bucketMins / 60);
       const addMults = Math.round(addQsos * multRatio);
       running += addQsos * ptsPerQso;
       projScores.push(Math.round(running));
@@ -125,8 +132,6 @@
     const projLabels = Array.from({length: remBuckets}, (_, i) =>
       `+${i+1}h`);
     const allLabels  = [...histLabels, ...projLabels];
-
-    if (trajChart) { trajChart.destroy(); trajChart = null; }
 
     // Same glowing-sparkline technique as overview.js's makeSparkline() /
     // rate.js's Mults-per-hour chart: canvas drop-shadow filter + gradient
@@ -145,6 +150,26 @@
     const nowPointRadius = actualData.map((_, i) => i === lastIdx ? 5 : 0);
     const nowPointColour = actualData.map((_, i) => i === lastIdx ? C.accent : 'transparent');
     const nowPointBorder = actualData.map((_, i) => i === lastIdx ? '#fff' : 'transparent');
+    const projData = [...Array(historical.length - 1).fill(null), lastScore, ...projScores];
+
+    // Fixed 2-dataset shape (Actual/Projected) every redraw — mutate the
+    // existing instance instead of destroy+recreate on every ~1.5s snapshot
+    // tick (see issue #73).
+    if (trajChart) {
+      trajChart.data.labels = allLabels;
+      const dsA = trajChart.data.datasets[0];
+      dsA.data = actualData;
+      dsA.backgroundColor = grad;
+      dsA.pointRadius = nowPointRadius;
+      dsA.pointBackgroundColor = nowPointColour;
+      dsA.pointBorderColor = nowPointBorder;
+      dsA.pointBorderWidth = actualData.map((_, i) => i === lastIdx ? 2 : 0);
+      const dsB = trajChart.data.datasets[1];
+      dsB.label = `Projected @ ${curRate}/hr`;
+      dsB.data = projData;
+      trajChart.update();
+      return;
+    }
 
     trajChart = new Chart(ctx, {
       type: 'line',
@@ -170,7 +195,7 @@
           },
           {
             label: `Projected @ ${curRate}/hr`,
-            data: [...Array(historical.length - 1).fill(null), lastScore, ...projScores],
+            data: projData,
             borderColor: C.accent3,
             borderDash: [6, 4],
             borderWidth: 2, fill: false, tension: 0.3,
@@ -340,6 +365,13 @@
     return PALETTE[Math.max(idx, 0) % PALETTE.length];
   }
   const escapeHtml = window.VKA.escapeHtml;
+
+  // Mirrors report.js's own isTabActive() — gates the self-rescheduling
+  // poll chain below so it stops once the Pace tab isn't visible instead
+  // of running for the lifetime of the session (see issue #59).
+  function isTabActive() {
+    return document.getElementById('tab-pace')?.classList.contains('active');
+  }
   function escapeAttr(s) { return escapeHtml(s); }
 
   const refAtElapsed = window.VKA.refAtElapsed;
@@ -608,7 +640,11 @@
       }
     }
     if (_pollHandle) clearTimeout(_pollHandle);
-    _pollHandle = setTimeout(pollLive, interval);
+    // Only keep the chain alive while the Pace tab is actually visible —
+    // previously this polled /api/pace/live every 5-30s indefinitely for
+    // the lifetime of the session, even after navigating away (see issue
+    // #59). The vka:tabchange listener below resumes it on return.
+    _pollHandle = isTabActive() ? setTimeout(pollLive, interval) : null;
   }
 
   async function pollLive() {
@@ -661,5 +697,12 @@
   document.getElementById('pace-thresh-input')?.addEventListener('change', redrawRefs);
 
   window.addEventListener('vka:loaded', () => { _refsLoaded = false; _hidden.clear(); loadRefs(); });
-  window.addEventListener('vka:tabchange', e => { if (e.detail.tab === 'pace' && !_refsLoaded) loadRefs(); });
+  window.addEventListener('vka:tabchange', e => {
+    if (e.detail.tab !== 'pace') return;
+    if (!_refsLoaded) loadRefs();
+    // Resume the poll chain updateRefAlarm() stopped while this tab was
+    // inactive (see issue #59) — loadRefs() already resumes it via
+    // redrawRefs()->updateRefAlarm() when refs weren't loaded yet.
+    else if (!_pollHandle) pollLive();
+  });
 })();

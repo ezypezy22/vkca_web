@@ -108,6 +108,16 @@ _setup_logging()
 
 _SETTINGS_PATH = _app_data_dir() / "vkca_web_settings.json"
 
+# Guards every settings-file read-modify-write sequence below (see
+# _settings_read_modify_write()) so two roughly-simultaneous writers (e.g.
+# adding a log-dir folder while removing QRZ credentials, or a window-close
+# geometry save racing a Settings POST) can't each read-modify-write with no
+# synchronization and silently clobber one another's change (see issue #61).
+# A plain threading.Lock, not asyncio.Lock: callers include both async
+# handlers (via run_in_executor, so this runs on a worker thread) and
+# genuinely synchronous callbacks (the native window-closing handler).
+_settings_lock = threading.Lock()
+
 
 def _load_settings() -> dict:
     try:
@@ -121,6 +131,19 @@ def _save_settings(settings: dict):
     _SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(_SETTINGS_PATH, "w", encoding="utf-8") as f:
         json.dump(settings, f, indent=2)
+
+
+def _settings_read_modify_write(mutate_fn):
+    """Atomically load the settings file, let `mutate_fn(settings)` mutate
+    the dict in place, save it back, and return `mutate_fn`'s return value —
+    all under _settings_lock so the whole read-modify-write sequence is one
+    critical section (see issue #61). This function does blocking file I/O;
+    call it via run_in_executor from async handlers."""
+    with _settings_lock:
+        settings = _load_settings()
+        result = mutate_fn(settings)
+        _save_settings(settings)
+        return result
 
 
 # ── QRZ.com lookup cache ──────────────────────────────────────────────────────
@@ -168,6 +191,12 @@ class AppState:
         self._base_url:     Optional[str]         = None  # set after webview starts; used by /api/popout
         self._hud_window                          = None  # the single Mini HUD window, if open
         self._operator_hud_window                 = None  # the single Operator HUD window, if open
+        # Serializes each HUD's check-existing/reuse-or-create sequence below
+        # so two concurrent /api/hud (or /api/operator_hud) requests can't
+        # both see no existing window and each create one, orphaning the
+        # first (see issue #51).
+        self._hud_lock                            = asyncio.Lock()
+        self._operator_hud_lock                   = asyncio.Lock()
         self.yoy_extra_paths: list                = []    # extra .s3db files added on the YOY tab
         self.pace_extra_paths: list               = []    # [{"path":..., "kind":"s3db"|"adif"|"cabrillo"}]
         self.fatigue_extra_paths: list            = []    # extra .s3db files added on the Fatigue tab
@@ -232,9 +261,10 @@ class AppState:
             return {"error": err}
         try:
             contests = ContestLog.available_contests(path)
+            my_call  = ContestLog.station_call(path)
             result   = []
             for ct in contests:
-                p = plugin_for(str(ct.get("ContestName", "")))
+                p = plugin_for(str(ct.get("ContestName", "")), my_call)
                 result.append({
                     "contest_nr":   ct["ContestNR"],
                     "contest_name": ct.get("ContestName", ""),
@@ -670,23 +700,31 @@ async def api_add_log_dir(body: dict):
     if not p.is_dir():
         return JSONResponse({"error": f"Not a folder: {path}"}, status_code=400)
     resolved = str(p.resolve())
-    settings = _load_settings()
-    dirs = settings.setdefault("log_dirs", [])
-    key = os.path.normcase(os.path.normpath(resolved))
-    if not any(os.path.normcase(os.path.normpath(d)) == key for d in dirs):
-        dirs.append(resolved)
-        _save_settings(settings)
+
+    def _mutate(settings):
+        dirs = settings.setdefault("log_dirs", [])
+        key = os.path.normcase(os.path.normpath(resolved))
+        if not any(os.path.normcase(os.path.normpath(d)) == key for d in dirs):
+            dirs.append(resolved)
+        return dirs
+
+    dirs = await asyncio.get_event_loop().run_in_executor(
+        None, _settings_read_modify_write, _mutate)
     return {"ok": True, "dirs": dirs}
 
 
 @app.delete("/api/settings/log_dirs")
 async def api_remove_log_dir(body: dict):
     path = (body.get("path") or "").strip()
-    settings = _load_settings()
-    dirs = settings.setdefault("log_dirs", [])
-    key = os.path.normcase(os.path.normpath(path))
-    dirs[:] = [d for d in dirs if os.path.normcase(os.path.normpath(d)) != key]
-    _save_settings(settings)
+
+    def _mutate(settings):
+        dirs = settings.setdefault("log_dirs", [])
+        key = os.path.normcase(os.path.normpath(path))
+        dirs[:] = [d for d in dirs if os.path.normcase(os.path.normpath(d)) != key]
+        return dirs
+
+    dirs = await asyncio.get_event_loop().run_in_executor(
+        None, _settings_read_modify_write, _mutate)
     return {"ok": True, "dirs": dirs}
 
 
@@ -712,9 +750,11 @@ def _qrz_test_and_save(username: str, password: str) -> dict:
         return {"error": str(e) or "Invalid QRZ username/password."}
     except qrz.QRZError as e:
         return {"error": f"Could not reach QRZ.com: {e}"}
-    settings = _load_settings()
-    settings["qrz_credentials"] = {"username": username, "password": password}
-    _save_settings(settings)
+
+    def _mutate(settings):
+        settings["qrz_credentials"] = {"username": username, "password": password}
+
+    _settings_read_modify_write(_mutate)
     STATE._qrz_client.set_credentials(username, password)
     return {"ok": True, "username": username}
 
@@ -742,9 +782,11 @@ async def api_qrz_credentials_post(body: dict):
 
 @app.delete("/api/qrz/credentials")
 async def api_qrz_credentials_delete():
-    settings = _load_settings()
-    settings.pop("qrz_credentials", None)
-    _save_settings(settings)
+    def _mutate(settings):
+        settings.pop("qrz_credentials", None)
+
+    await asyncio.get_event_loop().run_in_executor(
+        None, _settings_read_modify_write, _mutate)
     STATE._qrz_client.set_credentials(None, None)
     STATE._qrz_clear_queue()
     return {"ok": True}
@@ -865,6 +907,11 @@ async def api_hud():
     if STATE._webview_window is None or not STATE._base_url:
         return JSONResponse({"error": "PyWebView window not ready"}, status_code=503)
 
+    async with STATE._hud_lock:
+        return await _do_open_hud()
+
+
+async def _do_open_hud():
     existing = STATE._hud_window
     if existing is not None:
         def _restore():
@@ -985,6 +1032,11 @@ async def api_operator_hud():
     if STATE._webview_window is None or not STATE._base_url:
         return JSONResponse({"error": "PyWebView window not ready"}, status_code=503)
 
+    async with STATE._operator_hud_lock:
+        return await _do_open_operator_hud()
+
+
+async def _do_open_operator_hud():
     existing = STATE._operator_hud_window
     if existing is not None:
         def _restore():
@@ -1099,7 +1151,16 @@ async def api_load(body: dict):
 
     contest_nr  = body.get("contest_nr")
     plugin_name = body.get("plugin_name") or ""
-    plugin      = plugin_for(plugin_name) if plugin_name else None
+    plugin      = None
+    if plugin_name:
+        # station_call() disambiguates plugins that claim the same contest
+        # name (e.g. ARRL DX's DX-station vs W/VE-station plugins — see
+        # issue #40); a quick standalone read, done before the full
+        # ContestLog (and its own Station.Call read) is constructed.
+        my_call = await asyncio.get_event_loop().run_in_executor(
+            None, ContestLog.station_call, path
+        )
+        plugin = plugin_for(plugin_name, my_call)
 
     result = await asyncio.get_event_loop().run_in_executor(
         None, STATE.load_db, path, contest_nr, plugin
@@ -1373,7 +1434,7 @@ async def api_sessions():
 async def api_dupes():
     with STATE._lock:
         if not STATE.contest_log:
-            return {"by_band": {}, "by_call": {}}
+            return {"by_band": {}, "by_call": {}, "rule_text": ""}
         try:
             by_band, by_call = STATE.contest_log.dupe_analysis()
             return {
@@ -1383,7 +1444,7 @@ async def api_dupes():
                 "rule_text": STATE.contest_log.plugin.dupe_rule_text,
             }
         except Exception:
-            return {"by_band": {}, "by_call": {}}
+            return {"by_band": {}, "by_call": {}, "rule_text": ""}
 
 @app.get("/api/qsos")
 async def api_qsos():
@@ -1419,6 +1480,12 @@ def _delete_qsos(qso_ids: list) -> dict:
             except Exception as e:
                 log.exception("Delete failed for QSO %s", qid)
                 errors.append(f"{qid}: {e}")
+        if deleted:
+            # Recompute the cached snapshot immediately (mirrors poll_once()'s
+            # own reload path) — without this, connected clients keep seeing
+            # the deleted QSOs until the next poll cycle notices the DB's
+            # mtime changed, which can lag several seconds (see issue #52).
+            STATE.last_snapshot = STATE._safe_snapshot()
         return {"deleted": deleted, "errors": errors}
 
 
@@ -1428,7 +1495,10 @@ async def api_qsos_delete(body: dict):
     qso_ids = body.get("qso_ids") or []
     if not qso_ids:
         return JSONResponse({"error": "No qso_ids supplied"}, status_code=400)
-    return await asyncio.get_event_loop().run_in_executor(None, _delete_qsos, qso_ids)
+    result = await asyncio.get_event_loop().run_in_executor(None, _delete_qsos, qso_ids)
+    if result.get("deleted"):
+        await _broadcast(STATE.snapshot())
+    return result
 
 
 def _yoy_build_trajectory(cl: "ContestLog") -> Optional[dict]:
@@ -2499,18 +2569,27 @@ async def ws_cluster(ws: WebSocket):
             if cmd.get("cmd") == "connect":
                 await _teardown()
                 host = cmd.get("host","")
-                port = int(cmd.get("port", 7300))
                 call = cmd.get("callsign","VK2YI")
                 try:
+                    # int() moved inside the try: a non-numeric port used to
+                    # raise before this block, bypassing the except below
+                    # entirely and silently killing the whole session via
+                    # the outer catch-all instead of sending a normal
+                    # "invalid port" status message (see issue #62).
+                    port = int(cmd.get("port", 7300))
                     loop = asyncio.get_event_loop()
                     tcp  = await loop.run_in_executor(
                         None, lambda: _socket.create_connection((host,port), timeout=10))
                     tcp.settimeout(30)
                     reader_task = asyncio.create_task(_read_tcp())
                     await asyncio.sleep(1)
-                    tcp.sendall((call+"\n").encode())
+                    # sendall() is blocking (tcp.settimeout(30) covers it too,
+                    # same as recv()) — off-loaded so a congested/hung peer
+                    # can't stall the single event loop for up to 30s and
+                    # freeze every other window/request in the app.
+                    await loop.run_in_executor(None, tcp.sendall, (call+"\n").encode())
                     await asyncio.sleep(1)
-                    tcp.sendall(b"SET/DX\n")
+                    await loop.run_in_executor(None, tcp.sendall, b"SET/DX\n")
                     await ws.send_text(json.dumps({
                         "type":"status","connected":True,
                         "msg":f"Connected to {host}:{port}"}))
@@ -2519,8 +2598,11 @@ async def ws_cluster(ws: WebSocket):
                         "type":"status","connected":False,"msg":str(e)}))
 
             elif cmd.get("cmd") == "send" and tcp:
-                try: tcp.sendall((cmd.get("text","")+"\n").encode())
-                except: pass
+                try:
+                    await asyncio.get_event_loop().run_in_executor(
+                        None, tcp.sendall, (cmd.get("text","")+"\n").encode())
+                except Exception:
+                    pass
 
             elif cmd.get("cmd") == "disconnect":
                 await _teardown()
@@ -2674,34 +2756,6 @@ async def api_save_location():
 # Simple prefix→lat/lon lookup for major DXCC prefixes
 
 import subprocess as _subprocess
-
-@app.get("/api/os_theme")
-async def api_os_theme():
-    import platform
-    system = platform.system()
-    try:
-        if system == "Windows":
-            import winreg
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
-            val, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
-            winreg.CloseKey(key)
-            return {"theme": "Light" if val == 1 else "Dark (Default)"}
-        elif system == "Darwin":
-            r = _subprocess.run(["defaults","read","-g","AppleInterfaceStyle"],
-                capture_output=True, text=True)
-            return {"theme": "Dark (Default)" if "Dark" in r.stdout else "Light"}
-        else:
-            r = _subprocess.run(["gsettings","get","org.gnome.desktop.interface","color-scheme"],
-                capture_output=True, text=True)
-            return {"theme": "Dark (Default)" if "dark" in r.stdout.lower() else "Light"}
-    except Exception:
-        return {"theme": "Dark (Default)"}
-
-@app.get("/api/save_location")
-async def api_save_location():
-    import platform, os
-    return {"folder": os.path.join(os.path.expanduser("~"), "Downloads"), "os": platform.system()}
 
 # Prefix lat/lon lookup (ASCII minus only)
 # DXCC prefix lookup — longer prefixes listed first to take priority over shorter ones
@@ -3390,17 +3444,17 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
             entirely — see its docstring) — both need this written before the
             process exits."""
             try:
-                settings = _load_settings()
-                if _maximized and _pre_max_geom:
-                    x, y, w, h = _pre_max_geom
-                    settings["window_geometry"] = {"x": x, "y": y, "width": w, "height": h, "maximized": True}
-                else:
-                    settings["window_geometry"] = {
-                        "x": window.x, "y": window.y,
-                        "width": window.width, "height": window.height,
-                        "maximized": False,
-                    }
-                _save_settings(settings)
+                def _mutate(settings):
+                    if _maximized and _pre_max_geom:
+                        x, y, w, h = _pre_max_geom
+                        settings["window_geometry"] = {"x": x, "y": y, "width": w, "height": h, "maximized": True}
+                    else:
+                        settings["window_geometry"] = {
+                            "x": window.x, "y": window.y,
+                            "width": window.width, "height": window.height,
+                            "maximized": False,
+                        }
+                _settings_read_modify_write(_mutate)
             except Exception:
                 log.exception("Failed to save window geometry")
 

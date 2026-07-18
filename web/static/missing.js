@@ -18,11 +18,17 @@
 
   let _rows = [];
 
+  // Bumped on every load() call so an older, slower-to-resolve fetch can't
+  // clobber the table with stale rows after a newer one already rendered
+  // (e.g. a rapid snapshot-tick + tab-switch) — mirrors report.js's own
+  // _loadGeneration pattern (see issue #64).
+  let _loadGeneration = 0;
+
   // ── Region summary chips (worked/total per region, click to quick-filter) ──
   // Reuses snap.region_heat, already computed for the Overview state-bars
   // panel — no extra fetch needed.
   function renderRegionStrip() {
-    if (!strip) return;
+    if (!strip || !filter) return;
     const heat = window.VKA?.lastSnap?.()?.region_heat;
     if (!heat || !heat.length) { strip.innerHTML = ''; return; }
 
@@ -50,25 +56,31 @@
   }
 
   async function load() {
+    if (!tbody) return;
+    const gen = ++_loadGeneration;
     try {
       const res  = await fetch('/api/missing');
-      _rows = await res.json();
+      const data = await res.json();
+      if (gen !== _loadGeneration) return;
+      _rows = data;
       render();
     } catch (e) {
+      if (gen !== _loadGeneration) return;
       tbody.innerHTML = `<tr><td colspan="2" style="color:var(--red);padding:12px">
         Failed to load: ${e.message}</td></tr>`;
     }
   }
 
   function render() {
-    const q = (filter.value || '').toLowerCase().trim();
+    if (!tbody) return;
+    const q = (filter?.value || '').toLowerCase().trim();
     const filtered = q
       ? _rows.filter(r =>
           r.mult.toLowerCase().includes(q) ||
           (r.region || '').toLowerCase().includes(q))
       : _rows;
 
-    count.textContent = filtered.length;
+    if (count) count.textContent = filtered.length;
     renderRegionStrip();
 
     tbody.innerHTML = '';
@@ -90,7 +102,7 @@
     tbody.appendChild(frag);
   }
 
-  filter.addEventListener('input', render);
+  filter?.addEventListener('input', render);
 
   // Reload when snapshot changes (new QSOs may have worked mults)
   window.addEventListener('vka:snapshot', load);

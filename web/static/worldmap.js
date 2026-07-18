@@ -121,6 +121,17 @@
   let _showShort    = true;
   let _showLong     = false;
   let _currentBasemap = 'Dark (CartoDB)';
+  // Base opacities for short/long-path arcs, chosen per basemap brightness
+  // in switchBasemap() below — arcs need to be more opaque to stay visible
+  // against a bright/light basemap than a dark one. Matches the initial
+  // 'Dark (CartoDB)' default above (see issue #70 — this used to be
+  // computed in switchBasemap() and then discarded, never actually
+  // affecting the arcs).
+  const ARC_OPACITY = {
+    dark:  { short: 0.60, long: 0.35 },
+    light: { short: 0.70, long: 0.40 },
+  };
+  let _arcOpacityTier = 'dark';
   let _renderer     = null;
   let _isDragging   = false;
   let _pendingRender = false;
@@ -276,12 +287,15 @@
 
     _currentBasemap = name;
 
-    // Adjust arc opacity: lighter on bright basemaps
+    // Adjust arc opacity: more opaque on bright basemaps so arcs stay
+    // visible against the lighter background (see issue #70 — this used
+    // to compute `opacity` here and then discard it; _cacheValid() below
+    // now invalidates the layer cache on a tier change so _buildCache()
+    // actually picks up ARC_OPACITY[_arcOpacityTier]).
     const isDark = name.toLowerCase().includes('dark') ||
                    name.toLowerCase().includes('satellite') ||
                    name.toLowerCase().includes('ocean');
-    const opacity = isDark ? 0.55 : 0.70;
-    // Re-render with updated opacity preference
+    _arcOpacityTier = isDark ? 'dark' : 'light';
     render();
   }
 
@@ -320,7 +334,8 @@
       && _layerCache.home[0]  === HOME[0]
       && _layerCache.home[1]  === HOME[1]
       && _layerCache.showShort === _showShort
-      && _layerCache.showLong  === _showLong;
+      && _layerCache.showLong  === _showLong
+      && _layerCache.arcTier   === _arcOpacityTier;
   }
 
   // Leaflet's canvas renderer does one beginPath()/stroke() PER PATH OBJECT on
@@ -334,6 +349,7 @@
   // specific station, since every station in the "wrap" group already gets a
   // shifted duplicate regardless of which sub-array its points ended up in.
   function _buildCache() {
+    const arcOpacity = ARC_OPACITY[_arcOpacityTier];
     const maxCount = Math.max(..._allData.map(d => d.count), 1);
     const valid = _allData.filter(d => d.lat != null && d.lon != null);
 
@@ -355,7 +371,7 @@
       // ── Short-path arcs: merged into up to 3 Path objects per band ──────────
       const shortLayers = [];
       if (_showShort && typeof L.geodesic !== 'undefined') {
-        const sStyle = { weight: 1.3, color: col, opacity: 0.60 };
+        const sStyle = { weight: 1.3, color: col, opacity: arcOpacity.short };
         if (plainStations.length) {
           const lines = plainStations.map(d => [L.latLng(HOME[0], HOME[1]), L.latLng(d.lat, d.lon)]);
           shortLayers.push(L.geodesic(lines, { ...sStyle, steps: 36, wrap: true }));
@@ -375,13 +391,13 @@
           const pts = gcPoints(HOME[0], HOME[1], d.lat, d.lon, 40);
           splitAtAntimeridian(pts).forEach(seg => allSegs.push(seg));
         });
-        if (allSegs.length) shortLayers.push(L.polyline(allSegs, { color: col, weight: 1.2, opacity: 0.55 }));
+        if (allSegs.length) shortLayers.push(L.polyline(allSegs, { color: col, weight: 1.2, opacity: arcOpacity.short }));
       }
 
       // ── Long-path arcs: merged into up to 2 Path objects per band ───────────
       const longLayers = [];
       if (_showLong && typeof L.geodesic !== 'undefined') {
-        const lStyle = { weight: 1.2, color: col, opacity: 0.35, dashArray: '5 7' };
+        const lStyle = { weight: 1.2, color: col, opacity: arcOpacity.long, dashArray: '5 7' };
         const lines = stations.map(d => {
           const antiLat = -d.lat;
           const antiLon = d.lon > 0 ? d.lon - 180 : d.lon + 180;
@@ -428,6 +444,7 @@
     _layerCache = {
       dataRef: _allData, home: [...HOME],
       showShort: _showShort, showLong: _showLong,
+      arcTier: _arcOpacityTier,
       bandData,
     };
   }

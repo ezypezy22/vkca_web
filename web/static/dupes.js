@@ -11,10 +11,20 @@
 
   let bandChart = null;
 
+  // Bumped on every load() call — lets load()/renderDupeQsos() detect and
+  // discard a fetch that's still in flight once a newer call has started
+  // (e.g. a rapid snapshot-tick + tab-switch), instead of a slower-to-
+  // resolve older response clobbering the table with stale rows after a
+  // newer one already rendered (see issue #64, mirrors report.js's own
+  // _loadGeneration pattern).
+  let _loadGeneration = 0;
+
   async function load() {
+    const gen = ++_loadGeneration;
     try {
       const res  = await fetch('/api/dupes');
       const data = await res.json();
+      if (gen !== _loadGeneration) return;
       const byBand = data.by_band || {};
       const byCall = data.by_call || {};
       const total  = Object.values(byBand).reduce((a,b)=>a+b, 0);
@@ -35,9 +45,10 @@
       } else {
         renderBandChart(byBand);
         renderCallTable(byCall);
-        renderDupeQsos();
+        renderDupeQsos(gen);
       }
     } catch(e) {
+      if (gen !== _loadGeneration) return;
       const tbody = document.getElementById('dupes-call-tbody');
       if (tbody) tbody.innerHTML = `<tr><td colspan="2" style="color:var(--red);padding:12px">Load failed: ${e.message}</td></tr>`;
     }
@@ -94,14 +105,27 @@
     const cols   = bands.map(b => BAND_COLS[b] || C.muted);
     const canvas = document.getElementById('chart-dupes-band');
     if (!canvas) return;
-    if (bandChart) { bandChart.destroy(); bandChart = null; }
 
     if (!bands.length) {
+      if (bandChart) { bandChart.destroy(); bandChart = null; }
       canvas.style.display = 'none';
       if (empty) empty.style.display = 'flex';
       return;
     }
     canvas.style.display = '';
+
+    // Mutate the existing instance in place rather than destroy+recreate
+    // on every redraw — same dataset shape every time, just updated values
+    // (see issue #73, matches bands.js's existing pattern).
+    if (bandChart) {
+      bandChart.data.labels = bands.map(b=>b.toLowerCase());
+      bandChart.data.datasets[0].data = values;
+      bandChart.data.datasets[0].backgroundColor = cols.map(c=>c+'cc');
+      bandChart.data.datasets[0].borderColor = cols;
+      bandChart.options.scales.x.ticks.color = cols;
+      bandChart.update();
+      return;
+    }
 
     bandChart = new Chart(canvas.getContext('2d'), {
       type: 'bar',
@@ -142,7 +166,7 @@
     entries.forEach(([call, n]) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td style="color:var(--accent2);font-weight:bold">${call}</td>
+        <td style="color:var(--accent2);font-weight:bold">${escapeHtml(call)}</td>
         <td style="color:var(--accent2)">${n} dupe${n!==1?'s':''}</td>`;
       frag.appendChild(tr);
     });
@@ -150,12 +174,13 @@
   }
 
   // Show the actual dupe QSOs in a separate table
-  async function renderDupeQsos() {
+  async function renderDupeQsos(gen) {
     const wrap = document.getElementById('dupes-qso-wrap');
     if (!wrap) return;
     try {
       const res  = await fetch('/api/qsos');
       const qsos = await res.json();
+      if (gen !== _loadGeneration) return;
       const dupes = qsos.filter(q => q.dupe);
       if (!dupes.length) { wrap.style.display='none'; return; }
       wrap.style.display = '';

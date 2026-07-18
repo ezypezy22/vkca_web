@@ -170,9 +170,17 @@
   function renderRateChart(snap) {
     const canvas = document.getElementById('chart-report-rate');
     const values = snap.sparklines?.qsos || [];
-    if (rateChart) { rateChart.destroy(); rateChart = null; }
-    if (!canvas || !values.length) return;
+    if (!canvas || !values.length) { if (rateChart) { rateChart.destroy(); rateChart = null; } return; }
     const labels = values.map((_, i) => `h${i}`);
+    // Fixed single-dataset shape for the lifetime of a loaded log — mutate
+    // in place instead of destroy+recreate on every snapshot tick (see
+    // issue #73, matches bands.js's existing pattern).
+    if (rateChart) {
+      rateChart.data.labels = labels;
+      rateChart.data.datasets[0].data = values;
+      rateChart.update();
+      return;
+    }
     rateChart = new Chart(canvas.getContext('2d'), {
       type: 'bar',
       data: { labels, datasets: [{ label: 'QSOs', data: values,
@@ -194,9 +202,17 @@
   function renderScoreChart(snap) {
     const canvas = document.getElementById('chart-report-score');
     const hist   = snap.sparklines?.running_score || [];
-    if (scoreChart) { scoreChart.destroy(); scoreChart = null; }
-    if (!canvas || !hist.length) return;
+    if (!canvas || !hist.length) { if (scoreChart) { scoreChart.destroy(); scoreChart = null; } return; }
     const labels = hist.map((_, i) => `h${i}`);
+    // Fixed single-dataset shape for the lifetime of a loaded log — mutate
+    // in place instead of destroy+recreate on every snapshot tick (see
+    // issue #73, matches bands.js's existing pattern).
+    if (scoreChart) {
+      scoreChart.data.labels = labels;
+      scoreChart.data.datasets[0].data = hist;
+      scoreChart.update();
+      return;
+    }
     scoreChart = new Chart(canvas.getContext('2d'), {
       type: 'line',
       data: { labels, datasets: [{ label: 'Score', data: hist,
@@ -257,25 +273,36 @@
     bands = bands || [];
     renderRowsToTbody(tbody, bandRows(bands), '');
 
-    if (bandChart) { bandChart.destroy(); bandChart = null; }
-    if (canvas && bands.length) {
+    if (!canvas || !bands.length) { if (bandChart) { bandChart.destroy(); bandChart = null; } }
+    else {
       const labels  = bands.map(r => (r.band||'').toLowerCase());
       const effic   = bands.map(r => r.efficiency || 0);
       const colours = labels.map(b => BAND_COLS[b] || C.muted);
-      bandChart = new Chart(canvas.getContext('2d'), {
-        type: 'bar',
-        data: { labels, datasets: [{ label: 'Efficiency', data: effic,
-          backgroundColor: colours.map(c => c+'cc'), borderColor: colours, borderWidth: 1, borderRadius: 4 }] },
-        options: {
-          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-          animation: { duration: 400 },
-          plugins: { legend: { display: false }, tooltip: { backgroundColor: C.bg3, bodyColor: C.fg } },
-          scales: {
-            x: { ticks: { color: C.muted, font: { size: 9 } }, grid: { color: C.bg3+'80' } },
-            y: { ticks: { color: colours, font: { size: 11, weight: 'bold', family: 'Consolas' } }, grid: { display: false } },
+      // Mutate in place instead of destroy+recreate on every snapshot tick
+      // when a chart already exists (see issue #73).
+      if (bandChart) {
+        bandChart.data.labels = labels;
+        bandChart.data.datasets[0].data = effic;
+        bandChart.data.datasets[0].backgroundColor = colours.map(c => c+'cc');
+        bandChart.data.datasets[0].borderColor = colours;
+        bandChart.options.scales.y.ticks.color = colours;
+        bandChart.update();
+      } else {
+        bandChart = new Chart(canvas.getContext('2d'), {
+          type: 'bar',
+          data: { labels, datasets: [{ label: 'Efficiency', data: effic,
+            backgroundColor: colours.map(c => c+'cc'), borderColor: colours, borderWidth: 1, borderRadius: 4 }] },
+          options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            animation: { duration: 400 },
+            plugins: { legend: { display: false }, tooltip: { backgroundColor: C.bg3, bodyColor: C.fg } },
+            scales: {
+              x: { ticks: { color: C.muted, font: { size: 9 } }, grid: { color: C.bg3+'80' } },
+              y: { ticks: { color: colours, font: { size: 11, weight: 'bold', family: 'Consolas' } }, grid: { display: false } },
+            },
           },
-        },
-      });
+        });
+      }
     }
 
     const summary = document.getElementById('report-missing-summary');
@@ -304,13 +331,23 @@
     renderRowsToTbody(tbody, dupeRows(dupes),
       '<tr><td colspan="2" style="color:var(--green);padding:10px">No duplicate QSOs — clean log!</td></tr>');
 
-    if (dupeChart) { dupeChart.destroy(); dupeChart = null; }
     if (canvas) {
       const bands  = Object.keys(byBand);
       const values = bands.map(b => byBand[b]);
       const cols   = bands.map(b => BAND_COLS[(b||'').toLowerCase()] || C.muted);
       canvas.style.display = bands.length ? '' : 'none';
-      if (bands.length) {
+      if (!bands.length) {
+        if (dupeChart) { dupeChart.destroy(); dupeChart = null; }
+      } else if (dupeChart) {
+        // Mutate in place instead of destroy+recreate on every snapshot
+        // tick when a chart already exists (see issue #73).
+        dupeChart.data.labels = bands.map(b => b.toLowerCase());
+        dupeChart.data.datasets[0].data = values;
+        dupeChart.data.datasets[0].backgroundColor = cols.map(c => c+'cc');
+        dupeChart.data.datasets[0].borderColor = cols;
+        dupeChart.options.scales.x.ticks.color = cols;
+        dupeChart.update();
+      } else {
         dupeChart = new Chart(canvas.getContext('2d'), {
           type: 'bar',
           data: { labels: bands.map(b => b.toLowerCase()), datasets: [{ label: 'Dupes', data: values,
@@ -326,6 +363,8 @@
           },
         });
       }
+    } else if (dupeChart) {
+      dupeChart.destroy(); dupeChart = null;
     }
   }
 

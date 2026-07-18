@@ -7,6 +7,17 @@
 // the overlay and the opening button existing, its own event wiring,
 // window.VKA.showToast for feedback.
 (function () {
+  // The SPA serves the identical index.html for every route (main window,
+  // Mini HUD at /hud, Operator HUD at /operator_hud — see web/server.py),
+  // so #settings-dialog/#btn-settings exist in the DOM everywhere and the
+  // guard below alone would pass in all three windows. Without this, the
+  // always-on setInterval(pollTick, 2000) further down runs redundantly in
+  // all three, and each window could independently fire its own "QRZ
+  // Enrich All Complete" toast on the same batch (see issue #60). Settings
+  // is a main-window-only concept, so gate on pathname like app.js/
+  // overview.js already do for their own HUD-specific branching.
+  if (location.pathname !== '/') return;
+
   const overlay = document.getElementById('settings-dialog');
   const btnOpen = document.getElementById('btn-settings');
   if (!overlay || !btnOpen) return;

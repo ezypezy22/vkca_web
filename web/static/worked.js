@@ -62,14 +62,24 @@
     return { label: `${_labelPrefix}${bn + 1}`, blockEnd };
   }
 
+  // Bumped on every load() call so an older, slower-to-resolve fetch can't
+  // clobber the table with stale rows after a newer one already rendered
+  // (e.g. a rapid snapshot-tick + tab-switch) — mirrors report.js's own
+  // _loadGeneration pattern (see issue #64).
+  let _loadGeneration = 0;
+
   async function load() {
+    const gen = ++_loadGeneration;
     readSessionConfig();
     try {
       const res = await fetch('/api/qsos');
-      _allQsos  = await res.json();
+      const data = await res.json();
+      if (gen !== _loadGeneration) return;
+      _allQsos  = data;
       _page     = 0;
       applyFilter();
     } catch(e) {
+      if (gen !== _loadGeneration) return;
       if (tbody) tbody.innerHTML = `<tr><td colspan="13" style="color:var(--red);padding:12px">Failed: ${e.message}</td></tr>`;
     }
   }

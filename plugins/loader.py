@@ -21,14 +21,43 @@ import importlib
 import inspect
 import logging
 import os
+import re
 import sys
 import threading
-from typing import List
+from typing import List, Optional
 
 from plugins.base import ContestPlugin
 from plugins.generic import GenericPlugin
 
 log = logging.getLogger(__name__)
+
+# USA/Canadian amateur-radio callsign prefixes, per ITU allocation — used
+# only as plugin_for()'s tiebreaker when more than one plugin's identify()
+# claims the same contest name (see ContestPlugin.matches_station() and
+# issue #40). Not a general-purpose callsign classifier; deliberately
+# narrow to this one disambiguation use.
+_W_VE_CALL_RE = re.compile(r'^(A[A-L]|K|N|W|V[AEOXY]|C[FGHIJKYZ]|X[JKLMNO])[0-9]')
+
+# Alaska/Hawaii/Pacific-territory US callsigns (KL7, KH6, etc.) participate
+# in ARRL DX as DX stations, not W/VE, despite the K/N/W/A prefix — called
+# out explicitly in arrl_dx_dx.py's own docstring. Checked before
+# _W_VE_CALL_RE so these correctly stay classified as DX-station calls.
+# Known gap: arrl_dx_dx.py's docstring also calls out CY9 (St Paul Is.) and
+# CYØ (Sable Is.) as DX-station entities despite the CY prefix — these
+# aren't excluded here (they're rare, DXpedition-only entities), so a
+# logging station using one of those calls would still be misclassified as
+# W/VE. Worth revisiting if it ever comes up in practice.
+_US_DX_TERRITORY_RE = re.compile(r'^[AKNW][HL][0-9]')
+
+
+def looks_like_w_ve_call(call: Optional[str]) -> bool:
+    """True if `call` is shaped like a mainland USA or Canadian
+    amateur-radio callsign (Alaska/Hawaii/Pacific-territory US calls are
+    deliberately excluded — see _US_DX_TERRITORY_RE)."""
+    c = (call or "").strip().upper()
+    if not c or _US_DX_TERRITORY_RE.match(c):
+        return False
+    return _W_VE_CALL_RE.match(c) is not None
 
 # Ordered list of registered plugin instances (GenericPlugin always last).
 _PLUGINS: List[ContestPlugin] = []
@@ -122,21 +151,48 @@ def get_all_plugins() -> List[ContestPlugin]:
     return list(_PLUGINS)
 
 
-def _plugin_for_locked(contest_name: str) -> ContestPlugin:
+def _plugin_for_locked(contest_name: str, my_call: Optional[str] = None) -> ContestPlugin:
     """Shared identify() scan, used by both plugin_for() and _discover()'s
     own round-trip self-check (which runs while _discover_lock is already
-    held, so it can't call plugin_for() itself without deadlocking)."""
+    held, so it can't call plugin_for() itself without deadlocking).
+
+    Collects every non-GenericPlugin plugin whose identify() claims
+    contest_name — usually just one, but occasionally more than one (ARRL
+    DX's near-identical DX-station/W/VE-station plugins both recognise the
+    same raw N1MM ContestName values — see issue #40). GenericPlugin is
+    excluded from this collection specifically because its own identify()
+    matches every contest name unconditionally (it's the catch-all
+    fallback) — including it here would make it "win" the tiebreak against
+    any specific plugin whenever matches_station(my_call) can't confirm the
+    specific plugin (e.g. my_call is unknown), which defeats the whole
+    point of falling back to a specific plugin. When there's more than one
+    specific-plugin match, matches_station(my_call) breaks the tie; if that
+    still leaves zero or more than one candidate, the first identify()-match
+    wins, same as before this disambiguation existed. GenericPlugin is only
+    ever returned when no specific plugin matches at all."""
+    matches = []
     for p in _PLUGINS:
+        if isinstance(p, GenericPlugin):
+            continue
         try:
             if p.identify(contest_name):
-                return p
+                matches.append(p)
         except Exception:
             log.warning("Plugin loader: %s.identify(%r) raised", type(p).__name__,
                         contest_name, exc_info=True)
-    return GenericPlugin()
+    if not matches:
+        return GenericPlugin()
+    if len(matches) > 1:
+        preferred = [p for p in matches if p.matches_station(my_call)]
+        if len(preferred) == 1:
+            return preferred[0]
+    return matches[0]
 
 
-def plugin_for(contest_name: str) -> ContestPlugin:
-    """Return the first registered plugin that claims this contest name."""
+def plugin_for(contest_name: str, my_call: Optional[str] = None) -> ContestPlugin:
+    """Return the registered plugin that claims this contest name. `my_call`
+    (the logging station's own callsign) is optional and only used to break
+    a tie when more than one plugin claims the same contest_name — pass it
+    whenever it's available (see issue #40)."""
     _discover()
-    return _plugin_for_locked(contest_name)
+    return _plugin_for_locked(contest_name, my_call)

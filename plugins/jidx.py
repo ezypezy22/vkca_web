@@ -78,8 +78,8 @@ _PREFECTURE_INFO: dict[str, tuple[str, str]] = {
     "05": ("Yamagata",          "JA7"),
     "06": ("Miyagi",            "JA7"),
     "07": ("Fukushima",         "JA7"),
-    "08": ("Niigata",           "JA8"),
-    "09": ("Nagano",            "JA8"),
+    "08": ("Niigata",           "JA0"),
+    "09": ("Nagano",            "JA0"),
     "10": ("Tokyo",             "JA1"),
     "11": ("Kanagawa",          "JA1"),
     "12": ("Chiba",             "JA1"),
@@ -98,7 +98,7 @@ _PREFECTURE_INFO: dict[str, tuple[str, str]] = {
     "25": ("Osaka",             "JA3"),
     "26": ("Wakayama",          "JA3"),
     "27": ("Hyogo",             "JA3"),
-    "28": ("Fukui",             "JA0"),   # JA0/9 area
+    "28": ("Fukui",             "JA9"),   # JA0/9 area
     "29": ("Toyama",            "JA9"),
     "30": ("Ishikawa",          "JA9"),
     "31": ("Okayama",           "JA4"),
@@ -172,8 +172,8 @@ def _is_ja_call(call: str) -> bool:
     """
     Return True if this looks like a Japanese station callsign.
 
-    JA prefixes: JA–JS, 7J, 7K–7N (JA1 area), 8J (special), JD (islands).
-    The operator's own VK call is NOT a JA call.
+    JA prefixes: JA–JS, 7J, 7K–7N (JA1 area), 8J-8N (special event), JD
+    (islands). The operator's own VK call is NOT a JA call.
     """
     c = (call or "").upper().strip()
     if not c:
@@ -184,10 +184,8 @@ def _is_ja_call(call: str) -> bool:
     # 7J, 7K, 7L, 7M, 7N (JA1 call area special prefixes)
     if len(c) >= 2 and c[0] == "7" and c[1] in "JKLMN":
         return True
-    # 8J (JA special event/commemorative stations)
-    if len(c) >= 2 and c == "8J":
-        return True
-    if len(c) >= 3 and c[:2] == "8J":
+    # 8J, 8K, 8L, 8M, 8N (JA special event/commemorative stations)
+    if len(c) >= 2 and c[0] == "8" and c[1] in "JKLMN":
         return True
     return False
 

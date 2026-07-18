@@ -181,8 +181,14 @@ def _state_from_vk_call(call: str) -> Optional[str]:
 def _resolve_shire_from_call(raw: str, call: str) -> Optional[str]:
     """
     Resolve a short-form N1MM section (e.g. 'BN4') to a full shire code
-    (e.g. 'QLD-BN3') using the operator's callsign area digit.
-    Falls back to an unambiguous prefix lookup when the call isn't a VK.
+    (e.g. 'QLD-BN3'). The trailing digit in the short form already IS the
+    callsign-area digit (N1MM encodes the exchange as XX{callsign-area-digit},
+    e.g. VK4GSI sends "BN4" — see the module comment above
+    _VK_AREA_TO_STATE_SUFFIX), so it's used directly rather than re-derived
+    from the logged `call` field, which can disagree with the exchange for
+    portable ops or corrected calls (see issue #45).
+    Falls back to an unambiguous prefix lookup, then to the callsign's own
+    VK area, when the digit itself doesn't resolve to a valid shire.
     Returns None if unresolvable.
     """
     import re as _re
@@ -196,12 +202,19 @@ def _resolve_shire_from_call(raw: str, call: str) -> Optional[str]:
         candidate = f"{m.group(1)}-{m.group(2)}{m.group(3)}"
         if candidate in _ALL_SHIRES_SET:
             return candidate
-    # Short form: XX{digit}
+    # Short form: XX{digit} — the digit is the callsign-area digit itself.
     m = _re.match(r'^([A-Z]{2})([1-9])$', raw)
     if not m:
         return None
     letters = m.group(1)
-    # Derive VK area from callsign (handles VK3, VL4, VJ2 etc.)
+    area = int(m.group(2))
+    if area in _VK_AREA_TO_STATE_SUFFIX:
+        state, suffix = _VK_AREA_TO_STATE_SUFFIX[area]
+        candidate = f"{state}-{letters}{suffix}"
+        if candidate in _ALL_SHIRES_SET:
+            return candidate
+    # Fall back to the logged callsign's own VK area, in case the exchange
+    # digit didn't resolve (e.g. a mis-copied digit).
     cm = _re.search(r'V[A-Z]?(\d)', call, _re.I)
     if cm:
         area = int(cm.group(1))
@@ -328,7 +341,13 @@ class VKShiresPlugin(ContestPlugin):
             band_qsos[b] += 1
             band_pts[b]  += q.get("pts", 0) or 0
             if q.get("is_mult1") == 1 and q.get("raw_mult"):
-                band_mults[b].add(q["raw_mult"].strip().upper())
+                # Dedupe on the resolved canonical shire code, not the raw
+                # exchange string — same fix region_heat() already has
+                # above (see its comment): two QSOs whose raw text differs
+                # but resolve to the same shire must count as one
+                # "new shire", not two (see issue #66).
+                shire = _resolve_shire_from_call(q["raw_mult"], q.get("call", ""))
+                band_mults[b].add(shire or q["raw_mult"].strip().upper())
         time_stats = self._band_time_stats(qsos)
         result = []
         for b, qn in band_qsos.items():

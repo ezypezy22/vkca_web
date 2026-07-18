@@ -7,9 +7,18 @@
   let _allQsos = [];
   const filter = document.getElementById('debug-filter');
 
+  // Bumped on every load() call so an older, slower-to-resolve fetch can't
+  // clobber the table with stale rows after a newer one already rendered
+  // (e.g. a rapid snapshot-tick + tab-switch) — mirrors report.js's own
+  // _loadGeneration pattern (see issue #64).
+  let _loadGeneration = 0;
+
   async function load() {
+    const gen = ++_loadGeneration;
     const res  = await fetch('/api/qsos');
-    _allQsos   = await res.json();
+    const data = await res.json();
+    if (gen !== _loadGeneration) return;
+    _allQsos = data;
     render();
   }
 
