@@ -1346,7 +1346,13 @@ Users are responsible for verifying all information against N1MM before making d
   // Returns a forceHide(markSeen) function so a caller can dismiss the hint
   // programmatically (e.g. the radio hint clearing itself once real
   // radio_info arrives) without going through the close button.
-  function showCornerHint({ icon, title, bodyHtml, seenKey, onDismiss }) {
+  //
+  // autoHideMs, if given, auto-dismisses the hint after that long on
+  // screen — treated the same as a real dismissal (markSeen: true), same
+  // precedent as the HUD field-picker hint's own 8s auto-dismiss in
+  // overview.js: a tip nobody acted on within a generous viewing window is
+  // still "seen" for suppression purposes, not retried forever.
+  function showCornerHint({ icon, title, bodyHtml, seenKey, onDismiss, autoHideMs }) {
     const hint = document.createElement('div');
     hint.className = 'corner-hint';
     hint.innerHTML = `<div class="ch-icon">${icon}</div>
@@ -1358,13 +1364,16 @@ Users are responsible for verifying all information against N1MM before making d
     document.body.appendChild(hint);
     requestAnimationFrame(() => hint.classList.add('show'));
     chimeHint();
+    let autoTimer = null;
     const dismiss = (markSeen) => {
+      clearTimeout(autoTimer);
       hint.classList.remove('show');
       setTimeout(() => hint.remove(), 300);
       if (markSeen && seenKey) { try { localStorage.setItem(seenKey, '1'); } catch {} }
       onDismiss?.(markSeen);
     };
     hint.querySelector('.ch-close').addEventListener('click', () => dismiss(true));
+    if (autoHideMs) autoTimer = setTimeout(() => dismiss(true), autoHideMs);
     return dismiss;
   }
 
@@ -1378,12 +1387,14 @@ Users are responsible for verifying all information against N1MM before making d
   // inside maybeShowReportHint() stops the second from double-showing it):
   //   1. Chained right after the radio hint's own dismissal, reusing that
   //      "just read and acted on a corner hint" moment.
-  //   2. A fixed 60s-after-load fallback, for the — very common — case
+  //   2. A fixed 30s-after-load fallback, for the — very common — case
   //      where radio_info is already flowing and the radio hint never
   //      appears at all, so trigger 1 never happens.
-  // Only fires once, same as every other one-time hint here.
+  // Only fires once, same as every other one-time hint here — auto-hides
+  // after 60s on screen if not dismissed sooner (see autoHideMs above).
   const REPORT_HINT_SEEN_KEY = 'vkca_report_hint_seen';
-  const REPORT_HINT_WAIT_MS  = 60000;
+  const REPORT_HINT_WAIT_MS  = 30000;
+  const REPORT_HINT_AUTO_HIDE_MS = 60000;
   function maybeShowReportHint() {
     if (!IS_MAIN_WINDOW || localStorage.getItem(REPORT_HINT_SEEN_KEY)) return;
     showCornerHint({
@@ -1392,6 +1403,7 @@ Users are responsible for verifying all information against N1MM before making d
       bodyHtml: 'Click <b>&#128027; Report Issue</b> in the titlebar to open a pre-filled bug/feature form.' +
         ' <span style="color:var(--muted)">(Free GitHub account required to submit.)</span>',
       seenKey: REPORT_HINT_SEEN_KEY,
+      autoHideMs: REPORT_HINT_AUTO_HIDE_MS,
     });
   }
   if (IS_MAIN_WINDOW && !localStorage.getItem(REPORT_HINT_SEEN_KEY)) {

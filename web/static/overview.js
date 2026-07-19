@@ -513,8 +513,11 @@
 
   // ══ INFO PANELS ════════════════════════════════════════════════════════════
   function ip(id){return document.getElementById(id);}
-  function hdr(icon,col,title){
-    return `<div class="ip-hdr"><span style="color:${col}">${icon}</span><span class="ip-title" style="color:${col}">${title}</span></div>`;
+  function hdr(icon,col,title,extra=''){
+    // extra: raw HTML appended after the title span, inside the same flex
+    // row (see .ip-hdr) — used by the Radio panel's live-signal pulse icon;
+    // every other caller leaves it at its default and is unaffected.
+    return `<div class="ip-hdr"><span style="color:${col}">${icon}</span><span class="ip-title" style="color:${col}">${title}</span>${extra}</div>`;
   }
 
   function updateBandEfficiency(snap){
@@ -694,7 +697,16 @@
       addPopoutButton(el);
       return;
     }
-    el.innerHTML=hdr('[ &asymp; ]',T.accent3,'RADIO')+`
+    // Animated broadcast-wave rings — three arcs pulsing outward from the
+    // center in sequence, only shown once radio_info is actually flowing
+    // (there's nothing live to represent in the "no radio" branch above).
+    // CSS-only (see .radio-pulse in style.css) rather than a raster image:
+    // scales cleanly, recolors with the theme's accent3 automatically, and
+    // ships no binary asset.
+    const pulse = `<span class="radio-pulse" title="Receiving live RadioInfo from N1MM+">
+        <span class="rp-ring"></span><span class="rp-ring"></span><span class="rp-ring"></span>
+      </span>`;
+    el.innerHTML=hdr('[ &asymp; ]',T.accent3,'RADIO',pulse)+`
       <table class="ip-tbl">
         <tr><td>Freq</td><td style="color:${T.accent3};font-weight:bold;font-size:1.15em">${r.freqStr} MHz</td></tr>
         <tr><td>Band</td><td><span class="band-chip" style="background:${r.bandColor}30;color:${r.bandColor}">${r.band}</span></td></tr>

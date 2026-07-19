@@ -500,6 +500,32 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
    another multiplier here previously compounded to the smallest text on the
    page, making headers read smaller than their own body content. */
 .ip-title{font-size:1em;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;}
+
+/* ── Radio panel's live-signal pulse — three broadcast-wave arcs animating
+   outward from the center in sequence (see hdr()'s "extra" param and
+   updateRadioPanel() in overview.js). Each ring is a circle with only its
+   top border colored — the classic CSS "signal strength" arc trick — sized
+   and layered to read as concentric waves, bottom-anchored so they share a
+   single origin point like the reference broadcast-tower icon. Colour and
+   the base "how solid this ring reads" (--peak) are per-ring; the shared
+   keyframe just animates opacity between --peak and a dimmer fraction of
+   it, so a ring's identity (inner = solid, outer = faint) survives the
+   animation instead of being flattened to one shared brightness. */
+.radio-pulse{position:relative;display:inline-block;width:22px;height:15px;vertical-align:middle;}
+.radio-pulse .rp-ring{
+  position:absolute;left:50%;bottom:0;border-radius:50%;
+  border-style:solid;border-width:2px;border-color:transparent;
+  border-top-color:var(--accent3);
+  transform:translateX(-50%);
+  animation:rp-pulse-kf 1.8s ease-in-out infinite;
+}
+.radio-pulse .rp-ring:nth-child(1){width:7px; height:7px;  --peak:1;    animation-delay:0s;}
+.radio-pulse .rp-ring:nth-child(2){width:14px;height:14px; --peak:.7;   animation-delay:.2s;}
+.radio-pulse .rp-ring:nth-child(3){width:21px;height:21px; --peak:.4;   animation-delay:.4s;}
+@keyframes rp-pulse-kf{
+  0%,100%{opacity:calc(var(--peak) * .35);}
+  50%{opacity:var(--peak);}
+}
 .ip-tbl{width:100%;border-collapse:collapse;font-size:0.95em;}
 .ip-tbl th{color:var(--muted);font-size:0.85em;letter-spacing:.05em;text-transform:uppercase;
             padding:0 4px 3px 0;text-align:left;font-weight:normal;
