@@ -920,6 +920,29 @@ body:has(#tab-map.active) #content {
 #save-toast .toast-close { cursor:pointer; color:var(--muted); padding:0 4px; flex-shrink:0; }
 #save-toast .toast-close:hover { color:var(--fg); }
 
+/* ── Radio-readout setup hint — one-time, dismiss-only (see app.js) ────────
+   Own element rather than reusing #save-toast: that one auto-hides after
+   5-8s, too short to read and act on multi-step instructions, and a real
+   save-toast firing while this is up shouldn't clobber it. */
+#radio-setup-hint {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9998;
+  background: var(--bg2); border: 1px solid var(--accent3);
+  border-radius: var(--radius); padding: 12px 18px 12px 14px;
+  font-family: var(--font-mono); font-size: 0.82em; color: var(--fg);
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  display: flex; align-items: flex-start; gap: 10px;
+  transform: translateX(120%); transition: transform .3s ease;
+  max-width: 380px; line-height: 1.5;
+}
+#radio-setup-hint.show { transform: translateX(0); }
+#radio-setup-hint .rsh-icon  { font-size: 1.1em; flex-shrink: 0; margin-top: 1px; color: var(--accent3); }
+#radio-setup-hint .rsh-body  { flex: 1; min-width: 0; }
+#radio-setup-hint .rsh-title { color: var(--accent3); font-weight: bold; margin-bottom: 4px; }
+#radio-setup-hint .rsh-text  { color: var(--muted); }
+#radio-setup-hint .rsh-text b { color: var(--fg); }
+#radio-setup-hint .rsh-close { cursor:pointer; color:var(--muted); padding:0 4px; flex-shrink:0; }
+#radio-setup-hint .rsh-close:hover { color:var(--fg); }
+
 /* ── Splash ───────────────────────────────────────────────────────────────── */
 #splash-overlay {
   position: fixed; inset: 0; z-index: 99999;
@@ -1008,7 +1031,7 @@ body:has(#tab-map.active) #content {
 /* ── Print: always print the Report tab regardless of which tab is active ─── */
 @media print {
   #titlebar, #tabbar, #hud-bar, #session-bar, #splash-overlay,
-  #report-export-btn, #save-toast { display: none !important; }
+  #report-export-btn, #save-toast, #radio-setup-hint { display: none !important; }
   body, #content { position: static !important; overflow: visible !important; height: auto !important; }
   #content { padding: 0 !important; }
   .tab-panel { display: none !important; }
