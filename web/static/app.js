@@ -1313,27 +1313,35 @@ Users are responsible for verifying all information against N1MM before making d
   // there's no error or empty state that hints it's off, every radio readout
   // (titlebar chip, Mini HUD, Overview panel, Operator HUD, DX Cluster board)
   // just silently stays blank forever, which reads as broken rather than
-  // unconfigured. N1MM+ broadcasts at least every 10s once enabled, so give
-  // it a wait well past that before concluding nothing's arriving, then show
-  // a one-time, dismiss-only pointer — same "explain it, gone for good once
-  // acknowledged" pattern as the HUD field-picker hint in overview.js. Main
-  // window only — a HUD popout is too small a surface for a multi-line tip,
-  // and one already-dismissed hint should cover the user, not one per window.
+  // unconfigured. N1MM+ broadcasts at least every 10s once enabled, so an
+  // 8s wait can in principle fire while a correctly-configured N1MM+ just
+  // hasn't sent its first packet yet — accepted tradeoff for a snappier
+  // hint; it's harmless either way since it's dismiss-only and self-clears
+  // (see onRadioSnap below) the moment real radio_info actually arrives.
+  // Then show a one-time, dismiss-only pointer — same "explain it, gone for
+  // good once acknowledged" pattern as the HUD field-picker hint in
+  // overview.js. Main window only — a HUD popout is too small a surface for
+  // a multi-line tip, and one already-dismissed hint should cover the user,
+  // not one per window.
   const RADIO_HINT_SEEN_KEY = 'vkca_radio_hint_seen';
-  const RADIO_HINT_WAIT_MS  = 15000;
+  const RADIO_HINT_WAIT_MS  = 8000;
   const IS_MAIN_WINDOW = location.pathname !== '/hud' && location.pathname !== '/operator_hud';
   if (IS_MAIN_WINDOW && !localStorage.getItem(RADIO_HINT_SEEN_KEY)) {
     let _radioSeen = false;
+    let _hideHint = null;   // set once the hint element exists, so a radio
+                             // showing up *after* it's already on screen can
+                             // still clear it instead of leaving a stale tip
+                             // up once the thing it's explaining is working.
     const onRadioSnap = e => {
       const ri = e.detail?.radio_info;
       if (ri?.own || Object.keys(ri?.all || {}).length) {
         _radioSeen = true;
         window.removeEventListener('vka:snapshot', onRadioSnap);
+        _hideHint?.();
       }
     };
     window.addEventListener('vka:snapshot', onRadioSnap);
     setTimeout(() => {
-      window.removeEventListener('vka:snapshot', onRadioSnap);
       if (_radioSeen) return;
       const hint = document.createElement('div');
       hint.id = 'radio-setup-hint';
@@ -1346,12 +1354,14 @@ Users are responsible for verifying all information against N1MM before making d
         <div class="rsh-close" title="Dismiss">&#10005;</div>`;
       document.body.appendChild(hint);
       requestAnimationFrame(() => hint.classList.add('show'));
-      const dismiss = () => {
+      const dismiss = (markSeen) => {
         hint.classList.remove('show');
         setTimeout(() => hint.remove(), 300);
-        try { localStorage.setItem(RADIO_HINT_SEEN_KEY, '1'); } catch {}
+        _hideHint = null;
+        if (markSeen) { try { localStorage.setItem(RADIO_HINT_SEEN_KEY, '1'); } catch {} }
       };
-      hint.querySelector('.rsh-close').addEventListener('click', dismiss);
+      hint.querySelector('.rsh-close').addEventListener('click', () => dismiss(true));
+      _hideHint = () => dismiss(false);   // radio showed up on its own — not a user dismissal, don't suppress future sessions
     }, RADIO_HINT_WAIT_MS);
   }
 
