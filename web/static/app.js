@@ -1316,11 +1316,12 @@ Users are responsible for verifying all information against N1MM before making d
 
   // Reuses the Overview tab's own Sound Alerts toggle/key rather than adding
   // a second, independent mute control the user would have to discover —
-  // muting one silences the other. A plain two-partial chime (fundamental +
-  // quiet octave-up partial, same cheap "bell overtone" trick as
-  // overview.js's chimeNote()) rather than a flat oscillator beep, since a
-  // corner hint is competing for attention with whatever the user is
-  // actually looking at, not just confirming an action they just took.
+  // muting one silences the other. Three percussive "knock" hits (a quick
+  // pitch-dropping thump, like knuckles on a door) rather than a soft bell
+  // tone, at a much higher peak gain — a corner hint is competing for
+  // attention with whatever the user is actually looking at, not just
+  // confirming an action they just took, so it needs to be heard, not just
+  // technically audible.
   const HINT_SOUND_KEY = 'vka_overview_sound';
   let _hintAudioCtx = null;
   function getHintAudioCtx() {
@@ -1346,17 +1347,25 @@ Users are responsible for verifying all information against N1MM before making d
       const ctx = getHintAudioCtx();
       if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       const t0 = ctx.currentTime;
-      [[1, 1], [2, 0.25]].forEach(([mult, partialGain]) => {
+      const KNOCK_GAP = 0.16;
+      for (let i = 0; i < 3; i++) {
+        const t = t0 + i * KNOCK_GAP;
         const osc = ctx.createOscillator(), g = ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.value = 660 * mult;
-        g.gain.setValueAtTime(0.0001, t0);
-        g.gain.exponentialRampToValueAtTime(0.16 * partialGain, t0 + 0.008);
-        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
+        // Pitch drop (180Hz -> 55Hz) is what reads as a "thump" rather
+        // than a plain tone — a real knock's pitch falls as the impact's
+        // energy dies out.
+        osc.frequency.setValueAtTime(180, t);
+        osc.frequency.exponentialRampToValueAtTime(55, t + 0.08);
+        // Near-instant attack (2ms) into a fast decay (~130ms) — a
+        // percussive hit, not a sustained note.
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.55, t + 0.002);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
         osc.connect(g).connect(ctx.destination);
-        osc.start(t0);
-        osc.stop(t0 + 0.6);
-      });
+        osc.start(t);
+        osc.stop(t + 0.15);
+      }
     } catch (e) { /* Web Audio unavailable — ignore */ }
   }
 
