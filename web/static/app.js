@@ -1323,12 +1323,29 @@ Users are responsible for verifying all information against N1MM before making d
   // actually looking at, not just confirming an action they just took.
   const HINT_SOUND_KEY = 'vka_overview_sound';
   let _hintAudioCtx = null;
+  function getHintAudioCtx() {
+    _hintAudioCtx = _hintAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    return _hintAudioCtx;
+  }
+  // Browsers create a new AudioContext in a "suspended" state until a real
+  // user gesture (click/key/touch) resumes it — silently, no error, so a
+  // hint whose timer fires before the user has clicked anything at all
+  // (very plausible for the Report Issue hint's fixed 30s-after-load timer,
+  // especially when it's the *first* corner hint of the session because the
+  // radio hint never appeared) schedules its oscillators into a context
+  // that's still suspended and produces no audible sound. Resuming eagerly
+  // on the first interaction anywhere on the page means any later chime()
+  // call already has a running context by the time it's needed.
+  ['pointerdown', 'keydown'].forEach(evt =>
+    document.addEventListener(evt, () => getHintAudioCtx().resume().catch(() => {}), { once: true, passive: true }));
+
   function chimeHint() {
     const stored = localStorage.getItem(HINT_SOUND_KEY);
     if (stored === '0') return;
     try {
-      _hintAudioCtx = _hintAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      const ctx = _hintAudioCtx, t0 = ctx.currentTime;
+      const ctx = getHintAudioCtx();
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      const t0 = ctx.currentTime;
       [[1, 1], [2, 0.25]].forEach(([mult, partialGain]) => {
         const osc = ctx.createOscillator(), g = ctx.createGain();
         osc.type = 'sine';
