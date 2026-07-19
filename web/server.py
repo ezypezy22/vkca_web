@@ -295,31 +295,64 @@ class AppState:
             return {"error": err}
         try:
             cl = ContestLog(path, contest_nr=contest_nr, plugin=plugin)
+            # Enrichment + the full compute_snapshot() recompute both run
+            # against the local `cl` here, before it's published to
+            # self.contest_log — see poll_once()'s own comment just below
+            # for why that matters (self._lock is a plain threading.Lock
+            # shared with the asyncio event loop's own synchronous
+            # `with STATE._lock:` uses elsewhere).
+            self._enrich_qsos(cl)
+            mtime    = os.path.getmtime(path)
+            snapshot = self._compute_snapshot_for(cl)
             with self._lock:
-                self.db_path      = path
-                self.contest_nr   = contest_nr
-                self.plugin       = plugin
-                self.contest_log  = cl
-                self._enrich_qsos(cl)
-                self.last_mtime   = os.path.getmtime(path)
-                self.last_snapshot = self._safe_snapshot()
+                self.db_path       = path
+                self.contest_nr    = contest_nr
+                self.plugin        = plugin
+                self.contest_log   = cl
+                self.last_mtime    = mtime
+                self.last_snapshot = snapshot
             return {"ok": True, "path": path}
         except Exception as exc:
             log.exception("load_db failed")
             return {"error": str(exc)}
 
-    def _safe_snapshot(self) -> dict:
-        if not self.contest_log:
+    def _compute_snapshot_for(self, cl) -> dict:
+        if not cl:
             return {}
         try:
-            return _json_safe(self.contest_log.compute_snapshot())
+            return _json_safe(cl.compute_snapshot())
         except Exception as exc:
             log.exception("compute_snapshot failed")
             return {"error": str(exc)}
 
+    def _safe_snapshot(self) -> dict:
+        """For callers that already hold self._lock and want to recompute
+        from the currently-published self.contest_log in place (e.g. after
+        patching a QSO dict or deleting a QSO) — see _compute_snapshot_for()
+        for the "not yet published, safe to run outside the lock" variant
+        load_db()/poll_once() use instead, so a multi-thousand-QSO log's
+        full recompute doesn't hold self._lock — and therefore stall every
+        other thread's (and the asyncio event loop's own) `with self._lock`
+        — for its entire duration."""
+        return self._compute_snapshot_for(self.contest_log)
+
     def poll_once(self, force: bool = False) -> bool:
         """Check mtime; reload ContestLog if changed (or always, if force).
-        Returns True if updated."""
+        Returns True if updated.
+
+        Builds the new ContestLog, enriches it, and runs the full
+        compute_snapshot() recompute all *before* touching self._lock —
+        only the final publish (four attribute assignments) happens under
+        the lock. self._lock is a plain threading.Lock also acquired
+        synchronously by ~35 call sites across the async request handlers
+        and the radio_info/QRZ broadcast bridges; holding it across a full
+        recompute (previously done here) blocked the entire asyncio event
+        loop — every websocket, every HTTP request, every open window —
+        for however long that recompute took, any time this 5-second poll
+        cycle happened to be mid-recompute when something else needed the
+        lock. That's very likely why the live radio readout (and every
+        other live update) seemed to randomly stall rather than reliably
+        lag by a fixed amount."""
         if not self.db_path or not os.path.isfile(self.db_path):
             return False
         try:
@@ -332,11 +365,12 @@ class AppState:
             cl = ContestLog(self.db_path,
                             contest_nr=self.contest_nr,
                             plugin=self.plugin)
+            self._enrich_qsos(cl)
+            snapshot = self._compute_snapshot_for(cl)
             with self._lock:
                 self.contest_log   = cl
-                self._enrich_qsos(cl)
                 self.last_mtime    = mtime
-                self.last_snapshot = self._safe_snapshot()
+                self.last_snapshot = snapshot
             return True
         except Exception:
             log.exception("poll_once reload failed")
