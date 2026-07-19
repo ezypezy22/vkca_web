@@ -154,6 +154,32 @@ Users are responsible for verifying all information against N1MM before making d
   }
 })();
 
+  // pywebview's own built-in dragging (disabled here via easy_drag=False —
+  // see server.py) sends its move calls tagged 'pywebviewMoveWindow', which
+  // pywebview's bridge (webview/util.py's js_bridge_call) special-cases to
+  // call window.move() directly and return — no thread spawn, no evaluate_js
+  // round trip back into the page to resolve a promise, unlike every *other*
+  // js_api call including our own move_to(). That's real overhead 30 times a
+  // second (see DRAG_SEND_INTERVAL_MS below), on the same WebView2/GTK engine
+  // that's simultaneously trying to repaint the window mid-drag — the likely
+  // Windows-side counterpart to the GTK glib.idle_add bottleneck documented
+  // in wireDragRegions() below. Tapping the same fast path pywebview uses
+  // internally, while keeping our own delta/throttle math (needed for the
+  // selective drag-region behaviour easy_drag can't do), should be a pure
+  // latency win. Shared by the main window's titlebar drag and the Mini
+  // HUD/Operator HUD glance windows' drag bar. window.pywebview._jsApiCallback
+  // is what every api.xxx() wrapper calls under the hood (see
+  // webview/js/api.js) — not officially public API, so this checks it exists
+  // and falls back to the slower api.move_to() path if a future pywebview
+  // version removes it.
+  function fastMoveWindow(api, x, y) {
+    if (typeof window.pywebview?._jsApiCallback === 'function') {
+      window.pywebview._jsApiCallback('pywebviewMoveWindow', [Math.round(x), Math.round(y)], 'vka-drag');
+    } else {
+      api.move_to(x, y);
+    }
+  }
+
   // ── Frameless-window caption buttons (desktop app only) ────────────────────
   // #window-controls stays hidden until we know we're actually running inside
   // pywebview's main window — checking for pywebview.api.minimize specifically
@@ -301,7 +327,7 @@ Users are responsible for verifying all information against N1MM before making d
               // actually happens, not on mere mousedown, since a plain
               // click-without-drag never calls move_to() at all.
               setMaximizeIcon(false);
-              api.move_to(curX, curY);
+              fastMoveWindow(api, curX, curY);
             }
             function onMove(ev) {
               pendingDx += ev.screenX - lastX;
@@ -379,7 +405,7 @@ Users are responsible for verifying all information against N1MM before making d
             if (!pendingDx && !pendingDy) return;
             curX += pendingDx; curY += pendingDy;
             pendingDx = 0; pendingDy = 0;
-            api.move_to(curX, curY);
+            fastMoveWindow(api, curX, curY);
           }
           function onMove(ev) {
             pendingDx += ev.screenX - lastX;
