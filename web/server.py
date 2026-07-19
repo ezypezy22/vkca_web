@@ -3125,11 +3125,19 @@ async def ws_live(ws: WebSocket):
 
 
 async def _broadcast(data: dict):
+    """Sends are awaited one at a time, each under its own short timeout —
+    without that timeout, a single client whose socket isn't draining fast
+    enough (a minimized/OS-throttled HUD popout, a half-dead connection
+    that hasn't errored out yet) stalls this whole loop, delaying every
+    *other* client's update — including the main window's live radio
+    readout — until it clears. Same category of bug as the DX Cluster's
+    own socket blocking the app for up to 30s on a slow/hung peer (#41);
+    this is the general /ws/live broadcast path that fix didn't cover."""
     msg  = json.dumps({"type": "snapshot", "data": data})
     dead = []
     for ws in list(STATE._clients):
         try:
-            await ws.send_text(msg)
+            await asyncio.wait_for(ws.send_text(msg), timeout=2.0)
         except Exception:
             dead.append(ws)
     for ws in dead:
