@@ -578,13 +578,20 @@ def _radio_info_maybe_broadcast():
     land individually): this one is watched live while tuning, where every
     step matters. state.radio_info itself is updated in place on every
     single packet regardless — this only throttles how often that gets
-    *pushed* — so 1.5s silently dropped every intermediate frequency
-    between broadcasts, e.g. spinning the VFO from 7150 to 7155 would
-    only ever show the first and last step, never the ones in between.
-    250ms still caps this well under flood territory (4/s) while showing
-    close to every real step a human can dial through by hand."""
+    *pushed* — so too long a window silently drops every intermediate
+    frequency between broadcasts, e.g. spinning the VFO from 7150 to 7155
+    would only ever show the first and last step, never the ones between.
+
+    60ms (~16/s, one "frame" at a typical display refresh rate) is about
+    as low as this can usefully go — a human can't perceive anything
+    tighter as more responsive, and STATE.snapshot() is cheap post-lock-
+    refactor (see poll_once()'s docstring), so the broadcast itself isn't
+    the bottleneck this is guarding. It still exists as a hard floor
+    against a genuinely pathological flood (a flaky CAT interface
+    spamming noise), just no longer tuned as if the broadcast were
+    expensive."""
     now = time.time()
-    if now - STATE._radio_last_broadcast < 0.25:
+    if now - STATE._radio_last_broadcast < 0.06:
         return
     STATE._radio_last_broadcast = now
     if STATE._main_loop is not None:
