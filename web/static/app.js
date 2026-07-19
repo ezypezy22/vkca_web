@@ -1383,30 +1383,33 @@ Users are responsible for verifying all information against N1MM before making d
   const IS_MAIN_WINDOW = location.pathname !== '/hud' && location.pathname !== '/operator_hud';
 
   // ── Report Issue pointer ─────────────────────────────────────────────────
-  // Two triggers, whichever fires first (the REPORT_HINT_SEEN_KEY guard
-  // inside maybeShowReportHint() stops the second from double-showing it):
+  // Deliberately NOT persisted via localStorage (no seenKey) — unlike the
+  // radio hint (a one-time "fix this setting" tip, right to suppress
+  // forever once addressed), this is a recurring reminder that the feedback
+  // feature exists, so it shows again every launch rather than only once
+  // ever. _reportHintShown is in-memory only, just preventing the two
+  // triggers below from double-showing it within the same page load:
   //   1. Chained right after the radio hint's own dismissal, reusing that
   //      "just read and acted on a corner hint" moment.
   //   2. A fixed 30s-after-load fallback, for the — very common — case
   //      where radio_info is already flowing and the radio hint never
   //      appears at all, so trigger 1 never happens.
-  // Only fires once, same as every other one-time hint here — auto-hides
-  // after 60s on screen if not dismissed sooner (see autoHideMs above).
-  const REPORT_HINT_SEEN_KEY = 'vkca_report_hint_seen';
-  const REPORT_HINT_WAIT_MS  = 30000;
+  // Auto-hides after 60s on screen if not dismissed sooner (see autoHideMs).
+  const REPORT_HINT_WAIT_MS      = 30000;
   const REPORT_HINT_AUTO_HIDE_MS = 60000;
+  let _reportHintShown = false;
   function maybeShowReportHint() {
-    if (!IS_MAIN_WINDOW || localStorage.getItem(REPORT_HINT_SEEN_KEY)) return;
+    if (!IS_MAIN_WINDOW || _reportHintShown) return;
+    _reportHintShown = true;
     showCornerHint({
       icon: '&#9654;',
       title: 'Found a bug or have an idea?',
       bodyHtml: 'Click <b>&#128027; Report Issue</b> in the titlebar to open a pre-filled bug/feature form.' +
         ' <span style="color:var(--muted)">(Free GitHub account required to submit.)</span>',
-      seenKey: REPORT_HINT_SEEN_KEY,
       autoHideMs: REPORT_HINT_AUTO_HIDE_MS,
     });
   }
-  if (IS_MAIN_WINDOW && !localStorage.getItem(REPORT_HINT_SEEN_KEY)) {
+  if (IS_MAIN_WINDOW) {
     setTimeout(maybeShowReportHint, REPORT_HINT_WAIT_MS);
   }
 

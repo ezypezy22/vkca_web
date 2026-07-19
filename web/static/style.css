@@ -511,7 +511,7 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
    keyframe just animates opacity between --peak and a dimmer fraction of
    it, so a ring's identity (inner = solid, outer = faint) survives the
    animation instead of being flattened to one shared brightness. */
-.radio-pulse{position:relative;display:inline-block;width:38px;height:26px;vertical-align:middle;}
+.radio-pulse{position:relative;display:inline-block;width:38px;height:36px;vertical-align:middle;}
 .radio-pulse .rp-ring{
   position:absolute;left:50%;bottom:0;border-radius:50%;
   border-style:solid;border-width:3px;border-color:transparent;
