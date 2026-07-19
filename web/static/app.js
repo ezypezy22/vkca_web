@@ -1316,58 +1316,43 @@ Users are responsible for verifying all information against N1MM before making d
 
   // Reuses the Overview tab's own Sound Alerts toggle/key rather than adding
   // a second, independent mute control the user would have to discover —
-  // muting one silences the other. Three percussive "knock" hits (a quick
-  // pitch-dropping thump, like knuckles on a door) rather than a soft bell
-  // tone, at a much higher peak gain — a corner hint is competing for
+  // muting one silences the other. Real recorded knock SFX (web/static/sfx/
+  // knock.mp3 — "Knocking Sound Effect" by kokeshiofficial, via Pixabay)
+  // rather than a synthesized tone: a corner hint is competing for
   // attention with whatever the user is actually looking at, not just
   // confirming an action they just took, so it needs to be heard, not just
   // technically audible.
   const HINT_SOUND_KEY = 'vka_overview_sound';
-  let _hintAudioCtx = null;
-  function getHintAudioCtx() {
-    _hintAudioCtx = _hintAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    return _hintAudioCtx;
+  const KNOCK_SFX_URL  = '/static/sfx/knock.mp3';
+  let _knockAudio = null;
+  function getKnockAudio() {
+    if (!_knockAudio) {
+      _knockAudio = new Audio(KNOCK_SFX_URL);
+      _knockAudio.preload = 'auto';
+    }
+    return _knockAudio;
   }
-  // Browsers create a new AudioContext in a "suspended" state until a real
-  // user gesture (click/key/touch) resumes it — silently, no error, so a
-  // hint whose timer fires before the user has clicked anything at all
-  // (very plausible for the Report Issue hint's fixed 30s-after-load timer,
-  // especially when it's the *first* corner hint of the session because the
-  // radio hint never appeared) schedules its oscillators into a context
-  // that's still suspended and produces no audible sound. Resuming eagerly
-  // on the first interaction anywhere on the page means any later chime()
-  // call already has a running context by the time it's needed.
-  ['pointerdown', 'keydown'].forEach(evt =>
-    document.addEventListener(evt, () => getHintAudioCtx().resume().catch(() => {}), { once: true, passive: true }));
+  // Browsers block audio playback with no prior user gesture — silently, no
+  // error, so a hint whose timer fires before the user has clicked anything
+  // at all (very plausible for the Report Issue hint's fixed 30s-after-load
+  // timer, especially when it's the *first* corner hint of the session
+  // because the radio hint never appeared) would otherwise play into
+  // nothing. Priming playback on the first interaction anywhere on the page
+  // (play immediately paused-and-reset) unlocks this <audio> element for
+  // every later, real chimeHint() call.
+  ['pointerdown', 'keydown'].forEach(evt => document.addEventListener(evt, () => {
+    const a = getKnockAudio();
+    a.play().then(() => { a.pause(); a.currentTime = 0; }).catch(() => {});
+  }, { once: true, passive: true }));
 
   function chimeHint() {
     const stored = localStorage.getItem(HINT_SOUND_KEY);
     if (stored === '0') return;
     try {
-      const ctx = getHintAudioCtx();
-      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-      const t0 = ctx.currentTime;
-      const KNOCK_GAP = 0.16;
-      for (let i = 0; i < 3; i++) {
-        const t = t0 + i * KNOCK_GAP;
-        const osc = ctx.createOscillator(), g = ctx.createGain();
-        osc.type = 'sine';
-        // Pitch drop (1400Hz -> 700Hz) is what reads as a "knock" rather
-        // than a plain tone — a real knock's pitch falls as the impact's
-        // energy dies out. Kept high (was 180->55Hz) since a high-pitched
-        // rap cuts through and grabs attention better than a low thump.
-        osc.frequency.setValueAtTime(1400, t);
-        osc.frequency.exponentialRampToValueAtTime(700, t + 0.05);
-        // Near-instant attack (2ms) into a fast decay (~130ms) — a
-        // percussive hit, not a sustained note.
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.55, t + 0.002);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
-        osc.connect(g).connect(ctx.destination);
-        osc.start(t);
-        osc.stop(t + 0.15);
-      }
-    } catch (e) { /* Web Audio unavailable — ignore */ }
+      const a = getKnockAudio();
+      a.currentTime = 0;
+      a.play().catch(() => {});
+    } catch (e) { /* Audio unavailable — ignore */ }
   }
 
   // Returns a forceHide(markSeen) function so a caller can dismiss the hint
