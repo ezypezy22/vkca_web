@@ -1322,37 +1322,59 @@ Users are responsible for verifying all information against N1MM before making d
   // attention with whatever the user is actually looking at, not just
   // confirming an action they just took, so it needs to be heard, not just
   // technically audible.
+  //
+  // Played through Web Audio (BufferSource + Gain) rather than a plain
+  // <audio> element: a plain element's .volume caps at 1.0 (no headroom to
+  // go louder than the source recording) and has no clean way to raise
+  // pitch independent of a separate time-stretch step. playbackRate on a
+  // BufferSourceNode raises pitch and speed together — a knock sped up
+  // reads as a sharper, higher-pitched knock, which is exactly the "knock"
+  // sound this needs, not a concern to work around.
   const HINT_SOUND_KEY = 'vka_overview_sound';
-  const KNOCK_SFX_URL  = '/static/sfx/knock.mp3';
-  let _knockAudio = null;
-  function getKnockAudio() {
-    if (!_knockAudio) {
-      _knockAudio = new Audio(KNOCK_SFX_URL);
-      _knockAudio.preload = 'auto';
-    }
-    return _knockAudio;
+  const KNOCK_SFX_URL       = '/static/sfx/knock.mp3';
+  const KNOCK_PLAYBACK_RATE = 1.35;   // pitch/speed up the recording
+  const KNOCK_GAIN          = 2.2;    // beyond a plain <audio> element's 1.0 volume ceiling
+  let _hintAudioCtx = null;
+  function getHintAudioCtx() {
+    _hintAudioCtx = _hintAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    return _hintAudioCtx;
   }
-  // Browsers block audio playback with no prior user gesture — silently, no
-  // error, so a hint whose timer fires before the user has clicked anything
-  // at all (very plausible for the Report Issue hint's fixed 30s-after-load
-  // timer, especially when it's the *first* corner hint of the session
-  // because the radio hint never appeared) would otherwise play into
-  // nothing. Priming playback on the first interaction anywhere on the page
-  // (play immediately paused-and-reset) unlocks this <audio> element for
-  // every later, real chimeHint() call.
-  ['pointerdown', 'keydown'].forEach(evt => document.addEventListener(evt, () => {
-    const a = getKnockAudio();
-    a.play().then(() => { a.pause(); a.currentTime = 0; }).catch(() => {});
-  }, { once: true, passive: true }));
+  // Fetched/decoded once, eagerly, rather than lazily on the first chime —
+  // decodeAudioData() is async, and starting it only when a hint's timer
+  // fires would risk that hint's own chime missing its own sound.
+  let _knockBufferPromise = null;
+  function getKnockBuffer() {
+    _knockBufferPromise = _knockBufferPromise || fetch(KNOCK_SFX_URL)
+      .then(r => r.arrayBuffer())
+      .then(buf => getHintAudioCtx().decodeAudioData(buf));
+    return _knockBufferPromise;
+  }
+  getKnockBuffer().catch(() => {});
+  // Browsers create a new AudioContext in a "suspended" state until a real
+  // user gesture (click/key/touch) resumes it — silently, no error, so a
+  // hint whose timer fires before the user has clicked anything at all
+  // (very plausible for the Report Issue hint's fixed 30s-after-load timer,
+  // especially when it's the *first* corner hint of the session because the
+  // radio hint never appeared) would otherwise play into nothing. Resuming
+  // eagerly on the first interaction anywhere on the page means any later
+  // chimeHint() call already has a running context.
+  ['pointerdown', 'keydown'].forEach(evt =>
+    document.addEventListener(evt, () => getHintAudioCtx().resume().catch(() => {}), { once: true, passive: true }));
 
   function chimeHint() {
     const stored = localStorage.getItem(HINT_SOUND_KEY);
     if (stored === '0') return;
-    try {
-      const a = getKnockAudio();
-      a.currentTime = 0;
-      a.play().catch(() => {});
-    } catch (e) { /* Audio unavailable — ignore */ }
+    getKnockBuffer().then(buffer => {
+      const ctx = getHintAudioCtx();
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.playbackRate.value = KNOCK_PLAYBACK_RATE;
+      const g = ctx.createGain();
+      g.gain.value = KNOCK_GAIN;
+      src.connect(g).connect(ctx.destination);
+      src.start();
+    }).catch(() => { /* fetch/decode/Web Audio unavailable — ignore */ });
   }
 
   // Returns a forceHide(markSeen) function so a caller can dismiss the hint
