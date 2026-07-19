@@ -1313,7 +1313,36 @@ Users are responsible for verifying all information against N1MM before making d
   // once acknowledged" pattern as the HUD field-picker hint in overview.js,
   // generalized so a future one-time tip doesn't have to grow its own
   // near-copy of the create/animate/dismiss boilerplate.
-  //
+
+  // Reuses the Overview tab's own Sound Alerts toggle/key rather than adding
+  // a second, independent mute control the user would have to discover —
+  // muting one silences the other. A plain two-partial chime (fundamental +
+  // quiet octave-up partial, same cheap "bell overtone" trick as
+  // overview.js's chimeNote()) rather than a flat oscillator beep, since a
+  // corner hint is competing for attention with whatever the user is
+  // actually looking at, not just confirming an action they just took.
+  const HINT_SOUND_KEY = 'vka_overview_sound';
+  let _hintAudioCtx = null;
+  function chimeHint() {
+    const stored = localStorage.getItem(HINT_SOUND_KEY);
+    if (stored === '0') return;
+    try {
+      _hintAudioCtx = _hintAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = _hintAudioCtx, t0 = ctx.currentTime;
+      [[1, 1], [2, 0.25]].forEach(([mult, partialGain]) => {
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 660 * mult;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.16 * partialGain, t0 + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
+        osc.connect(g).connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + 0.6);
+      });
+    } catch (e) { /* Web Audio unavailable — ignore */ }
+  }
+
   // Returns a forceHide(markSeen) function so a caller can dismiss the hint
   // programmatically (e.g. the radio hint clearing itself once real
   // radio_info arrives) without going through the close button.
@@ -1328,6 +1357,7 @@ Users are responsible for verifying all information against N1MM before making d
       <div class="ch-close" title="Dismiss">&#10005;</div>`;
     document.body.appendChild(hint);
     requestAnimationFrame(() => hint.classList.add('show'));
+    chimeHint();
     const dismiss = (markSeen) => {
       hint.classList.remove('show');
       setTimeout(() => hint.remove(), 300);
@@ -1344,11 +1374,16 @@ Users are responsible for verifying all information against N1MM before making d
   const IS_MAIN_WINDOW = location.pathname !== '/hud' && location.pathname !== '/operator_hud';
 
   // ── Report Issue pointer ─────────────────────────────────────────────────
-  // Chained after the radio hint's own dismissal (below) rather than shown
-  // independently — reuses that moment of "the user just read and acted on
-  // a corner hint" instead of adding a second unrelated trigger condition to
-  // reason about. Only fires once, same as every other one-time hint here.
+  // Two triggers, whichever fires first (the REPORT_HINT_SEEN_KEY guard
+  // inside maybeShowReportHint() stops the second from double-showing it):
+  //   1. Chained right after the radio hint's own dismissal, reusing that
+  //      "just read and acted on a corner hint" moment.
+  //   2. A fixed 60s-after-load fallback, for the — very common — case
+  //      where radio_info is already flowing and the radio hint never
+  //      appears at all, so trigger 1 never happens.
+  // Only fires once, same as every other one-time hint here.
   const REPORT_HINT_SEEN_KEY = 'vkca_report_hint_seen';
+  const REPORT_HINT_WAIT_MS  = 60000;
   function maybeShowReportHint() {
     if (!IS_MAIN_WINDOW || localStorage.getItem(REPORT_HINT_SEEN_KEY)) return;
     showCornerHint({
@@ -1358,6 +1393,9 @@ Users are responsible for verifying all information against N1MM before making d
         ' <span style="color:var(--muted)">(Free GitHub account required to submit.)</span>',
       seenKey: REPORT_HINT_SEEN_KEY,
     });
+  }
+  if (IS_MAIN_WINDOW && !localStorage.getItem(REPORT_HINT_SEEN_KEY)) {
+    setTimeout(maybeShowReportHint, REPORT_HINT_WAIT_MS);
   }
 
   // ── Radio-readout setup hint ──────────────────────────────────────────────
