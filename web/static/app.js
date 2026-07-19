@@ -1352,11 +1352,12 @@ Users are responsible for verifying all information against N1MM before making d
         const t = t0 + i * KNOCK_GAP;
         const osc = ctx.createOscillator(), g = ctx.createGain();
         osc.type = 'sine';
-        // Pitch drop (180Hz -> 55Hz) is what reads as a "thump" rather
+        // Pitch drop (1400Hz -> 700Hz) is what reads as a "knock" rather
         // than a plain tone — a real knock's pitch falls as the impact's
-        // energy dies out.
-        osc.frequency.setValueAtTime(180, t);
-        osc.frequency.exponentialRampToValueAtTime(55, t + 0.08);
+        // energy dies out. Kept high (was 180->55Hz) since a high-pitched
+        // rap cuts through and grabs attention better than a low thump.
+        osc.frequency.setValueAtTime(1400, t);
+        osc.frequency.exponentialRampToValueAtTime(700, t + 0.05);
         // Near-instant attack (2ms) into a fast decay (~130ms) — a
         // percussive hit, not a sustained note.
         g.gain.setValueAtTime(0.0001, t);
