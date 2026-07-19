@@ -1408,11 +1408,19 @@ Users are responsible for verifying all information against N1MM before making d
   // radio_info arrives) without going through the close button.
   //
   // autoHideMs, if given, auto-dismisses the hint after that long on
-  // screen — treated the same as a real dismissal (markSeen: true), same
-  // precedent as the HUD field-picker hint's own 8s auto-dismiss in
-  // overview.js: a tip nobody acted on within a generous viewing window is
-  // still "seen" for suppression purposes, not retried forever.
-  function renderCornerHint({ icon, title, bodyHtml, seenKey, onDismiss, autoHideMs }) {
+  // screen. autoHideMarksSeen controls whether THAT auto-dismiss also
+  // permanently suppresses it (via seenKey) — defaults true, matching the
+  // HUD field-picker hint's own 8s auto-dismiss in overview.js: a general
+  // "did you know" tip nobody acted on within a generous viewing window is
+  // still "seen" for suppression purposes, not retried forever. The radio
+  // hint sets this false: found live — with autoHideMs added purely to
+  // stop an unattended hint blocking the queue behind it (see the
+  // showCornerHint gate above), a user who simply didn't click it in time
+  // had it silently marked "seen" forever even though their radio was
+  // still genuinely unconfigured, and it would never offer to tell them
+  // again on a future launch. A real click of the close button always
+  // marks seen regardless of this flag — only the timeout path respects it.
+  function renderCornerHint({ icon, title, bodyHtml, seenKey, onDismiss, autoHideMs, autoHideMarksSeen = true }) {
     const hint = document.createElement('div');
     hint.className = 'corner-hint';
     hint.innerHTML = `<div class="ch-icon">${icon}</div>
@@ -1436,7 +1444,7 @@ Users are responsible for verifying all information against N1MM before making d
       if (next) renderCornerHint(next);
     };
     hint.querySelector('.ch-close').addEventListener('click', () => dismiss(true));
-    if (autoHideMs) autoTimer = setTimeout(() => dismiss(true), autoHideMs);
+    if (autoHideMs) autoTimer = setTimeout(() => dismiss(autoHideMarksSeen), autoHideMs);
     _activeHintDismiss = dismiss;
     return dismiss;
   }
@@ -1633,6 +1641,7 @@ Users are responsible for verifying all information against N1MM before making d
           ' <b>Config &rarr; Configure Ports &rarr; Broadcast Data</b> and check <b>"Radio"</b> (127.0.0.1:12060).',
         seenKey: RADIO_HINT_SEEN_KEY,
         autoHideMs: RADIO_HINT_AUTO_HIDE_MS,
+        autoHideMarksSeen: false,   // timing out unattended ≠ "fixed, stop asking" — only a real click of ✕ should permanently suppress this
         // Only chain the Report Issue hint on a real user dismissal
         // (markSeen), not the auto-clear-because-radio-showed-up path.
         onDismiss: (markSeen) => { _hideHint = null; if (markSeen) maybeShowReportHint(); },
