@@ -571,9 +571,20 @@ def _radio_info_maybe_broadcast():
     same time, but the just-opened Mini HUD, which hadn't received that
     broadcast, kept showing "no radio" until the next unrelated one).
     No recompute needed here (unlike QRZ) — STATE.snapshot() already
-    overlays the freshest radio_info on every call."""
+    overlays the freshest radio_info on every call.
+
+    The debounce window is much shorter than QRZ's 1.5s (which coalesces
+    a many-callsign Enrich All batch, where nobody's watching each result
+    land individually): this one is watched live while tuning, where every
+    step matters. state.radio_info itself is updated in place on every
+    single packet regardless — this only throttles how often that gets
+    *pushed* — so 1.5s silently dropped every intermediate frequency
+    between broadcasts, e.g. spinning the VFO from 7150 to 7155 would
+    only ever show the first and last step, never the ones in between.
+    250ms still caps this well under flood territory (4/s) while showing
+    close to every real step a human can dial through by hand."""
     now = time.time()
-    if now - STATE._radio_last_broadcast < 1.5:
+    if now - STATE._radio_last_broadcast < 0.25:
         return
     STATE._radio_last_broadcast = now
     if STATE._main_loop is not None:
