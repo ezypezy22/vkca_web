@@ -1442,9 +1442,121 @@ Users are responsible for verifying all information against N1MM before making d
         ' <span style="color:var(--muted)">(Free GitHub account required to submit.)</span>',
       autoHideMs: REPORT_HINT_AUTO_HIDE_MS,
     });
+    scheduleNextHelper();   // the rotating tips (below) start only after this hint's first appearance
   }
   if (IS_MAIN_WINDOW) {
     setTimeout(maybeShowReportHint, REPORT_HINT_WAIT_MS);
+  }
+
+  // ── Rotating feature-discovery tips ──────────────────────────────────────
+  // Starts only once the Report Issue hint has actually been shown (see its
+  // onDismiss-independent kickoff at the bottom of maybeShowReportHint,
+  // below) — that hint always takes priority as the first thing a user
+  // sees. After that, one tip every 30 minutes, in shuffled order with no
+  // repeat until the whole list has been shown once, then a 5-hour cooldown
+  // before reshuffling and starting a new cycle. State is persisted to
+  // localStorage (not just an in-memory timer) so the schedule survives the
+  // app being closed and reopened mid-contest — a relaunch 45 minutes after
+  // the last tip shows the next one almost immediately rather than waiting
+  // a fresh 30 minutes, and a relaunch during the 5h cooldown just keeps
+  // waiting out whatever's left of it.
+  const HELPER_TIPS = [
+    { id: 'mini-hud', title: 'Try the Mini HUD',
+      body: 'Click <b>&#128204; Mini HUD</b> in the toolbar for a tiny always-on-top window with score, rate, and time since last QSO — handy for keeping visible over your logging software.' },
+    { id: 'operator-hud', title: 'Multi-op? Try the Operator HUD',
+      body: '<b>&#128101; Operator HUD</b> shows per-operator QSOs, rate, and on-air % in its own always-on-top window.' },
+    { id: 'replay', title: 'Scrub back through the contest',
+      body: '<b>&#9194; Replay</b> lets you play back the whole contest&rsquo;s progression instead of only seeing the current state.' },
+    { id: 'whatif', title: '&ldquo;What if I worked that mult?&rdquo;',
+      body: '<b>&#128302; What if?</b> on the Missing Mults tab estimates the point/mult swing of working a specific missing multiplier, before you actually work it.' },
+    { id: 'panels', title: 'Customize your Overview',
+      body: '<b>&#9776; Panels</b> lets you show/hide individual Overview tiles; drag tiles to reorder them, and <b>&#8634; Reset layout</b> puts it all back to default.' },
+    { id: 'accent', title: 'Pick your accent color',
+      body: 'The color swatch next to the theme dropdown overrides any theme&rsquo;s accent color — your own color scheme.' },
+    { id: 'zoom', title: 'Zoom by scrolling',
+      body: 'Scroll your mouse wheel over the zoom slider for fine 1% steps; double-click the slider to reset to 100%.' },
+    { id: 'export', title: 'Export anything as CSV or PNG',
+      body: '<b>&#11015; CSV</b> and <b>&#128247; Snapshot</b> export whichever tab you&rsquo;re currently viewing, not just the Overview.' },
+    { id: 'band-advisor', title: 'DX Cluster Band Advisor',
+      body: 'The DX Cluster tab scores every band by recent needed-mult activity and tells you where to point the radio next.' },
+    { id: 'qrz', title: 'QRZ lookups run automatically',
+      body: 'Set your QRZ.com credentials in <b>&#9881; Settings</b> and names/grids/states fill in automatically as you log QSOs.' },
+    { id: 'switch-contest', title: 'Switch contests without restarting',
+      body: '<b>&#8644; Switch</b> (titlebar) loads a different contest from the same log database without relaunching.' },
+    { id: 'yoy', title: 'Year-over-year comparison',
+      body: 'The <b>Year on Year</b> tab compares this session&rsquo;s pace against your own past results in the same contest.' },
+  ];
+  const HELPER_INTERVAL_MS  = 30 * 60 * 1000;
+  const HELPER_COOLDOWN_MS  = 5 * 60 * 60 * 1000;
+  const HELPER_AUTO_HIDE_MS = 60000;
+  const HELPER_QUEUE_KEY         = 'vkca_helper_queue';
+  const HELPER_LAST_SHOWN_KEY    = 'vkca_helper_last_shown';
+  const HELPER_CYCLE_DONE_AT_KEY = 'vkca_helper_cycle_done_at';
+
+  function shuffledTipIds() {
+    const ids = HELPER_TIPS.map(t => t.id);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    return ids;
+  }
+
+  function getHelperQueue() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(HELPER_QUEUE_KEY) || 'null');
+      if (Array.isArray(raw)) return raw;
+    } catch {}
+    return null;
+  }
+
+  // Schedules (via setTimeout, computed from absolute stored timestamps —
+  // not a relative "wait 30 minutes from now" — so state survives a
+  // relaunch correctly) either the next tip in the current cycle, or the
+  // reshuffle-and-resume once the cooldown after a completed cycle elapses.
+  function scheduleNextHelper() {
+    if (!IS_MAIN_WINDOW) return;
+    let queue = getHelperQueue();
+    // Empty ([]) and never-initialized (null) both mean "needs a fresh
+    // shuffle" — a completed cycle stores [] (see showNextHelper's last
+    // shift() leaving nothing), NOT null, so checking only for null here
+    // would skip the cooldown gate below entirely once a cycle finishes.
+    if (!queue || !queue.length) {
+      const cycleDoneAt = parseInt(localStorage.getItem(HELPER_CYCLE_DONE_AT_KEY) || '0', 10);
+      if (cycleDoneAt) {
+        const readyAt = cycleDoneAt + HELPER_COOLDOWN_MS;
+        const wait = readyAt - Date.now();
+        if (wait > 0) { setTimeout(scheduleNextHelper, wait); return; }
+      }
+      queue = shuffledTipIds();
+      try {
+        localStorage.setItem(HELPER_QUEUE_KEY, JSON.stringify(queue));
+        localStorage.removeItem(HELPER_CYCLE_DONE_AT_KEY);
+      } catch {}
+    }
+    // No prior tip ever shown (lastShown 0) still waits a full interval
+    // from now, same as any other gap — the Report Issue hint just showed
+    // moments ago (this function is only ever called right after that),
+    // and the first rotating tip shouldn't crowd right in behind it.
+    const lastShown = parseInt(localStorage.getItem(HELPER_LAST_SHOWN_KEY) || '0', 10);
+    const dueAt = (lastShown || Date.now()) + HELPER_INTERVAL_MS;
+    setTimeout(showNextHelper, Math.max(0, dueAt - Date.now()));
+  }
+
+  function showNextHelper() {
+    const queue = getHelperQueue();
+    if (!queue || !queue.length) { scheduleNextHelper(); return; }
+    const id = queue.shift();
+    try {
+      localStorage.setItem(HELPER_QUEUE_KEY, JSON.stringify(queue));
+      localStorage.setItem(HELPER_LAST_SHOWN_KEY, String(Date.now()));
+      if (!queue.length) localStorage.setItem(HELPER_CYCLE_DONE_AT_KEY, String(Date.now()));
+    } catch {}
+    const tip = HELPER_TIPS.find(t => t.id === id);
+    if (tip) {
+      showCornerHint({ icon: '&#9654;', title: tip.title, bodyHtml: tip.body, autoHideMs: HELPER_AUTO_HIDE_MS });
+    }
+    scheduleNextHelper();
   }
 
   // ── Radio-readout setup hint ──────────────────────────────────────────────
