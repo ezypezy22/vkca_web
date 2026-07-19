@@ -1307,6 +1307,59 @@ Users are responsible for verifying all information against N1MM before making d
   }
   window.VKA.downloadBlob = downloadBlob;
 
+  // ── Corner hints — one-time, dismiss-only tips ───────────────────────────
+  // Shared by the radio-readout setup hint and the Report Issue pointer
+  // chained after it (see below). Same "explain it in words, gone for good
+  // once acknowledged" pattern as the HUD field-picker hint in overview.js,
+  // generalized so a future one-time tip doesn't have to grow its own
+  // near-copy of the create/animate/dismiss boilerplate.
+  //
+  // Returns a forceHide(markSeen) function so a caller can dismiss the hint
+  // programmatically (e.g. the radio hint clearing itself once real
+  // radio_info arrives) without going through the close button.
+  function showCornerHint({ icon, title, bodyHtml, seenKey, onDismiss }) {
+    const hint = document.createElement('div');
+    hint.className = 'corner-hint';
+    hint.innerHTML = `<div class="ch-icon">${icon}</div>
+      <div class="ch-body">
+        <div class="ch-title">${title}</div>
+        <div class="ch-text">${bodyHtml}</div>
+      </div>
+      <div class="ch-close" title="Dismiss">&#10005;</div>`;
+    document.body.appendChild(hint);
+    requestAnimationFrame(() => hint.classList.add('show'));
+    const dismiss = (markSeen) => {
+      hint.classList.remove('show');
+      setTimeout(() => hint.remove(), 300);
+      if (markSeen && seenKey) { try { localStorage.setItem(seenKey, '1'); } catch {} }
+      onDismiss?.(markSeen);
+    };
+    hint.querySelector('.ch-close').addEventListener('click', () => dismiss(true));
+    return dismiss;
+  }
+
+  // Main window only — a HUD popout is too small a surface for a multi-line
+  // tip, and one already-dismissed hint should cover the user, not one per
+  // window.
+  const IS_MAIN_WINDOW = location.pathname !== '/hud' && location.pathname !== '/operator_hud';
+
+  // ── Report Issue pointer ─────────────────────────────────────────────────
+  // Chained after the radio hint's own dismissal (below) rather than shown
+  // independently — reuses that moment of "the user just read and acted on
+  // a corner hint" instead of adding a second unrelated trigger condition to
+  // reason about. Only fires once, same as every other one-time hint here.
+  const REPORT_HINT_SEEN_KEY = 'vkca_report_hint_seen';
+  function maybeShowReportHint() {
+    if (!IS_MAIN_WINDOW || localStorage.getItem(REPORT_HINT_SEEN_KEY)) return;
+    showCornerHint({
+      icon: '&#9654;',
+      title: 'Found a bug or have an idea?',
+      bodyHtml: 'Click <b>&#128027; Report Issue</b> in the titlebar to open a pre-filled bug/feature form.' +
+        ' <span style="color:var(--muted)">(Free GitHub account required to submit.)</span>',
+      seenKey: REPORT_HINT_SEEN_KEY,
+    });
+  }
+
   // ── Radio-readout setup hint ──────────────────────────────────────────────
   // N1MM+'s RadioInfo UDP broadcast is opt-in (Config > Configure Ports >
   // Broadcast Data > "Radio" checkbox) — unlike most of this app's features,
@@ -1318,14 +1371,8 @@ Users are responsible for verifying all information against N1MM before making d
   // hasn't sent its first packet yet — accepted tradeoff for a snappier
   // hint; it's harmless either way since it's dismiss-only and self-clears
   // (see onRadioSnap below) the moment real radio_info actually arrives.
-  // Then show a one-time, dismiss-only pointer — same "explain it, gone for
-  // good once acknowledged" pattern as the HUD field-picker hint in
-  // overview.js. Main window only — a HUD popout is too small a surface for
-  // a multi-line tip, and one already-dismissed hint should cover the user,
-  // not one per window.
   const RADIO_HINT_SEEN_KEY = 'vkca_radio_hint_seen';
   const RADIO_HINT_WAIT_MS  = 8000;
-  const IS_MAIN_WINDOW = location.pathname !== '/hud' && location.pathname !== '/operator_hud';
   if (IS_MAIN_WINDOW && !localStorage.getItem(RADIO_HINT_SEEN_KEY)) {
     let _radioSeen = false;
     let _hideHint = null;   // set once the hint element exists, so a radio
@@ -1343,25 +1390,16 @@ Users are responsible for verifying all information against N1MM before making d
     window.addEventListener('vka:snapshot', onRadioSnap);
     setTimeout(() => {
       if (_radioSeen) return;
-      const hint = document.createElement('div');
-      hint.id = 'radio-setup-hint';
-      hint.innerHTML = `<div class="rsh-icon">&#9654;</div>
-        <div class="rsh-body">
-          <div class="rsh-title">Want a live radio readout?</div>
-          <div class="rsh-text">No RadioInfo has arrived from N1MM+ yet. To show live frequency/band here, in N1MM+ go to
-            <b>Config &rarr; Configure Ports &rarr; Broadcast Data</b> and check <b>"Radio"</b> (127.0.0.1:12060).</div>
-        </div>
-        <div class="rsh-close" title="Dismiss">&#10005;</div>`;
-      document.body.appendChild(hint);
-      requestAnimationFrame(() => hint.classList.add('show'));
-      const dismiss = (markSeen) => {
-        hint.classList.remove('show');
-        setTimeout(() => hint.remove(), 300);
-        _hideHint = null;
-        if (markSeen) { try { localStorage.setItem(RADIO_HINT_SEEN_KEY, '1'); } catch {} }
-      };
-      hint.querySelector('.rsh-close').addEventListener('click', () => dismiss(true));
-      _hideHint = () => dismiss(false);   // radio showed up on its own — not a user dismissal, don't suppress future sessions
+      _hideHint = showCornerHint({
+        icon: '&#9654;',
+        title: 'Want a live radio readout?',
+        bodyHtml: 'No RadioInfo has arrived from N1MM+ yet. To show live frequency/band here, in N1MM+ go to' +
+          ' <b>Config &rarr; Configure Ports &rarr; Broadcast Data</b> and check <b>"Radio"</b> (127.0.0.1:12060).',
+        seenKey: RADIO_HINT_SEEN_KEY,
+        // Only chain the Report Issue hint on a real user dismissal
+        // (markSeen), not the auto-clear-because-radio-showed-up path.
+        onDismiss: (markSeen) => { _hideHint = null; if (markSeen) maybeShowReportHint(); },
+      });
     }, RADIO_HINT_WAIT_MS);
   }
 
