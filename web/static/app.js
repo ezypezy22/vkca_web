@@ -1377,6 +1377,32 @@ Users are responsible for verifying all information against N1MM before making d
     }).catch(() => { /* fetch/decode/Web Audio unavailable — ignore */ });
   }
 
+  // Every corner hint goes through this one gate rather than rendering
+  // itself directly — found live: the radio hint has no autoHideMs (it
+  // waits indefinitely for a real user dismissal) and the Report Issue
+  // hint's independent 30s timer fires regardless of whether the radio
+  // hint is still on screen, so the two could and did render on top of
+  // each other at the same fixed bottom-right position. Only ever one
+  // .corner-hint in the DOM at a time now; a hint requested while another
+  // is showing queues instead of stacking, and shows automatically once
+  // the active one dismisses (by any means — click or its own autoHideMs).
+  let _activeHintDismiss = null;
+  const _hintQueue = [];
+
+  function showCornerHint(config) {
+    if (_activeHintDismiss) {
+      _hintQueue.push(config);
+      // Dismiss-like handle for a hint that may never actually render if
+      // something else cancels it first — just drops it from the queue.
+      return (markSeen) => {
+        const idx = _hintQueue.indexOf(config);
+        if (idx !== -1) _hintQueue.splice(idx, 1);
+        if (markSeen && config.seenKey) { try { localStorage.setItem(config.seenKey, '1'); } catch {} }
+      };
+    }
+    return renderCornerHint(config);
+  }
+
   // Returns a forceHide(markSeen) function so a caller can dismiss the hint
   // programmatically (e.g. the radio hint clearing itself once real
   // radio_info arrives) without going through the close button.
@@ -1386,7 +1412,7 @@ Users are responsible for verifying all information against N1MM before making d
   // precedent as the HUD field-picker hint's own 8s auto-dismiss in
   // overview.js: a tip nobody acted on within a generous viewing window is
   // still "seen" for suppression purposes, not retried forever.
-  function showCornerHint({ icon, title, bodyHtml, seenKey, onDismiss, autoHideMs }) {
+  function renderCornerHint({ icon, title, bodyHtml, seenKey, onDismiss, autoHideMs }) {
     const hint = document.createElement('div');
     hint.className = 'corner-hint';
     hint.innerHTML = `<div class="ch-icon">${icon}</div>
@@ -1404,10 +1430,14 @@ Users are responsible for verifying all information against N1MM before making d
       hint.classList.remove('show');
       setTimeout(() => hint.remove(), 300);
       if (markSeen && seenKey) { try { localStorage.setItem(seenKey, '1'); } catch {} }
+      _activeHintDismiss = null;
       onDismiss?.(markSeen);
+      const next = _hintQueue.shift();
+      if (next) renderCornerHint(next);
     };
     hint.querySelector('.ch-close').addEventListener('click', () => dismiss(true));
     if (autoHideMs) autoTimer = setTimeout(() => dismiss(true), autoHideMs);
+    _activeHintDismiss = dismiss;
     return dismiss;
   }
 
@@ -1570,8 +1600,15 @@ Users are responsible for verifying all information against N1MM before making d
   // hasn't sent its first packet yet — accepted tradeoff for a snappier
   // hint; it's harmless either way since it's dismiss-only and self-clears
   // (see onRadioSnap below) the moment real radio_info actually arrives.
+  // Also auto-hides after a minute — found live: with no autoHideMs, this
+  // could sit unattended for the rest of the session, and every later
+  // corner hint (Report Issue, the rotating tips) now queues behind
+  // whatever's currently showing instead of stacking on top of it — so an
+  // un-dismissed hint with no timeout of its own would silently block
+  // everything after it, forever.
   const RADIO_HINT_SEEN_KEY = 'vkca_radio_hint_seen';
-  const RADIO_HINT_WAIT_MS  = 8000;
+  const RADIO_HINT_WAIT_MS      = 8000;
+  const RADIO_HINT_AUTO_HIDE_MS = 60000;
   if (IS_MAIN_WINDOW && !localStorage.getItem(RADIO_HINT_SEEN_KEY)) {
     let _radioSeen = false;
     let _hideHint = null;   // set once the hint element exists, so a radio
@@ -1595,6 +1632,7 @@ Users are responsible for verifying all information against N1MM before making d
         bodyHtml: 'No RadioInfo has arrived from N1MM+ yet. To show live frequency/band here, in N1MM+ go to' +
           ' <b>Config &rarr; Configure Ports &rarr; Broadcast Data</b> and check <b>"Radio"</b> (127.0.0.1:12060).',
         seenKey: RADIO_HINT_SEEN_KEY,
+        autoHideMs: RADIO_HINT_AUTO_HIDE_MS,
         // Only chain the Report Issue hint on a real user dismissal
         // (markSeen), not the auto-clear-because-radio-showed-up path.
         onDismiss: (markSeen) => { _hideHint = null; if (markSeen) maybeShowReportHint(); },
