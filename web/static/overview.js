@@ -1226,7 +1226,7 @@
       const r=window.VKA.formatRadio(radioForOp(op.operator));
       const radioBadge=r ? `<span class="badge op-freq-badge${r.stale?' op-freq-badge--stale':''}">
           <span class="band-chip" style="background:${r.bandColor}30;color:${r.bandColor}">${r.band}</span>
-          ${r.freqStr}${r.modeStr?' '+escapeHtml(r.modeStr):''}</span>` : '';
+          ${r.freqStr} MHz${r.modeStr?' '+escapeHtml(r.modeStr):''}</span>` : '';
       // op.operator is free-text from the DXLOG Operator column — same
       // log-derived-text category as callsigns/comments elsewhere, escaped
       // before going into innerHTML (matches fatigue.js's renderOpCards()).
@@ -1307,7 +1307,7 @@
     if (!valEl) return;
     const r=window.VKA.formatRadio(snap?.radio_info?.own);
     if (!r){ valEl.textContent='—'; valEl.style.color=T.muted; if(subEl) subEl.textContent=''; return; }
-    valEl.innerHTML=`<span class="band-chip" style="background:${r.bandColor}30;color:${r.bandColor}">${r.band}</span> ${r.freqStr}`;
+    valEl.innerHTML=`<span class="band-chip" style="background:${r.bandColor}30;color:${r.bandColor}">${r.band}</span> ${r.freqStr} MHz`;
     valEl.style.color=T.accent;
     if (subEl) subEl.textContent = r.modeStr ? `${r.modeStr} · RADIO ${r.radioNr}` : `RADIO ${r.radioNr}`;
   }

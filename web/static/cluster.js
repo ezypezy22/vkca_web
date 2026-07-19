@@ -3,19 +3,63 @@
  */
 ;(function () {
   'use strict';
-  const C = { accent:'#00d4aa', accent2:'#ff6b35', accent3:'#f0c040',
+  // Mutable (not const) — kept in sync with the active theme by onTheme()
+  // below. "blue" has no equivalent in the server's theme palette (it's
+  // this tab's own decorative NEW_BAND colour, not a shared UI colour), so
+  // it never changes with the theme.
+  let C = { accent:'#00d4aa', accent2:'#ff6b35', accent3:'#f0c040',
                green:'#2ed573', blue:'#64b5f6', red:'#ff4757', muted:'#8b949e',
                bg3:'#21262d', fg:'#e6edf3' };
   const BAND_COLS = window.VKA.BAND_COLS;
   const escapeHtml = window.VKA.escapeHtml;
-  // Status -> row styling, mirrors the old desktop app's tree tags.
-  const STATUS_STYLE = {
-    NEW_MULT: { color: C.green,  weight: 'bold',   opacity: 1 },
-    NEW_BAND: { color: C.blue,   weight: 'bold',   opacity: 1 },
-    WORKED:   { color: C.muted,  weight: 'normal',  opacity: 0.6 },
-    NOT_MULT: { color: C.muted,  weight: 'normal',  opacity: 0.35 },
-    NO_LOG:   { color: C.fg,     weight: 'normal',  opacity: 1 },
-  };
+  // Whether the active theme is light-background — a flat opacity tuned to
+  // read well on a near-black background fades to near-invisible on a
+  // near-white one, so the de-emphasis tiers below need a lighter-theme
+  // variant rather than a single fixed value. Same "starts with #f/#e"
+  // heuristic app.js's applyTheme() uses.
+  let _isLightTheme = false;
+  // Status -> row styling, mirrors the old desktop app's tree tags. Rebuilt
+  // (not just declared once) by rebuildStatusStyle() so it tracks both C
+  // and _isLightTheme across theme changes.
+  let STATUS_STYLE = {};
+  function rebuildStatusStyle() {
+    const dim = _isLightTheme ? { WORKED: 0.8, NOT_MULT: 0.62 } : { WORKED: 0.6, NOT_MULT: 0.35 };
+    STATUS_STYLE = {
+      NEW_MULT: { color: C.green,  weight: 'bold',   opacity: 1 },
+      NEW_BAND: { color: C.blue,   weight: 'bold',   opacity: 1 },
+      WORKED:   { color: C.muted,  weight: 'normal',  opacity: dim.WORKED },
+      NOT_MULT: { color: C.muted,  weight: 'normal',  opacity: dim.NOT_MULT },
+      NO_LOG:   { color: C.fg,     weight: 'normal',  opacity: 1 },
+    };
+  }
+  rebuildStatusStyle();
+
+  // ── Theme sync — cluster.js keeps its own colour copy (used throughout
+  // this file's inline-styled HTML) rather than reading CSS vars per
+  // render, so it must be told about theme changes explicitly. Chains onto
+  // whatever handler overview.js (loaded first) already registered, rather
+  // than clobbering it — window.VKA.onTheme is a single slot shared by
+  // every tab that needs one.
+  function onThemeChange(palette) {
+    if (!palette) return;
+    C = { ...C,
+      accent: palette.accent, accent2: palette.accent2, accent3: palette.accent3,
+      green: palette.green, red: palette.red, muted: palette.muted,
+      bg3: palette.bg3, fg: palette.fg,
+    };
+    _isLightTheme = !!(palette.bg && (palette.bg.startsWith('#f') || palette.bg.startsWith('#e')));
+    rebuildStatusStyle();
+    renderSpots();
+    if (_lastRadioInfo) renderRadioBoard(_lastRadioInfo);
+  }
+  window.VKA = window.VKA || {};
+  {
+    const _prevOnTheme = window.VKA.onTheme;
+    window.VKA.onTheme = function (palette) {
+      if (_prevOnTheme) _prevOnTheme(palette);
+      onThemeChange(palette);
+    };
+  }
 
   let ws         = null;
   let spots      = [];
