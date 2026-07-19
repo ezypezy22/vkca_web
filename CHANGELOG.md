@@ -1,5 +1,28 @@
 # Changelog
 
+## 26.7.20
+
+### Enhancements
+
+90ca898 Add live radio frequency/band readout via N1MM+'s RadioInfo UDP broadcast
+38f3d12 Add DX Cluster band highlighting, live dead-air alert, and a band occupancy board
+2bc3ffb Turn the DX Cluster's next-targets line into a live Band Advisor that scores every band by recent needed-mult activity and recommends where to switch
+bab56dd Add a one-time hint pointing new users to N1MM+'s Radio broadcast setting when none is detected
+bbf3b61 Add a recurring Report Issue reminder pointing at the titlebar's bug/feature-request button
+3eb5a3a Add a rotating set of feature-discovery tips (Mini HUD, Operator HUD, Replay, What if?, Band Advisor, and more), shown periodically after the Report Issue reminder
+22167d8 Add an animated live-signal pulse to the Overview Radio panel while radio data is flowing
+a85c904 Give hint popups an audible "knock" alert (real recorded SFX, tuned for pitch and volume) so they're harder to miss
+
+### Bugfixes
+
+126adba Fix Mini HUD's radio tile missing the "MHz" unit, and unreadable DX Cluster "Not a Mult" rows in Light theme
+214c1e8 Fix the live radio readout (and every other live update) stalling behind a single slow/unresponsive WebSocket client
+2259b90 Fix a shared lock held across a full log recompute, which could freeze the entire app for several seconds at a time
+c251c9e Fix the radio broadcast debounce silently dropping intermediate frequency steps while tuning
+3c7352a Fix window dragging lagging behind the cursor by routing through pywebview's fast move-window path instead of the slower generic API bridge
+bdc4cb1 Fix the radio-signal pulse icon being cropped by its panel's overflow clipping
+47ae321 Fix hint chimes sometimes producing no audible sound due to a suspended AudioContext never being resumed
+
 ## 26.7.19
 
 ### Enhancements

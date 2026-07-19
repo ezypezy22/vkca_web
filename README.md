@@ -6,7 +6,7 @@ Built and maintained by **VK2YI**.
 
 ## Current version
 
-`26.7.19`
+`26.7.20`
 
 Versions follow a `YY.M.patch` scheme:
 
