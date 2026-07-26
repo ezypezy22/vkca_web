@@ -14,7 +14,7 @@
 ; ISCC.exe will fail with a missing-source-file error if this isn't done.
 
 #define MyAppName "VK Contest Analyzer"
-#define MyAppVersion "26.7.21"
+#define MyAppVersion "26.7.22"
 #define MyAppExeName "VKContestAnalyzer.exe"
 #define MyAppSourceDir "dist\VKContestAnalyzer"
 

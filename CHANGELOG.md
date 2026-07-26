@@ -1,5 +1,19 @@
 # Changelog
 
+## 26.7.22
+
+### Enhancements
+
+6c5141e Add a full per-operator table to Spectator Mode
+031cbf8 Add quick-win animations: gauge/spectator number tweens, menu entrance, new-operator flash
+58656f2 Animate the newest sparkline point drawing in instead of snapping
+18d3ad3 Cosmetic pass: accent-aware glows, button press feedback, skeleton loaders
+
+### Bugfixes
+
+a48c542 Send Cache-Control: no-cache so app updates don't stay masked by WebView2's cache
+1e9ac58 Fix Spectator popover being invisibly clipped by the titlebar row
+
 ## 26.7.21
 
 ### Enhancements
