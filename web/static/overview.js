@@ -1192,6 +1192,9 @@
   // ══ OPERATOR HUD (own popped-out window, /operator_hud) ═════════════════════
   const OPERATOR_HUD_MODE=location.pathname==='/operator_hud';
 
+  // ══ SPECTATOR (read-only LAN viewer, /spectator) ═════════════════════════════
+  const SPECTATOR_MODE=location.pathname==='/spectator';
+
   // Same 8-colour identity palette as fatigue.js's OP_PALETTE — an operator
   // reads as the same colour on the Fatigue tab and this HUD.
   const OPERATOR_HUD_PALETTE=['#00d4aa','#f0c040','#ff6b35','#a78bfa',
@@ -1322,6 +1325,30 @@
     valEl.innerHTML=`<span class="band-chip" style="background:${r.bandColor}30;color:${r.bandColor}">${r.band}</span> ${r.freqStr} MHz`;
     valEl.style.color=T.accent;
     if (subEl) subEl.textContent = r.modeStr ? `${r.modeStr} · RADIO ${r.radioNr}` : `RADIO ${r.radioNr}`;
+  }
+
+  // ══ SPECTATOR: read-only scoreboard for a LAN viewer at /spectator ══════════
+  // Reuses the same snapshot fields updateHud()/updateHudRadio() already
+  // render — no new calculation logic, just a simpler 4-tile display with no
+  // sparklines/countdown/field-picker (this is a plain browser tab on
+  // someone else's device, not a pywebview popout window).
+  function updateSpectator(snap){
+    const pb=snap?.personal_bests||{};
+    const scoreEl=document.getElementById('spectator-score');
+    const multsEl=document.getElementById('spectator-mults');
+    const rateEl =document.getElementById('spectator-rate');
+    const nameEl =document.getElementById('spectator-contest');
+    if (scoreEl) scoreEl.textContent=(snap?.score||0).toLocaleString('en-AU');
+    if (multsEl) multsEl.textContent=(snap?.band_mults||snap?.worked||0).toLocaleString('en-AU');
+    if (rateEl)  rateEl.textContent=(pb.current_hour_rate||0)+'/hr';
+    if (nameEl && snap?._plugin_name) nameEl.textContent=snap._plugin_name;
+    const valEl=document.getElementById('spectator-radio');
+    const subEl=document.getElementById('spectator-radio-sub');
+    if (!valEl) return;
+    const r=window.VKA.formatRadio(snap?.radio_info?.own);
+    if (!r){ valEl.textContent='—'; if(subEl) subEl.textContent=''; return; }
+    valEl.innerHTML=`<span class="band-chip" style="background:${r.bandColor}30;color:${r.bandColor}">${r.band}</span> ${r.freqStr} MHz`;
+    if (subEl) subEl.textContent = r.modeStr || '';
   }
 
   // ── HUD mini sparklines ────────────────────────────────────────────────
@@ -2098,6 +2125,7 @@
   let _firstSnap=true;
   window.addEventListener('vka:snapshot',e=>{
     trackLastQso(e.detail);
+    if (SPECTATOR_MODE) { updateSpectator(e.detail); return; }
     if (OPERATOR_HUD_MODE) { updateOperatorHud(e.detail); return; }
     if (HUD_MODE) { updateHud(e.detail); trackHudSparklines(e.detail); checkCelebrations(e.detail); checkEndTimeAlert(e.detail); checkDeadAir(e.detail); return; }
     if (_replaying) return;
@@ -2117,7 +2145,7 @@
     // panel-live-rank doesn't exist in either HUD window's DOM — polling
     // there just fires an unnecessary COSB-scraping request every load
     // (see issue #72).
-    if (!HUD_MODE && !OPERATOR_HUD_MODE) startLiveRankPolling();
+    if (!HUD_MODE && !OPERATOR_HUD_MODE && !SPECTATOR_MODE) startLiveRankPolling();
   });
 
   if (!HUD_MODE && !OPERATOR_HUD_MODE) startLiveRankPolling();

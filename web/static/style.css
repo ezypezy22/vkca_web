@@ -94,6 +94,8 @@ body{height:100%;background:var(--bg);color:var(--fg);
 .tb-btn:disabled{opacity:.5;cursor:default;}
 .tb-btn--primary{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:bold;}
 .tb-btn--primary:hover{background:#00efc0;color:var(--bg);}
+.tb-btn--active{color:var(--green);border-color:var(--green);background:rgba(46,213,115,.12);}
+.tb-btn--active:hover{color:var(--green);border-color:var(--green);}
 .tb-btn--icon{padding:2px 6px;font-size:0.85em;}
 /* Coloured outline (not filled) so it reads as distinct from — but not
    competing with — the solid-filled Open Log primary button beside it. */
@@ -340,6 +342,35 @@ html.operator-hud-mode #titlebar,html.operator-hud-mode #session-bar,
 html.operator-hud-mode #tabbar,html.operator-hud-mode #content{display:none!important;}
 html.operator-hud-mode #operator-hud-bar{display:block;}
 html.operator-hud-mode #operator-hud-close{display:block;}
+
+/* ── Spectator Mode (rendered only for a read-only LAN viewer, /spectator)
+   A single full-bleed scoreboard — no titlebar, no tabs, nothing clickable —
+   deliberately simpler than the Mini HUD since this is a plain browser tab
+   on someone else's device, not a pywebview popout window they configure. */
+#spectator-bar{display:none;flex-direction:column;align-items:center;
+  justify-content:center;position:fixed;inset:0;background:var(--bg);
+  gap:22px;padding:24px;}
+html.spectator-mode body{padding:0;overflow:hidden;}
+html.spectator-mode #titlebar,html.spectator-mode #session-bar,
+html.spectator-mode #tabbar,html.spectator-mode #content{display:none!important;}
+html.spectator-mode #spectator-bar{display:flex;}
+#spectator-title{font-family:var(--font-mono);font-size:1.1em;
+  color:var(--muted);letter-spacing:.04em;text-align:center;}
+.spectator-grid{display:grid;grid-template-columns:repeat(2,1fr);
+  gap:16px;width:100%;max-width:520px;}
+.spectator-item{display:flex;flex-direction:column;align-items:center;
+  gap:6px;background:var(--bg2);border:1px solid var(--bg3);
+  border-radius:var(--radius);padding:20px;}
+.spectator-label{font-family:var(--font-mono);font-size:0.8em;
+  color:var(--muted);letter-spacing:.08em;}
+.spectator-val{font-size:2.2em;font-weight:bold;color:var(--accent);
+  line-height:1.2;}
+.spectator-radio-sub{font-size:0.6em;color:var(--muted);font-weight:normal;}
+
+/* ── Spectator Mode titlebar toggle + URL popover (main window only) ─────── */
+#spectator-popover{min-width:300px;}
+#spectator-popover.open{display:flex;flex-direction:column;gap:6px;}
+#spectator-url-input{width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:0.85em;}
 
 /* ── HUD vertical orientation ─────────────────────────────────────────────
    Stacks stats in a single column instead of a wrapping row — label+value

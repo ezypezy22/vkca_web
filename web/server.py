@@ -188,6 +188,13 @@ class AppState:
         self.poll_interval: float                 = 5.0
         self._lock                                = threading.Lock()
         self._clients:      list                  = []
+        # Spectator Mode: a second, LAN-facing read-only listener, started/
+        # stopped on demand via /api/spectator. Deliberately not persisted —
+        # see spectator_app below for why. All None while off.
+        self._spectator_server                    = None  # uvicorn.Server
+        self._spectator_task                      = None  # asyncio.Task running .serve()
+        self._spectator_sock                      = None  # its pre-bound listening socket
+        self._spectator_url: Optional[str]        = None  # e.g. "http://192.168.1.23:51234/spectator"
         self._webview_window                      = None  # set after webview starts
         self._base_url:     Optional[str]         = None  # set after webview starts; used by /api/popout
         self._hud_window                          = None  # the single Mini HUD window, if open
@@ -3220,6 +3227,122 @@ async def _poll_loop():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ── Spectator Mode ────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# A second, minimal FastAPI app — not a flag/middleware bolted onto `app` —
+# because `app` has zero auth/access-control anywhere (no CORS/token/IP
+# checks; its whole security model is "loopback bind = trusted") and carries
+# every mutating route (/api/qsos/delete, /api/load, /api/settings/*, ...).
+# spectator_app's route table only ever contains the three routes registered
+# below, so there is nothing for a future middleware bug or forgotten
+# allowlist entry to accidentally expose to the LAN — safety is structural.
+
+def _get_lan_ip() -> Optional[str]:
+    """Best-effort discovery of this machine's LAN-facing IPv4 address.
+    Connecting a UDP socket sends no packets (UDP is connectionless) — it
+    only forces the OS routing table to pick a source interface/IP, which is
+    exactly the adapter this machine would use to reach another device on
+    the LAN. Works even with no real internet uplink (common at a
+    contest site on an isolated LAN), since 8.8.8.8 never actually needs to
+    respond. Returns None if there's no route at all (Wi-Fi/Ethernet off)."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
+
+
+spectator_app = FastAPI(title="VK Contest Analyzer — Spectator")
+spectator_app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
+
+
+@spectator_app.get("/spectator")
+async def spectator_page():
+    return FileResponse(str(_STATIC / "index.html"))
+
+
+# Same handler object the main app uses for /ws/live — same STATE._clients
+# list, same _broadcast() fan-out. A spectator connection is indistinguishable
+# from a HUD popout's connection from the server's point of view; any future
+# fix to ws_live (timeouts, ping cadence, etc.) applies to both automatically.
+spectator_app.add_api_websocket_route("/ws/live", ws_live)
+
+
+async def _start_spectator_server() -> dict:
+    if STATE._spectator_server is not None:
+        return {"ok": True, "enabled": True, "url": STATE._spectator_url}
+    lan_ip = _get_lan_ip()
+    if not lan_ip:
+        return {"error": "Could not detect a Wi-Fi/LAN address on this machine."}
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.bind(("0.0.0.0", 0))   # OS-assigned ephemeral port — a fresh URL
+                                     # each toggle-on is fine, it's always read
+                                     # live from the titlebar popover, never
+                                     # bookmarked or persisted (see no-persist
+                                     # decision below)
+        sock.listen(128)
+    except OSError as exc:
+        sock.close()
+        return {"error": f"Could not open a port for Spectator Mode: {exc}"}
+    port = sock.getsockname()[1]
+    config = uvicorn.Config(
+        spectator_app, host="0.0.0.0", port=port,
+        log_level="warning", loop="asyncio", log_config=None,
+    )
+    server = uvicorn.Server(config)
+    task = asyncio.create_task(server.serve(sockets=[sock]))
+    STATE._spectator_server = server
+    STATE._spectator_task = task
+    STATE._spectator_sock = sock
+    STATE._spectator_url = f"http://{lan_ip}:{port}/spectator"
+    return {"ok": True, "enabled": True, "url": STATE._spectator_url}
+
+
+async def _stop_spectator_server() -> dict:
+    server, task = STATE._spectator_server, STATE._spectator_task
+    if server is None:
+        return {"ok": True, "enabled": False}
+    STATE._spectator_server = None
+    STATE._spectator_task = None
+    STATE._spectator_sock = None
+    STATE._spectator_url = None
+    server.should_exit = True
+    if task:
+        try:
+            await asyncio.wait_for(task, timeout=3.0)
+        except asyncio.TimeoutError:
+            server.force_exit = True
+            try:
+                await asyncio.wait_for(task, timeout=2.0)
+            except asyncio.TimeoutError:
+                pass
+    return {"ok": True, "enabled": False}
+
+
+@app.get("/api/spectator")
+async def api_spectator_status():
+    """Loopback-only status/control endpoint — deliberately absent from
+    spectator_app, so a LAN visitor can't discover or toggle this themselves."""
+    return {"enabled": STATE._spectator_server is not None, "url": STATE._spectator_url}
+
+
+@app.post("/api/spectator")
+async def api_spectator_toggle(body: dict):
+    if body.get("enabled"):
+        result = await _start_spectator_server()
+    else:
+        result = await _stop_spectator_server()
+    if "error" in result:
+        return JSONResponse(result, status_code=400)
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # ── PyWebView launcher ────────────────────────────────────────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -3652,8 +3775,11 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                     pass
                 STATE._clients.clear()
 
-                # Signal uvicorn to stop
+                # Signal uvicorn to stop (both the main server and, if it's
+                # running, the LAN-facing Spectator Mode listener)
                 server.should_exit = True
+                if STATE._spectator_server:
+                    STATE._spectator_server.should_exit = True
 
                 # Give uvicorn up to 2 seconds to finish in-flight requests
                 server_thread.join(timeout=2.0)

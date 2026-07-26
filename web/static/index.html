@@ -14,6 +14,7 @@
   if (location.pathname === '/hud') document.documentElement.classList.add('hud-mode');
   else if (location.pathname === '/operator_hud') document.documentElement.classList.add('operator-hud-mode');
   else if (location.pathname.startsWith('/popout/')) document.documentElement.classList.add('popout-mode');
+  else if (location.pathname === '/spectator') document.documentElement.classList.add('spectator-mode');
 </script>
 </head>
 <body>
@@ -120,6 +121,19 @@
     <!-- Report issue / request feature -->
     <button id="btn-report-issue" class="tb-btn" title="Report a bug or request a feature">🐛 Report Issue</button>
 
+    <div class="tb-sep"></div>
+
+    <!-- Spectator Mode: lets someone else on the same Wi-Fi watch a
+         read-only live scoreboard. See app.js wireSpectatorToggle(). -->
+    <div class="panels-menu-wrap">
+      <button id="spectator-toggle-btn" class="tb-btn" title="Let someone on the same Wi-Fi watch a read-only live scoreboard">📡 Spectator</button>
+      <div id="spectator-popover" class="panels-menu">
+        <div class="panels-menu-group">Shareable URL (same Wi-Fi only)</div>
+        <input id="spectator-url-input" class="tb-input" readonly>
+        <button id="spectator-copy-btn" class="tb-btn">📋 Copy</button>
+      </div>
+    </div>
+
     <!-- Trailing drag handle — row 2 is otherwise wall-to-wall interactive
          controls (slider, selects, buttons), so without this the whole
          bottom row of the titlebar is undraggable. -->
@@ -153,6 +167,18 @@
 <div id="operator-hud-bar">
   <button id="operator-hud-close" title="Close">✕</button>
   <div id="operator-hud-cards"></div>
+</div>
+
+<!-- ── Spectator bar (only shown when loaded at /spectator by a read-only
+     LAN viewer — see overview.js SPECTATOR_MODE) ─────────────────────────── -->
+<div id="spectator-bar">
+  <div id="spectator-title">📡 <span id="spectator-contest">VK Contest Analyzer</span> — Live</div>
+  <div class="spectator-grid">
+    <div class="spectator-item"><span class="spectator-label">SCORE</span><span class="spectator-val" id="spectator-score">—</span></div>
+    <div class="spectator-item"><span class="spectator-label">RATE</span><span class="spectator-val" id="spectator-rate">—</span></div>
+    <div class="spectator-item"><span class="spectator-label">MULTS</span><span class="spectator-val" id="spectator-mults">—</span></div>
+    <div class="spectator-item"><span class="spectator-label">RADIO</span><span class="spectator-val" id="spectator-radio">—</span><span class="spectator-radio-sub" id="spectator-radio-sub"></span></div>
+  </div>
 </div>
 
 <!-- ── Tab bar ────────────────────────────────────────────────────────────── -->

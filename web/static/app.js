@@ -27,7 +27,7 @@ The developers of this software make no guarantees regarding the accuracy or com
 
 Users are responsible for verifying all information against N1MM before making decisions or submitting contest entries.`;
 
-  { if (location.pathname === '/hud' || location.pathname.startsWith('/popout/')) return; }
+  { if (location.pathname === '/hud' || location.pathname.startsWith('/popout/') || location.pathname === '/spectator') return; }
   try { if (localStorage.getItem('vkca_splash_accepted') === '1') return; } catch {}
 
   const el = document.createElement('div');
@@ -1452,7 +1452,7 @@ Users are responsible for verifying all information against N1MM before making d
   // Main window only — a HUD popout is too small a surface for a multi-line
   // tip, and one already-dismissed hint should cover the user, not one per
   // window.
-  const IS_MAIN_WINDOW = location.pathname !== '/hud' && location.pathname !== '/operator_hud';
+  const IS_MAIN_WINDOW = location.pathname !== '/hud' && location.pathname !== '/operator_hud' && location.pathname !== '/spectator';
 
   // ── Report Issue pointer ─────────────────────────────────────────────────
   // Deliberately NOT persisted via localStorage (no seenKey) — unlike the
@@ -1647,6 +1647,69 @@ Users are responsible for verifying all information against N1MM before making d
         onDismiss: (markSeen) => { _hideHint = null; if (markSeen) maybeShowReportHint(); },
       });
     }, RADIO_HINT_WAIT_MS);
+  }
+
+  // ── Spectator Mode toggle ──────────────────────────────────────────────────
+  // Deliberately not persisted server-side (see server.py's spectator_app
+  // comment) — always starts off, so this only ever reflects state the user
+  // set this session. The popover is purely a "show/copy the URL" surface;
+  // hiding it (click elsewhere) doesn't turn spectator mode off, only the
+  // toggle button itself does.
+  if (IS_MAIN_WINDOW) {
+    const toggleBtn = document.getElementById('spectator-toggle-btn');
+    const popover    = document.getElementById('spectator-popover');
+    const urlInput   = document.getElementById('spectator-url-input');
+    const copyBtn    = document.getElementById('spectator-copy-btn');
+    let _spectatorOn = false;
+
+    function applySpectatorState(enabled, url) {
+      _spectatorOn = enabled;
+      toggleBtn?.classList.toggle('tb-btn--active', enabled);
+      if (enabled && url) {
+        if (urlInput) urlInput.value = url;
+        popover?.classList.add('open');
+      } else {
+        popover?.classList.remove('open');
+      }
+    }
+
+    if (toggleBtn) {
+      fetch('/api/spectator').then(r => r.json()).then(d => applySpectatorState(!!d.enabled, d.url)).catch(() => {});
+
+      toggleBtn.addEventListener('click', async e => {
+        e.stopPropagation();
+        try {
+          const res = await fetch('/api/spectator', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: !_spectatorOn }),
+          });
+          const data = await res.json();
+          if (!res.ok || data.error) {
+            window.VKA?.showToast?.('Spectator Mode', data.error || 'Could not toggle Spectator Mode.', '✗', true);
+            return;
+          }
+          applySpectatorState(!!data.enabled, data.url);
+        } catch (err) {
+          window.VKA?.showToast?.('Spectator Mode', err.message, '✗', true);
+        }
+      });
+
+      copyBtn?.addEventListener('click', async e => {
+        e.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(urlInput?.value || '');
+          window.VKA?.showToast?.('Copied', 'Spectator URL copied to clipboard.', '✓');
+        } catch (err) {
+          window.VKA?.showToast?.('Copy failed', err.message, '✗', true);
+        }
+      });
+
+      document.addEventListener('click', e => {
+        if (!popover || !popover.classList.contains('open')) return;
+        if (!popover.contains(e.target) && e.target !== toggleBtn) popover.classList.remove('open');
+      });
+    }
   }
 
 })();
