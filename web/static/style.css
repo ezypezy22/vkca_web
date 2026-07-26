@@ -385,7 +385,7 @@ html.spectator-mode #spectator-bar{display:flex;}
    with JS-computed viewport coordinates (see app.js's spectator toggle),
    rather than clip silently invisible inside the titlebar row. */
 #spectator-popover{position:fixed;top:auto;right:auto;left:auto;min-width:300px;}
-#spectator-popover.open{display:flex;flex-direction:column;gap:6px;}
+#spectator-popover.open{display:flex;flex-direction:column;gap:6px;animation:hud-hint-in .2s ease-out;}
 #spectator-url-input{width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:0.85em;}
 
 /* ── HUD vertical orientation ─────────────────────────────────────────────
@@ -435,7 +435,7 @@ html.popout-mode .hide-btn{display:none;}
   background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);
   padding:8px;min-width:220px;max-height:60vh;overflow-y:auto;
   box-shadow:0 8px 24px -8px rgba(0,0,0,.5);display:none;}
-.panels-menu.open{display:block;}
+.panels-menu.open{display:block;animation:hud-hint-in .2s ease-out;}
 .panels-menu-group{font-family:var(--font-mono);font-size:0.75em;color:var(--muted);
   letter-spacing:.06em;text-transform:uppercase;margin:8px 4px 4px;}
 .panels-menu-group:first-child{margin-top:2px;}
@@ -815,6 +815,14 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .fatigue-cards-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:var(--gap);}
 .fatigue-card{background:var(--bg2);border:1px solid var(--bg3);
   border-top:2px solid var(--accent);border-radius:var(--radius);padding:10px 14px 12px;}
+/* Only applied to a genuinely new operator's first card (see _seenOperators
+   in overview.js) — cards rebuild wholesale every snapshot, so animating
+   this unconditionally would replay it on every existing op too. */
+.op-card-enter{animation:op-card-enter-kf .4s ease-out;}
+@keyframes op-card-enter-kf{
+  0%{opacity:0;transform:translateY(8px) scale(.97);}
+  100%{opacity:1;transform:translateY(0) scale(1);}
+}
 .fatigue-op{font-family:var(--font-mono);font-size:1em;font-weight:bold;margin-bottom:8px;}
 .fatigue-stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;}
 .fatigue-stat{text-align:center;}

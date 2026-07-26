@@ -277,7 +277,7 @@
       lblEl.textContent=g.label||'';
       card.appendChild(valEl); card.appendChild(lblEl);
       row.appendChild(card);
-      _gaugeState[i]={cur:0,raf:null};
+      _gaugeState[i]={cur:0,curVal:0,raf:null};
       if (g.tooltip){
         card.addEventListener('mousemove',e=>showTip(g.tooltip,e.clientX,e.clientY));
         card.addEventListener('mouseleave',hideTip);
@@ -303,14 +303,20 @@
 
   function animGauge(idx,gDef,val,maxVal,target){
     const st=_gaugeState[idx]; if(!st) return;
-    const t0=performance.now(),s0=st.cur;
+    const t0=performance.now(),s0=st.cur,sVal0=st.curVal??0;
     if(st.raf) cancelAnimationFrame(st.raf);
     function step(now){
       const t=Math.min((now-t0)/700,1);
-      st.cur=s0+(target-s0)*(1-Math.pow(1-t,3));
-      redrawGauge(idx,gDef,st.cur,val,maxVal);
+      const eased=1-Math.pow(1-t,3);
+      st.cur=s0+(target-s0)*eased;
+      // Tweens the raw value in lockstep with the arc rather than reusing
+      // the arc's own (clamped-to-1) fraction — a gauge whose value has
+      // overshot its nominal max (frac pinned at 1) would otherwise have
+      // its number stuck at maxVal instead of counting up past it.
+      st.curVal=sVal0+(val-sVal0)*eased;
+      redrawGauge(idx,gDef,st.cur,st.curVal,maxVal);
       if(t<1) st.raf=requestAnimationFrame(step);
-      else{st.cur=target;st.raf=null;}
+      else{st.cur=target;st.curVal=val;st.raf=null;}
     }
     st.raf=requestAnimationFrame(step);
   }
@@ -1205,6 +1211,13 @@
     return h ? `${h}h ${mm}m` : `${mm}m`;
   }
 
+  // Cards rebuild wholesale every snapshot (see updateOperatorHud below), so
+  // without this an entrance animation would replay on every op's card on
+  // every poll, not just when an operator genuinely first appears — tracks
+  // which operator names have already been seen so only a real newcomer
+  // (someone starting their first session) gets the entrance animation.
+  let _seenOperators=new Set();
+
   // Cards are rebuilt wholesale every snapshot (innerHTML='' + forEach +
   // createElement) rather than incrementally diffed — same idiom fatigue.js's
   // renderOpCards() and pace.js's roster tables already use for "N dynamic
@@ -1236,6 +1249,11 @@
       const onPct=op.span_minutes>0 ? Math.round(op.on_minutes/op.span_minutes*100) : 0;
       const div=document.createElement('div');
       div.className='fatigue-card';
+      const opKey=(op.operator||'').trim().toUpperCase();
+      if (opKey && opKey!=='—' && !_seenOperators.has(opKey)){
+        div.classList.add('op-card-enter');
+        _seenOperators.add(opKey);
+      }
       div.style.borderTopColor=col;
       div.style.boxShadow=`0 0 20px -8px ${col}, 0 2px 8px -2px rgba(0,0,0,.5)`;
       const r=window.VKA.formatRadio(radioForOp(op.operator));
@@ -1332,15 +1350,45 @@
   // render — no new calculation logic, just a simpler 4-tile display with no
   // sparklines/countdown/field-picker (this is a plain browser tab on
   // someone else's device, not a pywebview popout window).
+
+  // Tweens a tile's number with the same ease-out cubic the Overview gauges
+  // use (see animGauge), and gives the tile a brief flash when the value
+  // has genuinely gone up — a spectator watching passively gets a clear
+  // "something just happened" cue instead of a silent number swap. The
+  // very first call for a given id just snaps to the value with no
+  // animation/flash — counting up from 0 on page load (a contest already
+  // hours in) would just be a slow, meaningless wait.
+  const _specNumState={};
+  function animateSpectatorNumber(id,target,opts){
+    const el=document.getElementById(id); if(!el) return;
+    const fmt=(opts&&opts.fmt)||(n=>Math.round(n).toLocaleString('en-AU'));
+    const suffix=(opts&&opts.suffix)||'';
+    let st=_specNumState[id];
+    if (!st){
+      st=_specNumState[id]={cur:target,raf:null};
+      el.textContent=fmt(target)+suffix;
+      return;
+    }
+    if (target>st.cur) flashEl(el.closest('.spectator-item'),'flash-new-qso',900);
+    if (st.raf) cancelAnimationFrame(st.raf);
+    const from=st.cur,t0=performance.now();
+    function step(now){
+      const t=Math.min((now-t0)/700,1);
+      const val=from+(target-from)*(1-Math.pow(1-t,3));
+      el.textContent=fmt(val)+suffix;
+      st.cur=val;
+      if(t<1) st.raf=requestAnimationFrame(step);
+      else{st.cur=target;st.raf=null;el.textContent=fmt(target)+suffix;}
+    }
+    st.raf=requestAnimationFrame(step);
+  }
+
   function updateSpectator(snap){
     const pb=snap?.personal_bests||{};
-    const scoreEl=document.getElementById('spectator-score');
-    const multsEl=document.getElementById('spectator-mults');
-    const rateEl =document.getElementById('spectator-rate');
     const nameEl =document.getElementById('spectator-contest');
-    if (scoreEl) scoreEl.textContent=(snap?.score||0).toLocaleString('en-AU');
-    if (multsEl) multsEl.textContent=(snap?.band_mults||snap?.worked||0).toLocaleString('en-AU');
-    if (rateEl)  rateEl.textContent=(pb.current_hour_rate||0)+'/hr';
+    animateSpectatorNumber('spectator-score',snap?.score||0);
+    animateSpectatorNumber('spectator-mults',snap?.band_mults||snap?.worked||0);
+    animateSpectatorNumber('spectator-rate',pb.current_hour_rate||0,{suffix:'/hr'});
     if (nameEl && snap?._plugin_name) nameEl.textContent=snap._plugin_name;
     const valEl=document.getElementById('spectator-radio');
     const subEl=document.getElementById('spectator-radio-sub');
@@ -2149,6 +2197,8 @@
   });
   window.addEventListener('vka:loaded',()=>{
     _metaLoaded=false;_firstSnap=true;resetCelebrations();resetEndTimeAlerts();resetHudSparklines();resetDeadAirTracking();
+    _seenOperators.clear();
+    for (const k in _specNumState) delete _specNumState[k];
     // panel-live-rank doesn't exist in either HUD window's DOM — polling
     // there just fires an unnecessary COSB-scraping request every load
     // (see issue #72).
