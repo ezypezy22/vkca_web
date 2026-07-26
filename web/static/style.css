@@ -347,9 +347,13 @@ html.operator-hud-mode #operator-hud-close{display:block;}
    A single full-bleed scoreboard — no titlebar, no tabs, nothing clickable —
    deliberately simpler than the Mini HUD since this is a plain browser tab
    on someone else's device, not a pywebview popout window they configure. */
+/* justify-content:flex-start (not center) + overflow-y:auto — once the
+   per-operator table is populated this can grow well past one screen for
+   a multi-op station, and centering variable-height content just makes it
+   jump around/clip instead of scrolling predictably. */
 #spectator-bar{display:none;flex-direction:column;align-items:center;
-  justify-content:center;position:fixed;inset:0;background:var(--bg);
-  gap:22px;padding:24px;}
+  justify-content:flex-start;position:fixed;inset:0;background:var(--bg);
+  gap:22px;padding:24px;overflow-y:auto;}
 html.spectator-mode body{padding:0;overflow:hidden;}
 html.spectator-mode #titlebar,html.spectator-mode #session-bar,
 html.spectator-mode #tabbar,html.spectator-mode #content{display:none!important;}
@@ -366,6 +370,13 @@ html.spectator-mode #spectator-bar{display:flex;}
 .spectator-val{font-size:2.2em;font-weight:bold;color:var(--accent);
   line-height:1.2;}
 .spectator-radio-sub{font-size:0.6em;color:var(--muted);font-weight:normal;}
+/* Per-operator table — reuses updateOperatorHud()/.fatigue-card as-is (see
+   overview.js), just pointed at this container instead of the Operator
+   HUD popout's; .fatigue-cards-row already gives a responsive card grid. */
+#spectator-operators-wrap{width:100%;max-width:900px;}
+.spectator-section-label{font-family:var(--font-mono);font-size:0.75em;
+  color:var(--muted);letter-spacing:.08em;text-transform:uppercase;
+  text-align:center;margin-bottom:10px;}
 
 /* ── Spectator Mode titlebar toggle + URL popover (main window only) ─────── */
 /* .panels-menu's own position:absolute is relative to #tb-row2, which has

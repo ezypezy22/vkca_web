@@ -1210,8 +1210,8 @@
   // renderOpCards() and pace.js's roster tables already use for "N dynamic
   // items"; a handful of operator cards makes a full rebuild cheap and this
   // codebase has no precedent for anything fancier.
-  function updateOperatorHud(snap){
-    const wrap=document.getElementById('operator-hud-cards'); if (!wrap) return;
+  function updateOperatorHud(snap,containerId){
+    const wrap=document.getElementById(containerId||'operator-hud-cards'); if (!wrap) return;
     const ops=snap?.operator_times||[];
     wrap.innerHTML='';
     if (!ops.length){
@@ -1344,11 +1344,18 @@
     if (nameEl && snap?._plugin_name) nameEl.textContent=snap._plugin_name;
     const valEl=document.getElementById('spectator-radio');
     const subEl=document.getElementById('spectator-radio-sub');
-    if (!valEl) return;
-    const r=window.VKA.formatRadio(snap?.radio_info?.own);
-    if (!r){ valEl.textContent='—'; if(subEl) subEl.textContent=''; return; }
-    valEl.innerHTML=`<span class="band-chip" style="background:${r.bandColor}30;color:${r.bandColor}">${r.band}</span> ${r.freqStr} MHz`;
-    if (subEl) subEl.textContent = r.modeStr || '';
+    if (valEl){
+      const r=window.VKA.formatRadio(snap?.radio_info?.own);
+      if (!r){ valEl.textContent='—'; if(subEl) subEl.textContent=''; }
+      else {
+        valEl.innerHTML=`<span class="band-chip" style="background:${r.bandColor}30;color:${r.bandColor}">${r.band}</span> ${r.freqStr} MHz`;
+        if (subEl) subEl.textContent = r.modeStr || '';
+      }
+    }
+    // Full per-operator table — same cards/data as the Operator HUD
+    // (see updateOperatorHud above), just pointed at this page's own
+    // container instead of the popout window's.
+    updateOperatorHud(snap,'spectator-operator-cards');
   }
 
   // ── HUD mini sparklines ────────────────────────────────────────────────
