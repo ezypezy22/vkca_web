@@ -665,6 +665,21 @@ _STATIC = _HERE / "static"
 app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
 
 
+@app.middleware("http")
+async def _no_cache_headers(request, call_next):
+    """WebView2's storage_path (see launch_webview()) keeps a *persistent*
+    HTTP cache in %LOCALAPPDATA%\\VKContestAnalyzer\\webview_storage across
+    app restarts AND reinstalls/upgrades — and FileResponse/StaticFiles set
+    no Cache-Control header, so absent this, Chromium's heuristic freshness
+    can silently keep serving a previous version's cached index.html/JS/CSS
+    even after the exe on disk has been rebuilt and relaunched. This is a
+    loopback-only app with no real caching upside, so just always
+    revalidate rather than let a stale UI linger invisibly after an update."""
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 @app.get("/")
 async def index():
     return FileResponse(str(_STATIC / "index.html"))
@@ -3257,6 +3272,7 @@ def _get_lan_ip() -> Optional[str]:
 
 spectator_app = FastAPI(title="VK Contest Analyzer — Spectator")
 spectator_app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
+spectator_app.middleware("http")(_no_cache_headers)
 
 
 @spectator_app.get("/spectator")
