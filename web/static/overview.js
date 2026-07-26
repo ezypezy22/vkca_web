@@ -1437,8 +1437,49 @@
   // needs to resize on the fly when the HUD switches orientation (see
   // HUD_ORIENTATIONS below), which is simpler to do by hand than by
   // re-instantiating four chart objects on every layout change.
+  // Canvas-keyed animation state for the newest-point draw-in (see
+  // drawSparkline below) — a WeakMap so a canvas that's torn down (e.g. an
+  // operator card rebuilt wholesale next snapshot) doesn't leak state.
+  const _sparkAnimState=new WeakMap();
+
+  // Redraws the newest point's height smoothly from its previous value
+  // instead of snapping straight to it — same ease-out cubic/duration
+  // family as the gauge and Spectator-tile number tweens (animGauge,
+  // animateSpectatorNumber) for a consistent feel across the app. Only the
+  // last point's *value* is interpolated (its x-position is always the
+  // rightmost pixel regardless), which reads as the newest tick "settling
+  // into place" rather than a full re-layout of the whole trend line.
   function drawSparkline(canvas,values,colour){
     if (!canvas) return;
+    const idx=values.map((v,i)=>({v,i})).filter(p=>p.v!=null);
+    if (idx.length<2){ _renderSparklineFrame(canvas,values,colour); return; }
+    const lastPoint=idx[idx.length-1];
+    let st=_sparkAnimState.get(canvas);
+    if (!st){
+      // First time this canvas has ever been drawn — snap straight to the
+      // real data with no animation, same rationale as the number tweens:
+      // counting/growing in from nothing on first load is just a slow,
+      // meaningless wait, not a meaningful "value changed" cue.
+      st={lastVal:lastPoint.v,raf:null};
+      _sparkAnimState.set(canvas,st);
+      _renderSparklineFrame(canvas,values,colour);
+      return;
+    }
+    if (st.raf) cancelAnimationFrame(st.raf);
+    const fromVal=st.lastVal,targetVal=lastPoint.v,t0=performance.now();
+    function step(now){
+      const t=Math.min((now-t0)/350,1);
+      const animVal=fromVal+(targetVal-fromVal)*(1-Math.pow(1-t,3));
+      const animValues=values.slice();
+      animValues[lastPoint.i]=animVal;
+      _renderSparklineFrame(canvas,animValues,colour);
+      if (t<1) st.raf=requestAnimationFrame(step);
+      else{st.raf=null;st.lastVal=targetVal;_renderSparklineFrame(canvas,values,colour);}
+    }
+    st.raf=requestAnimationFrame(step);
+  }
+
+  function _renderSparklineFrame(canvas,values,colour){
     // Canvas size is CSS-driven (.hud-spark / html.hud-vertical .hud-spark)
     // so it can change shape when the orientation toggle flips — read the
     // rendered box size fresh each draw rather than trusting the width/
