@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.7.21
+
+### Enhancements
+
+183dbaf Add local Spectator Mode: a titlebar toggle that shares a read-only live scoreboard (score, rate, mults, radio freq) with anyone on the same Wi-Fi
+
 ## 26.7.20
 
 ### Enhancements
