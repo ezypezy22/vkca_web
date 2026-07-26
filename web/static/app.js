@@ -1662,11 +1662,23 @@ Users are responsible for verifying all information against N1MM before making d
     const copyBtn    = document.getElementById('spectator-copy-btn');
     let _spectatorOn = false;
 
+    // #spectator-popover is position:fixed (see style.css comment) because
+    // #tb-row2 clips absolutely-positioned children at its own 28px-tall
+    // edge — same problem #hud-menu solves the same way. Position it
+    // ourselves from the toggle button's actual on-screen location.
+    function positionPopover() {
+      if (!toggleBtn || !popover) return;
+      const r = toggleBtn.getBoundingClientRect();
+      popover.style.left = Math.max(4, r.right - 300) + 'px';
+      popover.style.top  = (r.bottom + 4) + 'px';
+    }
+
     function applySpectatorState(enabled, url) {
       _spectatorOn = enabled;
       toggleBtn?.classList.toggle('tb-btn--active', enabled);
       if (enabled && url) {
         if (urlInput) urlInput.value = url;
+        positionPopover();
         popover?.classList.add('open');
       } else {
         popover?.classList.remove('open');

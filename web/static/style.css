@@ -368,7 +368,12 @@ html.spectator-mode #spectator-bar{display:flex;}
 .spectator-radio-sub{font-size:0.6em;color:var(--muted);font-weight:normal;}
 
 /* ── Spectator Mode titlebar toggle + URL popover (main window only) ─────── */
-#spectator-popover{min-width:300px;}
+/* .panels-menu's own position:absolute is relative to #tb-row2, which has
+   overflow:hidden (fixed 28px titlebar row) — same clipping problem as
+   #hud-menu (see its own comment above), same fix: escape to position:fixed
+   with JS-computed viewport coordinates (see app.js's spectator toggle),
+   rather than clip silently invisible inside the titlebar row. */
+#spectator-popover{position:fixed;top:auto;right:auto;left:auto;min-width:300px;}
 #spectator-popover.open{display:flex;flex-direction:column;gap:6px;}
 #spectator-url-input{width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:0.85em;}
 
