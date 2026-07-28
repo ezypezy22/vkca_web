@@ -1,5 +1,27 @@
 # Changelog
 
+## 26.7.23
+
+### Enhancements
+
+d709d88 Add day/night greyline overlay and live glowing DX Cluster spots to the World Map
+d709d88 Add projected final score at current pace, tab-switch transition, and animated hero numbers to Overview
+d709d88 Add a QSOs-per-hour-by-band stacked chart to Rate
+d709d88 Cross-reference Missing Mults against live DX Cluster spots
+d709d88 Add a "best band right now" advisory to Bands
+d709d88 Add a proactive continuous-operator fatigue alert
+d709d88 Add a band-mix-by-year comparison chart to Year on Year
+d709d88 Add a dupe-rate-by-hour trend chart to Dupes
+d709d88 Add an anomalies-only filter to Debug Mults
+d709d88 Add column sorting and CSV/ADIF export to Worked
+d709d88 Add a per-operator breakdown table and shareable score-card PNG to the Postcontest Report
+d709d88 Share one coalesced /api/qsos fetch across Worked/Debug Mults/Dupes/Rate instead of each tab fetching independently
+
+### Bugfixes
+
+d709d88 Stop the radio UDP listener from setting SO_REUSEADDR, which let a second process silently steal N1MM+'s packets on Windows with no indication why; surface a specific warning in the titlebar/Overview when the port is unavailable
+d709d88 Fix an ordering bug in Worked's delete flow that could serve just-deleted rows back from the new QSO cache
+
 ## 26.7.22
 
 ### Enhancements
