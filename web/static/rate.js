@@ -5,9 +5,12 @@
   'use strict';
   const C = { accent:'#00d4aa', accent2:'#ff6b35', accent3:'#f0c040',
                muted:'#8b949e', bg3:'#21262d', fg:'#e6edf3', green:'#2ed573' };
+  const BAND_COLS = window.VKA.BAND_COLS;
+  const BAND_ORDER = ['160M','80M','60M','40M','30M','20M','17M','15M','12M','10M','6M','2M'];
 
   let rateChart = null;
   let multsChart = null;
+  let bandStackChart = null;
 
   // vka:snapshot fires on every WebSocket push — including the QRZ
   // background-lookup worker's own broadcasts, which happen every ~1.5s
@@ -37,6 +40,11 @@
       const rateData = JSON.parse(rateJSON);
       renderRateChart(rateData);
       renderMultsChart(rateData);
+      // Piggybacks on the same "rate data actually changed" gate as the two
+      // charts above — a new QSO is exactly the event that would also move
+      // this chart, so there's no point fetching the (potentially large)
+      // full QSO list on every idle snapshot tick.
+      renderBandStackChart(rateData);
     }
     if (force || sessJSON !== _lastSessJSON) {
       _lastSessJSON = sessJSON;
@@ -189,6 +197,84 @@
           x: { ticks:{color:C.muted,font:{size:9},maxRotation:45},
                grid:{display:false}, border:{display:false} },
           y: { display:false, beginAtZero:true },
+        },
+      },
+    });
+  }
+
+  // ── QSOs per hour, stacked by band — same hour buckets as renderRateChart
+  // (r.hour from /api/rate), just split per-band instead of just totalled,
+  // so a good hour's actual source band is visible instead of hidden inside
+  // one flat bar. Computed client-side from the full QSO list rather than a
+  // new backend endpoint — one pass over the array, via the shared cache
+  // (see app.js's window.VKA.fetchQsos) other tabs already populate.
+  let _bandStackGen = 0;
+  async function renderBandStackChart(rateData) {
+    const canvas = document.getElementById('chart-rate-bands');
+    if (!canvas || !rateData.length) return;
+    const gen = ++_bandStackGen;
+    let qsos;
+    try {
+      qsos = await window.VKA.fetchQsos();
+    } catch (e) { return; }
+    if (gen !== _bandStackGen) return;   // a newer call already superseded this one
+
+    const hourKeys = rateData.map(r => r.hour.substring(0, 13));   // "YYYY-MM-DDTHH"
+    const hourIndex = new Map(hourKeys.map((h, i) => [h, i]));
+    const bandsSeen = new Set();
+    const counts = {};   // band -> array parallel to rateData, QSO count per hour
+    qsos.forEach(q => {
+      if (q.dupe || !q.time || !q.band) return;
+      const idx = hourIndex.get(String(q.time).substring(0, 13));
+      if (idx === undefined) return;
+      const band = q.band.toUpperCase();
+      bandsSeen.add(band);
+      if (!counts[band]) counts[band] = new Array(rateData.length).fill(0);
+      counts[band][idx]++;
+    });
+
+    const bands = BAND_ORDER.filter(b => bandsSeen.has(b))
+      .concat([...bandsSeen].filter(b => !BAND_ORDER.includes(b)).sort());
+    const labels = rateData.map(r => {
+      const d = new Date(r.hour + 'Z');
+      return `${String(d.getUTCHours()).padStart(2,'0')}:00`;
+    });
+    const datasets = bands.map(b => ({
+      label: b.toLowerCase(),
+      data: counts[b],
+      backgroundColor: (BAND_COLS[b] || C.muted) + 'cc',
+      borderColor: BAND_COLS[b] || C.muted,
+      borderWidth: 1,
+      stack: 'bands',
+    }));
+
+    if (bandStackChart) {
+      bandStackChart.data.labels = labels;
+      bandStackChart.data.datasets = datasets;
+      bandStackChart.update();
+      return;
+    }
+
+    bandStackChart = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: 500, easing: 'easeOutQuart' },
+        plugins: {
+          legend: { display: true, position: 'bottom',
+            labels: { color: C.muted, font: { size: 9 }, boxWidth: 10, padding: 8 } },
+          tooltip: {
+            backgroundColor: C.bg3, bodyColor: C.fg,
+            titleColor: C.accent, borderColor: C.bg3, borderWidth: 1,
+            callbacks: { title: i => `Hour ${i[0].label}`, label: i => ` ${i.dataset.label}: ${i.raw} QSOs` },
+          },
+        },
+        scales: {
+          x: { stacked: true, ticks:{color:C.muted,font:{size:9},maxRotation:45},
+               grid:{color:C.bg3+'80'} },
+          y: { stacked: true, ticks:{color:C.muted,font:{size:9}},
+               grid:{color:C.bg3+'80'}, beginAtZero:true },
         },
       },
     });

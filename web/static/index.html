@@ -414,7 +414,8 @@
         <span style="color:var(--accent)">●</span> END-OF-CONTEST REPORT
       </div>
       <span id="report-generated" style="font-family:var(--font-mono);font-size:0.77em;color:var(--muted)"></span>
-      <button id="report-export-btn" class="tb-btn tb-btn--primary" style="margin-left:auto" disabled>⬇ Export Report (HTML)</button>
+      <button id="report-scorecard-btn" class="tb-btn" style="margin-left:auto" disabled>🖼 Score Card (PNG)</button>
+      <button id="report-export-btn" class="tb-btn tb-btn--primary" disabled>⬇ Export Report (HTML)</button>
     </div>
 
     <div class="pace-cards-row" id="report-kpis">
@@ -469,6 +470,16 @@
         <table class="data-table">
           <thead><tr><th>Region</th><th>QSOs</th><th>Mults Worked</th><th>% Complete</th></tr></thead>
           <tbody id="report-regions-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel-box" id="report-operators-wrap" style="display:none">
+      <div class="panel-header"><span style="color:var(--green)">●</span> PER-OPERATOR BREAKDOWN</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Operator</th><th>QSOs</th><th>On Air</th><th>Q/hr On Air</th><th>On-Air %</th></tr></thead>
+          <tbody id="report-operators-tbody"></tbody>
         </table>
       </div>
     </div>
@@ -612,6 +623,10 @@
       <div class="panel-header"><span style="color:var(--accent3)">●</span> MULTS PER HOUR</div>
       <div style="position:relative;height:220px"><canvas id="chart-rate-mults"></canvas></div>
     </div>
+    <div class="panel-box" style="min-height:260px">
+      <div class="panel-header"><span style="color:var(--green)">●</span> QSOs PER HOUR BY BAND</div>
+      <div style="position:relative;height:220px"><canvas id="chart-rate-bands"></canvas></div>
+    </div>
     <div class="panel-box">
       <div class="panel-header"><span style="color:var(--accent3)">●</span> SESSION BREAKDOWN</div>
       <div class="table-wrap">
@@ -633,7 +648,7 @@
     <div id="missing-region-strip" class="missing-region-strip"></div>
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr><th>Mult Code</th><th>Region</th></tr></thead>
+        <thead><tr><th>Mult Code</th><th>Region</th><th>On Cluster</th></tr></thead>
         <tbody id="missing-tbody"></tbody>
       </table>
     </div>
@@ -642,6 +657,8 @@
   <!-- ══ BANDS ══ -->
   <section id="tab-bands" class="tab-panel">
     <div class="panel-header"><span style="color:var(--green)">●</span> BAND BREAKDOWN</div>
+    <div id="bands-advice" style="display:none;font-family:var(--font-mono);font-size:0.85em;
+         color:var(--accent3);padding:6px 2px"></div>
     <div class="bands-grid">
       <div class="bands-chart-wrap"><canvas id="chart-band-eff"></canvas></div>
       <div class="table-wrap">
@@ -809,6 +826,11 @@
           </table>
         </div>
       </div>
+
+      <div class="panel-box">
+        <div class="panel-header"><span style="color:var(--green)">●</span> BAND MIX — YEAR ON YEAR</div>
+        <div style="position:relative;height:220px"><canvas id="chart-yoy-bandmix"></canvas></div>
+      </div>
     </div>
   </section>
 
@@ -915,6 +937,12 @@
         </div>
       </div>
     </div>
+    <!-- Dupe-rate trend -->
+    <div class="panel-box" id="dupes-trend-wrap" style="display:none;min-height:180px">
+      <div class="panel-header"><span style="color:var(--accent2)">●</span> DUPE RATE BY HOUR</div>
+      <div style="position:relative;height:150px"><canvas id="chart-dupes-trend"></canvas></div>
+    </div>
+
     <!-- All dupe QSOs -->
     <div class="panel-box" id="dupes-qso-wrap" style="display:none">
       <div class="panel-header"><span style="color:var(--accent2)">●</span> DUPE QSO LIST (not scored)</div>
@@ -932,6 +960,10 @@
     <div class="panel-header">
       <span style="color:var(--muted)">●</span> DEBUG MULTS
       <span class="badge" id="debug-count">0</span>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-family:var(--font-mono);
+             font-size:0.72em;color:var(--red);margin-left:8px">
+        <input id="debug-anomalies-only" type="checkbox"><span>⚠ Anomalies only</span>
+      </label>
       <input id="debug-filter" class="filter-input" placeholder="Filter call, band, mult…" type="text">
     </div>
     <div class="table-wrap">
@@ -949,6 +981,8 @@
       <span class="badge" id="worked-count">0</span>
       <span style="color:var(--muted);font-size:0.77em;margin-left:6px">— Next Block In = when this operating block ends</span>
       <input id="worked-filter" class="filter-input" placeholder="Filter call, band, mode…" type="text">
+      <button id="worked-export-csv-btn" class="btn btn--ghost btn--sm" style="margin-left:8px">⬇ CSV</button>
+      <button id="worked-export-adif-btn" class="btn btn--ghost btn--sm">⬇ ADIF</button>
       <button id="worked-delete-btn" class="btn btn--ghost btn--sm" style="margin-left:8px;color:var(--red);border-color:var(--red)" disabled>🗑 Delete Selected</button>
       <div style="margin-left:8px;display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:0.77em">
         <button id="worked-prev" class="btn btn--ghost btn--sm" disabled>‹ Prev</button>
@@ -960,9 +994,15 @@
       <table class="data-table">
         <thead><tr>
           <th><input id="worked-select-all" type="checkbox"></th>
-          <th>Call</th><th>Band</th><th>Mode</th><th>Mult</th><th>Pts</th>
-          <th>Name</th><th>Grid</th><th>State</th>
-          <th>Time (UTC)</th>
+          <th class="sortable-th" data-sort="call">Call</th>
+          <th class="sortable-th" data-sort="band">Band</th>
+          <th class="sortable-th" data-sort="mode">Mode</th>
+          <th class="sortable-th" data-sort="mult1">Mult</th>
+          <th class="sortable-th" data-sort="pts">Pts</th>
+          <th class="sortable-th" data-sort="qrz_name">Name</th>
+          <th class="sortable-th" data-sort="qrz_grid">Grid</th>
+          <th class="sortable-th" data-sort="qrz_state">State</th>
+          <th class="sortable-th" data-sort="time">Time (UTC)</th>
           <th>Block</th><th>Next Block In</th><th>Dupe</th>
         </tr></thead>
         <tbody id="worked-tbody"></tbody>
@@ -993,6 +1033,16 @@
       <label style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:0.77em;color:var(--muted);cursor:pointer">
         <input id="map-toggle-long" type="checkbox">
         <span style="color:var(--muted)">╌╌ Long path</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:0.77em;color:var(--muted);cursor:pointer"
+             title="Plot live DX Cluster spots on the map as they arrive">
+        <input id="map-toggle-livespots" type="checkbox" checked>
+        <span>📡 Live spots</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:0.77em;color:var(--muted);cursor:pointer"
+             title="Shade the current night hemisphere">
+        <input id="map-toggle-greyline" type="checkbox" checked>
+        <span>🌓 Greyline</span>
       </label>
       <div class="tb-sep"></div>
       <label class="tb-label">BASEMAP</label>

@@ -404,7 +404,29 @@
     if (spots.length > MAX_SPOTS) spots = spots.slice(0, MAX_SPOTS);
     alertOnSpot(spot);
     renderSpots();
+    // Lets other tabs react to a spot landing without polling this module's
+    // own private `spots` array — Missing Mults only cares about NEW_MULT
+    // ones (see window.VKA.getRecentSpottedMults() below for that read
+    // side), but the World Map plots every spot with a resolved lat/lon
+    // regardless of status, so this fires for all of them.
+    window.dispatchEvent(new CustomEvent('vka:cluster_spot', { detail: spot }));
   }
+
+  // Needed mults spotted recently (status NEW_MULT), most-recent win per
+  // mult code — read by missing.js to flag a missing mult as "spotted just
+  // now" instead of a plain static checklist entry. Same recency window as
+  // the Band Advisor below (ADVISOR_WINDOW_MS) so "recent" means the same
+  // thing everywhere on this tab.
+  window.VKA = window.VKA || {};
+  window.VKA.getRecentSpottedMults = function () {
+    const out = {};
+    const cutoff = Date.now() - ADVISOR_WINDOW_MS;
+    for (const s of spots) {
+      if (s.status !== 'NEW_MULT' || !s.mult || s._receivedAt < cutoff) continue;
+      if (!out[s.mult] || out[s.mult]._receivedAt < s._receivedAt) out[s.mult] = s;
+    }
+    return out;
+  };
 
   function passesStatusFilter(s) {
     switch (s.status) {

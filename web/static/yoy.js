@@ -10,6 +10,8 @@
   const PALETTE = ['#00d4aa','#ff6b35','#f0c040','#2ed573','#64b5f6',
                     '#e040fb','#ff5252','#69f0ae','#ea80fc','#80d8ff'];
   const MUTED = '#8b949e', GRID = '#21262d80', FG = '#e6edf3';
+  const BAND_COLS = window.VKA.BAND_COLS;
+  const BAND_ORDER = ['160M','80M','60M','40M','30M','20M','17M','15M','12M','10M','6M','2M'];
 
   const METRIC_KEYS   = { score:'cum_score', qsos:'cum_qsos', mults:'cum_mults' };
   const METRIC_LABELS = { score:'Score', qsos:'Cumulative QSOs',
@@ -18,7 +20,7 @@
   let _series  = [];          // raw series from the API
   let _hidden  = new Set();   // keys hidden by the user clicking a roster row
   let _loaded  = false;
-  let trajChart = null, rateChart = null;
+  let trajChart = null, rateChart = null, bandMixChart = null;
 
   function colourFor(key) {
     const idx = _series.findIndex(s => s.key === key);
@@ -87,7 +89,71 @@
     const filtered = filteredSeries();
     renderTable(filtered);
     renderCharts(filtered);
+    renderBandMixChart(filtered);
     renderInsight(filtered);
+  }
+
+  // ── Band mix — has this year's band strategy shifted from prior years? ────
+  // One 100%-stacked horizontal bar per year, segments = that year's share
+  // of QSOs per band (final_band_counts, added server-side alongside the
+  // existing final_score/final_qsos/final_mults tallies in
+  // _yoy_build_trajectory). Independent of the hidden-year toggle above —
+  // this is a "how did I operate" comparison, not the same "compare
+  // trajectories" purpose the show/hide roster rows serve, so every loaded
+  // year always shows here regardless of what's hidden on the main chart.
+  function renderBandMixChart(filtered) {
+    const canvas = document.getElementById('chart-yoy-bandmix');
+    if (!canvas || !filtered.length) return;
+
+    const years = filtered.filter(s => s.final_band_counts && Object.keys(s.final_band_counts).length);
+    if (!years.length) { if (bandMixChart) { bandMixChart.destroy(); bandMixChart = null; } return; }
+
+    const bandsSeen = new Set();
+    years.forEach(s => Object.keys(s.final_band_counts).forEach(b => bandsSeen.add(b)));
+    const bands = BAND_ORDER.filter(b => bandsSeen.has(b))
+      .concat([...bandsSeen].filter(b => !BAND_ORDER.includes(b)).sort());
+
+    const labels = years.map(s => String(s.year || '?'));
+    const totals = years.map(s => Object.values(s.final_band_counts).reduce((a,b)=>a+b, 0) || 1);
+    const datasets = bands.map(b => ({
+      label: b.toLowerCase(),
+      data: years.map((s, i) => ((s.final_band_counts[b] || 0) / totals[i]) * 100),
+      backgroundColor: (BAND_COLS[b] || MUTED) + 'cc',
+      borderColor: BAND_COLS[b] || MUTED,
+      borderWidth: 1,
+      stack: 'bandmix',
+    }));
+
+    if (bandMixChart) {
+      bandMixChart.data.labels = labels;
+      bandMixChart.data.datasets = datasets;
+      bandMixChart.update();
+      return;
+    }
+
+    bandMixChart = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: 500, easing: 'easeOutQuart' },
+        plugins: {
+          legend: { display: true, position: 'bottom',
+            labels: { color: MUTED, font: { size: 9 }, boxWidth: 10, padding: 8 } },
+          tooltip: {
+            backgroundColor: GRID.slice(0,7), bodyColor: FG, borderWidth: 1,
+            callbacks: { label: i => ` ${i.dataset.label}: ${i.raw.toFixed(1)}%` },
+          },
+        },
+        scales: {
+          x: { stacked: true, max: 100, ticks: { color: MUTED, font: { size: 9 },
+               callback: v => v + '%' }, grid: { color: GRID } },
+          y: { stacked: true, ticks: { color: MUTED, font: { size: 10, weight: 'bold' } },
+               grid: { display: false } },
+        },
+      },
+    });
   }
 
   // ── Roster table ──────────────────────────────────────────────────────────

@@ -196,7 +196,8 @@ body.has-session-bar #content{top:calc(var(--titlebar-h) + var(--sessbar-h) + va
   padding:var(--gap);display:flex;flex-direction:column;gap:var(--gap);
 }
 .tab-panel{display:none;flex-direction:column;gap:var(--gap);}
-.tab-panel.active{display:flex;}
+.tab-panel.active{display:flex;animation:tab-in .22s ease-out;}
+@keyframes tab-in{0%{opacity:0;transform:translateY(5px);}100%{opacity:1;transform:translateY(0);}}
 
 /* ── Overview layout hint / reset ───────────────────────────────────────── */
 .layout-hint{display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -485,9 +486,9 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
             height:264px;flex-shrink:0;position:relative;}
 .gauge-card{background:var(--bg2);border:1px solid var(--bg3);
   border-top:2px solid var(--accent);border-radius:var(--radius);
-  overflow:hidden;position:relative;transition:border-top-color .3s,box-shadow .3s;}
+  overflow:hidden;position:relative;transition:border-top-color .3s,box-shadow .3s,transform .2s ease-out;}
 .gauge-card canvas{position:absolute;inset:0;width:100%!important;height:100%!important;}
-.gauge-card:hover{border-top-color:var(--accent3);box-shadow:0 0 10px -4px var(--accent3);}
+.gauge-card:hover{border-top-color:var(--accent3);box-shadow:0 0 10px -4px var(--accent3);transform:translateY(-2px);}
 .gauge-value,.gauge-label{position:absolute;left:0;right:0;
   font-family:Consolas,monospace;text-align:center;white-space:nowrap;pointer-events:none;}
 .gauge-value{font-weight:bold;}
@@ -529,8 +530,8 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
 .spark-row{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--gap);flex-shrink:0;}
 .spark-card{background:var(--bg2);border:1px solid var(--bg3);
   border-top:2px solid var(--accent);border-radius:var(--radius);
-  padding:8px 12px;min-width:0;position:relative;transition:box-shadow .3s;}
-.spark-card:hover{box-shadow:0 0 10px -4px var(--accent);}
+  padding:8px 12px;min-width:0;position:relative;transition:box-shadow .3s,transform .2s ease-out;}
+.spark-card:hover{box-shadow:0 0 10px -4px var(--accent);transform:translateY(-2px);}
 .spark-hero{font-family:var(--font-mono);font-size:1.54em;font-weight:bold;
              color:var(--accent);line-height:1;}
 .spark-title{font-family:var(--font-mono);font-size:0.77em;color:var(--muted);
@@ -553,7 +554,8 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
 .info-panel{background:var(--bg2);border:1px solid var(--bg3);
   border-top:2px solid var(--bg3);border-radius:var(--radius);
   padding:8px 10px;font-family:var(--font-mono);font-size:0.88em;overflow:hidden;
-  position:relative;}
+  position:relative;transition:transform .2s ease-out,box-shadow .3s;}
+.info-panel:hover{transform:translateY(-2px);box-shadow:0 0 10px -4px var(--accent);}
 .ip-hdr{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
 /* 1em, not a fraction — this already sits inside .info-panel's reduced context;
    another multiplier here previously compounded to the smallest text on the
@@ -701,6 +703,12 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .data-table tbody tr:nth-child(odd){background:var(--bg2);}
 .data-table tbody tr:nth-child(even){background:var(--bg3);}
 .data-table tbody tr:hover{background:var(--bg3);}
+.band-advice-pick{border-left:2px solid var(--accent3)!important;background:color-mix(in srgb,var(--accent3) 8%,transparent)!important;}
+.sortable-th{cursor:pointer;user-select:none;}
+.sortable-th:hover{color:var(--fg);}
+.sortable-th::after{content:'';display:inline-block;width:0.8em;}
+.sortable-th.sort-asc::after{content:'▲';font-size:0.85em;margin-left:2px;}
+.sortable-th.sort-desc::after{content:'▼';font-size:0.85em;margin-left:2px;}
 .data-table tbody td{padding:5px 10px;color:var(--fg);}
 .data-table tbody td:first-child{color:var(--accent);font-weight:bold;}
 
@@ -945,6 +953,23 @@ body:has(#tab-map.active) #content {
   font-family:var(--font-mono); font-size:0.69em; }
 .map-legend-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 .map-legend-count { color:var(--muted); }
+
+/* Live DX Cluster spots — a small solid dot plus a blurred, pulsing halo
+   behind it (same "glow" language as .radio-pulse/.spot-pulse-mult
+   elsewhere in the app). A plain L.divIcon rather than a canvas
+   circleMarker specifically so CSS animation/filter can drive the pulse —
+   Leaflet's canvas renderer has no per-path animation hook, but a divIcon
+   is real DOM and gets one for free. --col is set inline per-marker to the
+   spot's band colour (see worldmap.js's liveSpotIcon()). */
+.map-spot-dot{position:relative;display:block;width:10px;height:10px;margin:3px;
+  border-radius:50%;background:var(--col);box-shadow:0 0 6px 2px var(--col);}
+.map-spot-dot::before{content:'';position:absolute;inset:-6px;border-radius:50%;
+  background:var(--col);opacity:.45;filter:blur(3px);
+  animation:map-spot-pulse-kf 1.8s ease-in-out infinite;}
+@keyframes map-spot-pulse-kf{
+  0%,100%{transform:scale(.6);opacity:.5;}
+  50%{transform:scale(1.4);opacity:.05;}
+}
 
 /* Leaflet dark theme overrides */
 .leaflet-container { background:#0d1117 !important; font-family:var(--font-mono); }

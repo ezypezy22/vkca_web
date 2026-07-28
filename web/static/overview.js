@@ -429,7 +429,7 @@
         data.map((_,i)=>i===pi?2:0);
       chart.update();
       const last=[...data].reverse().find(v=>v>0)||0;
-      const el=document.getElementById(heroId); if(el) el.textContent=last.toLocaleString('en-AU');
+      animateNumber(heroId,last);
     }
     apply(_sparks.qsos, sl.qsos,'sp-qsos-val');
     apply(_sparks.score,sl.running_score,'sp-score-val');
@@ -456,11 +456,25 @@
     } else if (state==='live') {
       const rem=Math.round(ss.total_remaining_mins??ss.remaining_mins??0);
       const pct=((ss.total_pct_elapsed??ss.pct_elapsed)||0).toFixed(0);
+      const valid=snap?.valid||0;
+      // Same "extrapolate current pace over remaining time" formula the
+      // Pace tab's own projected-score KPI uses (see pace.js's
+      // updateKPIs) — reusing it here rather than a different method (e.g.
+      // straight-line from % elapsed) so the two tabs never show two
+      // different "projected final score" numbers for the same contest.
+      let projLine='';
+      if (rem>0 && valid>0){
+        const curRate=snap?.personal_bests?.current_hour_rate||0;
+        const projQsos=valid+curRate*(rem/60);
+        const projScore=Math.round((sc/valid)*projQsos);
+        projLine=`<div class="ct-info" style="color:${T.muted}">Projected final: ~${projScore.toLocaleString('en-AU')} pts at current pace</div>`;
+      }
       body=`<div class="ct-label">${ss.session_label||''}</div>
         <div class="ct-prog-wrap"><div class="ct-prog-bar" style="width:${pct}%;background:${col}55;border-right:2px solid ${col}"></div></div>
         <div class="ct-sub" style="color:${col}">${rem}m remaining · ${pct}%</div>
         <div class="ct-score" style="color:${T.accent}">${(sc||0).toLocaleString('en-AU')}</div>
-        <div class="ct-sub">${snap?.valid||0} Q × ${snap?.band_mults||snap?.worked||0} mults</div>`;
+        <div class="ct-sub">${valid} Q × ${snap?.band_mults||snap?.worked||0} mults</div>
+        ${projLine}`;
     } else if (state==='pre') {
       // Log is loaded and may already have test/early QSOs, but the
       // contest's scheduled start (per the plugin's start_hour) hasn't
@@ -698,8 +712,18 @@
     const el=ip('panel-radio'); if(!el) return;
     const r=window.VKA.formatRadio(snap?.radio_info?.own);
     if (!r){
-      el.innerHTML=hdr('[ &asymp; ]',T.accent3,'RADIO')+
-        `<div style="color:${T.muted};font-size:0.85em;padding:8px 0">No radio connected — enable N1MM+'s RadioInfo broadcast (Config &gt; Config Ports &gt; Broadcast Data &gt; Radio) to show this.</div>`;
+      // bind_error means the listener never even started this session (most
+      // likely another process already had the UDP port) — a completely
+      // different problem from "N1MM+ just hasn't broadcast yet", and one no
+      // amount of checking N1MM+'s own settings will fix. Say so plainly
+      // instead of pointing at the generic broadcast-config hint, which
+      // sends the operator troubleshooting the wrong end.
+      const bindErr=snap?.radio_info?.bind_error;
+      const msg=bindErr
+        ? `⚠ ${escapeHtml(bindErr)}`
+        : `No radio connected — enable N1MM+'s RadioInfo broadcast (Config &gt; Config Ports &gt; Broadcast Data &gt; Radio) to show this.`;
+      el.innerHTML=hdr('[ &asymp; ]',bindErr?T.red:T.accent3,'RADIO')+
+        `<div style="color:${bindErr?T.red:T.muted};font-size:0.85em;padding:8px 0">${msg}</div>`;
       addPopoutButton(el);
       return;
     }
@@ -1352,24 +1376,26 @@
   // someone else's device, not a pywebview popout window).
 
   // Tweens a tile's number with the same ease-out cubic the Overview gauges
-  // use (see animGauge), and gives the tile a brief flash when the value
-  // has genuinely gone up — a spectator watching passively gets a clear
-  // "something just happened" cue instead of a silent number swap. The
-  // very first call for a given id just snaps to the value with no
-  // animation/flash — counting up from 0 on page load (a contest already
-  // hours in) would just be a slow, meaningless wait.
-  const _specNumState={};
-  function animateSpectatorNumber(id,target,opts){
+  // use (see animGauge). The very first call for a given id just snaps to
+  // the value with no animation — counting up from 0 on page load (a
+  // contest already hours in) would just be a slow, meaningless wait.
+  // Shared by the Spectator tiles (animateSpectatorNumber below) and the
+  // Overview spark-hero numbers (see updateSparklines' apply()); opts.onRise
+  // lets a caller add its own "value just went up" cue — the spectator
+  // tiles flash their own card, Overview's already gets that from
+  // checkCelebrations' gauge-row pulse, so it opts out.
+  const _numAnimState={};
+  function animateNumber(id,target,opts){
     const el=document.getElementById(id); if(!el) return;
     const fmt=(opts&&opts.fmt)||(n=>Math.round(n).toLocaleString('en-AU'));
     const suffix=(opts&&opts.suffix)||'';
-    let st=_specNumState[id];
+    let st=_numAnimState[id];
     if (!st){
-      st=_specNumState[id]={cur:target,raf:null};
+      st=_numAnimState[id]={cur:target,raf:null};
       el.textContent=fmt(target)+suffix;
       return;
     }
-    if (target>st.cur) flashEl(el.closest('.spectator-item'),'flash-new-qso',900);
+    if (target>st.cur && opts&&opts.onRise) opts.onRise(el);
     if (st.raf) cancelAnimationFrame(st.raf);
     const from=st.cur,t0=performance.now();
     function step(now){
@@ -1381,6 +1407,10 @@
       else{st.cur=target;st.raf=null;el.textContent=fmt(target)+suffix;}
     }
     st.raf=requestAnimationFrame(step);
+  }
+  function animateSpectatorNumber(id,target,opts){
+    animateNumber(id,target,Object.assign({},opts,
+      {onRise:el=>flashEl(el.closest('.spectator-item'),'flash-new-qso',900)}));
   }
 
   function updateSpectator(snap){
@@ -2201,6 +2231,52 @@
     }
   }
 
+  // ── Continuous-operator fatigue alert ────────────────────────────────
+  // Distinct from the Fatigue tab's own cross-session dead-zone/nap
+  // analysis (retrospective, and easy to forget to go check mid-run) —
+  // this watches whoever N1MM+ currently reports as the active operator
+  // (radio_info.own.op_call) and flags a long unbroken stretch while it's
+  // actually happening. Known narrow gap, same spirit as checkDeadAir's
+  // documented SO2R limitation above: the clock only resets when N1MM's
+  // active-operator field itself changes (or the broadcast goes stale
+  // entirely) — stepping away from the radio without changing that field
+  // in N1MM won't reset it, so a very long single-operator stretch that's
+  // actually had real breaks can still fire. Worth the false positive; the
+  // alternative (never checking) misses every genuine case too.
+  const OP_FATIGUE_THRESHOLD_MINS = 90;
+  let _opFatigueCall=null, _opFatigueClockStart=null, _opFatigueFired=false;
+
+  function resetOperatorFatigueTracking(){
+    _opFatigueCall=null; _opFatigueClockStart=null; _opFatigueFired=false;
+  }
+
+  function playOperatorFatigueSound(){
+    if (!_soundEnabled) return;
+    // Three low, unhurried descending tones — deliberately calmer than the
+    // dead-air/end-time alert pings; this is a wellbeing nudge, not an
+    // emergency.
+    beep(392,0,0.3,0.1); beep(349,0.35,0.3,0.1); beep(294,0.7,0.45,0.1);
+  }
+
+  function checkOperatorFatigue(snap){
+    const call = snap?.radio_info?.own?.op_call;
+    if (!call){ resetOperatorFatigueTracking(); return; }
+    if (call !== _opFatigueCall){
+      // Operator changed (or first sighting this session) — (re)start the clock.
+      _opFatigueCall=call; _opFatigueClockStart=Date.now(); _opFatigueFired=false;
+      return;
+    }
+    if (_opFatigueFired) return;
+    if ((Date.now()-_opFatigueClockStart)/60000 >= OP_FATIGUE_THRESHOLD_MINS){
+      _opFatigueFired = true;
+      const target = HUD_MODE ? document.getElementById('hud-bar')
+                               : document.getElementById('panel-fatigue');
+      flashEl(target,'flash-endtime',1400);
+      notifyOS('😴 Time for a break?', `${call} has been at the radio for ${OP_FATIGUE_THRESHOLD_MINS}+ min straight`);
+      playOperatorFatigueSound();
+    }
+  }
+
   // ══ MAIN ═══════════════════════════════════════════════════════════════════
   function render(snap){
     updateGauges(snap); updateSparklines(snap); updateRegionBars(snap);
@@ -2223,13 +2299,14 @@
     trackLastQso(e.detail);
     if (SPECTATOR_MODE) { updateSpectator(e.detail); return; }
     if (OPERATOR_HUD_MODE) { updateOperatorHud(e.detail); return; }
-    if (HUD_MODE) { updateHud(e.detail); trackHudSparklines(e.detail); checkCelebrations(e.detail); checkEndTimeAlert(e.detail); checkDeadAir(e.detail); return; }
+    if (HUD_MODE) { updateHud(e.detail); trackHudSparklines(e.detail); checkCelebrations(e.detail); checkEndTimeAlert(e.detail); checkDeadAir(e.detail); checkOperatorFatigue(e.detail); return; }
     if (_replaying) return;
     if(_firstSnap){_firstSnap=false;loadPluginMeta().then(()=>render(e.detail));}
     else render(e.detail);
     checkCelebrations(e.detail);
     checkEndTimeAlert(e.detail);
     checkDeadAir(e.detail);
+    checkOperatorFatigue(e.detail);
   });
   window.addEventListener('vka:tabchange',e=>{
     if(e.detail.tab!=='overview') return;
@@ -2237,9 +2314,9 @@
     const snap=window.VKA.lastSnap(); if(snap) render(snap);
   });
   window.addEventListener('vka:loaded',()=>{
-    _metaLoaded=false;_firstSnap=true;resetCelebrations();resetEndTimeAlerts();resetHudSparklines();resetDeadAirTracking();
+    _metaLoaded=false;_firstSnap=true;resetCelebrations();resetEndTimeAlerts();resetHudSparklines();resetDeadAirTracking();resetOperatorFatigueTracking();
     _seenOperators.clear();
-    for (const k in _specNumState) delete _specNumState[k];
+    for (const k in _numAnimState) delete _numAnimState[k];
     // panel-live-rank doesn't exist in either HUD window's DOM — polling
     // there just fires an unnecessary COSB-scraping request every load
     // (see issue #72).

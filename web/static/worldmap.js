@@ -113,6 +113,8 @@
   let _markerLayer  = null;
   let _shortLayer   = null;
   let _longLayer    = null;
+  let _spotLayer    = null;
+  let _terminatorLayer = null;
   let _homeMarker   = null;
   let _allData      = [];
   let _lastLoadAt   = 0;
@@ -120,6 +122,8 @@
   let _filterBand   = 'ALL';
   let _showShort    = true;
   let _showLong     = false;
+  let _showLiveSpots = true;
+  let _showGreyline  = true;
   let _currentBasemap = 'Dark (CartoDB)';
   // Base opacities for short/long-path arcs, chosen per basemap brightness
   // in switchBasemap() below — arcs need to be more opaque to stay visible
@@ -184,6 +188,109 @@
     return segs.filter(s=>s.length>1);
   }
 
+  // ── Day/night terminator (greyline) ──────────────────────────────────────
+  // Low-precision solar position (USNO approximation, good to ~0.01°, far
+  // more than a greyline overlay needs) — subsolar declination + right
+  // ascension, plus Greenwich sidereal time, give the local hour angle at
+  // any longitude and from that the latitude where the sun is exactly on
+  // the horizon (the terminator itself).
+  const D2R = Math.PI/180, R2D = 180/Math.PI;
+
+  function sunPosition(date) {
+    const n = date.getTime()/86400000 + 2440587.5 - 2451545.0;   // days since J2000.0
+    const L = ((280.460 + 0.9856474*n) % 360 + 360) % 360;
+    const g = ((357.528 + 0.9856003*n) % 360 + 360) % 360;
+    const lambda = L + 1.915*Math.sin(g*D2R) + 0.020*Math.sin(2*g*D2R);
+    const epsilon = 23.439 - 0.0000004*n;
+    const alpha = Math.atan2(Math.cos(epsilon*D2R)*Math.sin(lambda*D2R), Math.cos(lambda*D2R)) * R2D;
+    const delta = Math.asin(Math.sin(epsilon*D2R)*Math.sin(lambda*D2R)) * R2D;
+    const gmst  = ((280.46061837 + 360.98564736629*n) % 360 + 360) % 360;
+    return { rightAscension: ((alpha % 360)+360)%360, declination: delta, gmst };
+  }
+
+  // One terminator latitude per 2° of longitude, closed into a polygon
+  // around whichever pole is currently in full darkness — that polygon is
+  // the night hemisphere, shaded by the caller.
+  function terminatorLatLngs(date) {
+    const sun = sunPosition(date);
+    const coords = [];
+    for (let lon=-180; lon<=180; lon+=2) {
+      const H = (sun.gmst + lon - sun.rightAscension) * D2R;
+      const lat = Math.atan(-Math.cos(H) / Math.tan(sun.declination*D2R)) * R2D;
+      coords.push([lat, lon]);
+    }
+    const darkPoleLat = sun.declination >= 0 ? -90 : 90;
+    coords.push([darkPoleLat, 180]);
+    coords.push([darkPoleLat, -180]);
+    return coords;
+  }
+
+  let _terminatorTimer = null;
+  function updateTerminator() {
+    if (!_map) return;
+    const coords = terminatorLatLngs(new Date());
+    if (_terminatorLayer) {
+      _terminatorLayer.setLatLngs(coords);
+    } else {
+      _terminatorLayer = L.polygon(coords, {
+        stroke: false, fillColor: '#000', fillOpacity: 0.38,
+        interactive: false, renderer: _renderer,
+      });
+      if (_showGreyline) _terminatorLayer.addTo(_map);
+    }
+  }
+
+  // ── Live DX Cluster spots ─────────────────────────────────────────────────
+  // Plotted alongside worked QSOs, keyed by callsign+band so a station
+  // re-spotted on the same band updates in place instead of stacking
+  // duplicate markers. Pruned on a timer rather than per-spot since nothing
+  // else drives a redraw once the cluster feed goes quiet.
+  const LIVE_SPOT_MAX_AGE_MS = 15*60*1000;
+  const _liveSpotEntries = new Map();   // "CALL|BAND" -> {marker, receivedAt}
+
+  function liveSpotIcon(col) {
+    return L.divIcon({
+      className: 'map-spot-icon',
+      html: `<span class="map-spot-dot" style="--col:${col}"></span>`,
+      iconSize: [16,16], iconAnchor: [8,8],
+    });
+  }
+
+  function addLiveSpot(spot) {
+    if (spot.lat == null || spot.lon == null || !_spotLayer) return;
+    const band = (spot.band || '?').toUpperCase();
+    const key  = `${spot.dx}|${band}`;
+    let entry  = _liveSpotEntries.get(key);
+    if (entry) {
+      entry.receivedAt = Date.now();
+      entry.marker.setLatLng([spot.lat, spot.lon]);
+      return;
+    }
+    const col = BAND_COLS[band] || '#8b949e';
+    const marker = L.marker([spot.lat, spot.lon], { icon: liveSpotIcon(col) })
+      .bindTooltip(() => `
+        <div style="font-family:Consolas,monospace;font-size:11px;line-height:1.6">
+          <b style="color:${col}">${escapeHtml(spot.dx)}</b><br>
+          ${band.toLowerCase()} · ${spot.freq} kHz
+          ${spot.status === 'NEW_MULT' ? '<br><span style="color:#2ed573">✦ Needed mult</span>' : ''}
+        </div>`, { direction: 'top', offset: [0,-8] });
+    marker.addTo(_spotLayer);
+    _liveSpotEntries.set(key, { marker, receivedAt: Date.now() });
+  }
+
+  function pruneLiveSpots() {
+    if (!_spotLayer) return;
+    const cutoff = Date.now() - LIVE_SPOT_MAX_AGE_MS;
+    _liveSpotEntries.forEach((entry, key) => {
+      if (entry.receivedAt < cutoff) {
+        _spotLayer.removeLayer(entry.marker);
+        _liveSpotEntries.delete(key);
+      }
+    });
+  }
+  setInterval(pruneLiveSpots, 30000);
+  window.addEventListener('vka:cluster_spot', e => addLiveSpot(e.detail));
+
   // ── Map init ────────────────────────────────────────────────────────────────
   // At low zoom a single world copy (256*2^zoom px) is narrower than most
   // browser windows, so pick the smallest zoom whose world width covers the
@@ -245,9 +352,19 @@
       maxZoom: 16,
     }).addTo(_map);
 
+    // Created (and added, if enabled) before the arc/marker layers below so
+    // it paints underneath them on the shared canvas renderer — see
+    // updateTerminator()'s own comment for why add-order is what determines
+    // canvas paint order here, not a z-index.
+    updateTerminator();
+    if (_terminatorTimer) clearInterval(_terminatorTimer);
+    _terminatorTimer = setInterval(updateTerminator, 5*60*1000);
+
     _shortLayer  = L.layerGroup().addTo(_map);
     _longLayer   = L.layerGroup();
     _markerLayer = L.layerGroup().addTo(_map);
+    _spotLayer   = L.layerGroup();
+    if (_showLiveSpots) _spotLayer.addTo(_map);
 
     // Home marker at its real position
     _homeMarker = L.circleMarker([HOME[0], HOME[1]], {
@@ -280,10 +397,14 @@
       }).addTo(_map);
     }
 
-    // Bring data layers above tiles
+    // Bring data layers above tiles, terminator shading behind the rest of
+    // the vector layers (bringToBack is a real reorder for a Path like this,
+    // unlike the LayerGroup calls below which no-op — see their own history).
+    _terminatorLayer?.bringToBack?.();
     if (_shortLayer)  _shortLayer.bringToFront?.();
     if (_longLayer)   _longLayer.bringToFront?.();
     if (_markerLayer) _markerLayer.bringToFront?.();
+    if (_spotLayer)   _spotLayer.bringToFront?.();
 
     _currentBasemap = name;
 
@@ -516,6 +637,20 @@
       else _map.removeLayer(_longLayer);
     }
     render();
+  });
+
+  document.getElementById('map-toggle-livespots')?.addEventListener('change', e => {
+    _showLiveSpots = e.target.checked;
+    if (!_map || !_spotLayer) return;
+    if (_showLiveSpots) _map.addLayer(_spotLayer);
+    else _map.removeLayer(_spotLayer);
+  });
+
+  document.getElementById('map-toggle-greyline')?.addEventListener('change', e => {
+    _showGreyline = e.target.checked;
+    if (!_map || !_terminatorLayer) return;
+    if (_showGreyline) _terminatorLayer.addTo(_map);
+    else _map.removeLayer(_terminatorLayer);
   });
 
   // Basemap switcher

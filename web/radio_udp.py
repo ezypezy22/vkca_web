@@ -115,19 +115,32 @@ def run_radio_info_listener(
     pattern already used for QRZ worker updates.
     """
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    # Deliberately NOT SO_REUSEADDR: on Windows that flag lets a second
+    # socket bind this exact port without error, and incoming datagrams
+    # then get delivered to only one of the bound sockets — nondeterministically,
+    # and not necessarily this one. A stray second copy of this app (or a
+    # leftover dev/test process) could silently steal every RadioInfo packet
+    # this way, with nothing in the log to explain why the readout stayed
+    # empty (this happened for real — see issue where a killed-but-not-quite
+    # test server ate the live radio feed for an entire session). Without
+    # SO_REUSEADDR, that second bind attempt fails loudly instead, and UDP
+    # doesn't need it for the plain single-listener case anyway — there's no
+    # TIME_WAIT-style lingering state after close() the way TCP has.
     try:
         sock.bind(("0.0.0.0", port))
     except OSError as exc:
-        # Most likely another process (or another instance of this app) has
-        # the port already — this must not take down the whole app, the
-        # radio readout just silently stays empty.
-        log.warning("radio_udp: could not bind UDP port %d (%s) — live radio "
-                    "readout disabled for this session", port, exc)
+        msg = (f"Could not bind UDP port {port} ({exc}) — most likely another "
+               f"process (possibly another copy of this app) already has it. "
+               f"Live radio readout is disabled for this session.")
+        log.warning("radio_udp: %s", msg)
+        with state._lock:
+            state.radio_bind_error = msg
         sock.close()
         return
 
     sock.settimeout(1.0)
+    with state._lock:
+        state.radio_bind_error = None   # clear any stale warning from an earlier attempt this process
     log.info("Listening for N1MM+ RadioInfo broadcasts on 0.0.0.0:%d", port)
     try:
         while not stop_check():

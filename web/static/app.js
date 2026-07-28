@@ -495,10 +495,30 @@ Users are responsible for verifying all information against N1MM before making d
   // or N1MM+/the rig isn't running) rather than showing a confusing
   // placeholder in the titlebar's tight space.
   const radioBadge = document.getElementById('radio-freq-badge');
+  const _radioBadgeDefaultTitle = radioBadge?.title || '';
   function updateRadioBadge(d) {
     if (!radioBadge) return;
     const r = window.VKA.formatRadio(d && d.radio_info && d.radio_info.own);
-    if (!r) { radioBadge.classList.add('hidden'); return; }
+    if (!r) {
+      // bind_error (listener never started, almost always another process
+      // already holding the UDP port) gets a small always-visible warning
+      // instead of the usual fully-hidden "nothing broadcasting yet" state —
+      // that one's silent on purpose since it's the common/expected case
+      // before N1MM+'s even running; this one means the readout is broken
+      // for reasons N1MM+'s own settings can't fix, worth flagging up front.
+      const bindErr = d && d.radio_info && d.radio_info.bind_error;
+      if (bindErr) {
+        radioBadge.classList.remove('hidden');
+        radioBadge.title = bindErr;
+        radioBadge.innerHTML = `<span class="dot" style="background:var(--red);color:var(--red)"></span>` +
+          `<span style="color:var(--red)">⚠ Radio UDP port busy</span>`;
+      } else {
+        radioBadge.classList.add('hidden');
+        radioBadge.title = _radioBadgeDefaultTitle;
+      }
+      return;
+    }
+    radioBadge.title = _radioBadgeDefaultTitle;
     radioBadge.classList.remove('hidden');
     radioBadge.innerHTML =
       `<span class="dot" style="background:${r.bandColor};color:${r.bandColor}"></span>` +
@@ -539,6 +559,41 @@ Users are responsible for verifying all information against N1MM before making d
 
   window.VKA = window.VKA || {};
   window.VKA.lastSnap = () => _lastSnap;
+  // Exposed read-only for other tabs that want the same contest label the
+  // titlebar shows (e.g. report.js's score-card export) — snap._plugin_name
+  // isn't always populated (depends on the plugin), whereas this is set
+  // directly from whatever the user actually picked in the load dialog.
+  window.VKA.currentContestName = () => _currentContestName;
+
+  // ── Shared /api/qsos cache ─────────────────────────────────────────────
+  // Worked, Debug Mults, Dupes, and Rate's per-band chart each need the
+  // full per-QSO list, and each listens for vka:snapshot independently of
+  // which tab is actually visible — on a live snapshot tick with dupes
+  // present, 3+ of them could each fire their own full-log fetch within
+  // the same moment. A short-lived cache coalesces calls landing in the
+  // same window into one request; short enough that it never masks a
+  // genuinely new snapshot (QRZ enrichment landing, a new QSO) from the
+  // *next* tick roughly 1.5s later — this is about not repeating the SAME
+  // moment's fetch 3-4x, not about reducing how often the data refreshes.
+  const QSOS_CACHE_MS = 800;
+  let _qsosCache = null, _qsosCacheAt = 0, _qsosPromise = null;
+  function fetchQsos() {
+    const now = Date.now();
+    if (_qsosCache && now - _qsosCacheAt < QSOS_CACHE_MS) return Promise.resolve(_qsosCache);
+    if (_qsosPromise) return _qsosPromise;
+    _qsosPromise = fetch('/api/qsos').then(r => r.json()).then(data => {
+      _qsosCache = data; _qsosCacheAt = Date.now(); _qsosPromise = null;
+      return data;
+    }).catch(e => { _qsosPromise = null; throw e; });
+    return _qsosPromise;
+  }
+  function invalidateQsosCache() { _qsosCache = null; _qsosCacheAt = 0; }
+  window.VKA.fetchQsos = fetchQsos;
+  window.VKA.invalidateQsosCache = invalidateQsosCache;
+  // A delete (Worked tab) or a freshly loaded log must never serve the
+  // previous list from cache, even within the short TTL above.
+  window.addEventListener('vka:qsos_changed', invalidateQsosCache);
+  window.addEventListener('vka:loaded', invalidateQsosCache);
 
   // Canonical band->colour map, shared by every tab that draws a band-colored
   // chart/table (bands, cluster, dupes, overview, worldmap, worked, report).

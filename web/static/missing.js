@@ -66,7 +66,7 @@
       render();
     } catch (e) {
       if (gen !== _loadGeneration) return;
-      tbody.innerHTML = `<tr><td colspan="2" style="color:var(--red);padding:12px">
+      tbody.innerHTML = `<tr><td colspan="3" style="color:var(--red);padding:12px">
         Failed to load: ${e.message}</td></tr>`;
     }
   }
@@ -85,22 +85,43 @@
 
     tbody.innerHTML = '';
     if (!filtered.length) {
-      tbody.innerHTML = `<tr><td colspan="2" style="color:var(--muted);padding:12px;
+      tbody.innerHTML = `<tr><td colspan="3" style="color:var(--muted);padding:12px;
         font-style:italic">${_rows.length ? 'No matches' : 'All multipliers worked!'}</td></tr>`;
       return;
     }
+
+    // Cross-reference against the DX Cluster tab's own live spot list (see
+    // cluster.js's window.VKA.getRecentSpottedMults()) — turns this from a
+    // static checklist into "this one's actionable right now" without a
+    // second network fetch, since cluster.js already keeps the spot list
+    // client-side.
+    const spotted = window.VKA?.getRecentSpottedMults?.() || {};
 
     const frag = document.createDocumentFragment();
     filtered.forEach((r, i) => {
       const tr = document.createElement('tr');
       const col = STATE_COLS[r.region] || 'var(--muted)';
+      const spot = spotted[r.mult];
+      const ageMin = spot ? Math.max(0, Math.round((Date.now() - spot._receivedAt) / 60000)) : null;
+      const spotCell = spot
+        ? `<span class="badge" style="color:var(--green);border:1px solid var(--green);background:rgba(46,213,115,.12)"
+             title="Spotted by ${window.VKA.escapeHtml(spot.spotter||'?')} on ${spot.freq} kHz">
+             📡 ${spot.band} · ${ageMin===0?'just now':ageMin+'m ago'}</span>`
+        : '';
       tr.innerHTML = `
         <td style="color:${col};font-weight:bold">${r.mult}</td>
-        <td style="color:${col}">${r.region || '—'}</td>`;
+        <td style="color:${col}">${r.region || '—'}</td>
+        <td>${spotCell}</td>`;
       frag.appendChild(tr);
     });
     tbody.appendChild(frag);
   }
+
+  // A new NEW_MULT spot lands independently of the snapshot stream (it
+  // comes over the DX Cluster tab's own WebSocket) — re-render so a
+  // "spotted" badge can appear without waiting for the next QSO/snapshot
+  // tick. Cheap: re-renders from the already-fetched _rows, no new fetch.
+  window.addEventListener('vka:cluster_spot', () => { if (_rows.length) render(); });
 
   filter?.addEventListener('input', render);
 

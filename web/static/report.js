@@ -50,6 +50,8 @@
     _liveReady = enabled;
     const btn = document.getElementById('report-export-btn');
     if (btn) btn.disabled = !enabled;
+    const scBtn = document.getElementById('report-scorecard-btn');
+    if (scBtn) scBtn.disabled = !enabled;
   }
 
   function isTabActive() {
@@ -77,6 +79,7 @@
       renderScoreChart(snap);
       renderBandSection(snap.band_efficiency || [], snap.missing || 0);
       renderRegionTable(snap.region_heat || []);
+      renderOperatorSection(snap.operator_times || []);
       const dupes = await fetch('/api/dupes').then(r => r.json());
       // A new log may have loaded while the fetch above was in flight —
       // applying this response now would overwrite the new log's state with
@@ -381,6 +384,38 @@
       '<tr><td colspan="4" style="color:var(--muted);padding:10px">No regional data for this contest.</td></tr>');
   }
 
+  // ── Per-operator breakdown (multi-op logs) — same operator_times the
+  // Fatigue tab's cards and the Operator HUD already draw from, just
+  // summarised as one report row per operator instead of a live card.
+  // Single-operator logs get exactly one row, which is fine — no separate
+  // "hide if solo" branch needed.
+  function operatorRows(ops) {
+    return [...(ops || [])]
+      .sort((a, b) => (b.qsos || 0) - (a.qsos || 0))
+      .map(op => {
+        const onHrs = (op.on_minutes || 0) / 60;
+        const rate  = onHrs > 0 ? ((op.qsos || 0) / onHrs).toFixed(1) : '—';
+        const onPct = op.span_minutes > 0 ? ((op.on_minutes || 0) / op.span_minutes * 100).toFixed(0) + '%' : '—';
+        return [
+          escapeHtml(op.operator || '—'), (op.qsos || 0).toLocaleString(),
+          onHrs.toFixed(1) + 'h', rate, onPct,
+        ];
+      });
+  }
+
+  function renderOperatorSection(ops) {
+    const wrap  = document.getElementById('report-operators-wrap');
+    const tbody = document.getElementById('report-operators-tbody');
+    if (!wrap) return;
+    // Solo-operator logs don't need this section repeating what the KPI
+    // row above already says — only show it once there's an actual
+    // multi-op breakdown to compare.
+    if (!ops || ops.length < 2) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+    renderRowsToTbody(tbody, operatorRows(ops),
+      '<tr><td colspan="5" style="color:var(--muted);padding:10px">No operator data for this contest.</td></tr>');
+  }
+
   // ── Pace vs goal & year-on-year comparison ───────────────────────────────
   function buildInsightParts(yoy, pace, snap) {
     const series = yoy?.series || [];
@@ -472,6 +507,12 @@
     return buildTable(['Year','Contest','Score','QSOs','Mults'], rows);
   }
 
+  function exportOperatorTable(snap) {
+    const ops = snap.operator_times || [];
+    if (ops.length < 2) return '';   // solo-op — same "not worth repeating" call as renderOperatorSection
+    return buildTable(['Operator','QSOs','On Air','Q/hr On Air','On-Air %'], operatorRows(ops));
+  }
+
   async function exportReport() {
     const btn = document.getElementById('report-export-btn');
     if (btn) { btn.disabled = true; btn.textContent = '⬇ …'; }
@@ -506,6 +547,7 @@
               text-transform:uppercase;letter-spacing:.06em">${label}</div>
         </div>`).join('');
 
+      const operatorHtml = exportOperatorTable(snap);
       const missingText = computeMissingSummary(snap.missing || 0);
       const insightText = buildInsightParts(_lastYoy, _lastPace, snap).join('   ') || 'No comparison data available yet.';
       const generated    = document.getElementById('report-generated')?.textContent || '';
@@ -541,6 +583,7 @@
   ${exportDupesTable(_lastDupes)}
   <h2>Top Worked Regions</h2>
   ${exportRegionTable(snap)}
+  ${operatorHtml ? `<h2>Per-Operator Breakdown</h2>${operatorHtml}` : ''}
   <h2>Pace vs Goal &amp; Year-on-Year</h2>
   ${exportYoyTable(_lastYoy) || '<p class="meta">Load reference logs in the Pace or Year-on-Year tab to enable goal/history comparison.</p>'}
   <div class="meta">${escapeHtml(insightText)}</div>
@@ -559,7 +602,90 @@
     }
   }
 
+  // ── Shareable score-card PNG — a single self-contained image (not a DOM
+  // screenshot) sized for posting to a club forum/social media, since
+  // nothing else in the app produces something meant to leave the app as a
+  // standalone visual rather than data. Drawn directly on a canvas rather
+  // than html2canvas-ing a report panel: full control over layout at a
+  // fixed shareable resolution regardless of the window's actual size.
+  async function exportScoreCard() {
+    const btn = document.getElementById('report-scorecard-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '🖼 …'; }
+    try {
+      const snap = window.VKA.lastSnap();
+      if (!hasLog(snap)) throw new Error('No report data loaded yet.');
+
+      const W = 1200, H = 630;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      // Background + accent corner glow
+      ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+      const glow = ctx.createRadialGradient(W, 0, 0, W, 0, 700);
+      glow.addColorStop(0, C.accent + '26'); glow.addColorStop(1, C.accent + '00');
+      ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = C.accent; ctx.lineWidth = 3;
+      ctx.strokeRect(1.5, 1.5, W - 3, H - 3);
+
+      const contestName = window.VKA.currentContestName?.() || snap._plugin_name || 'Contest';
+      const operator = (snap.operator_times || [])[0]?.operator || '';
+      const dateStr = new Date().toLocaleDateString('en-AU', { year: 'numeric', month: 'long', day: 'numeric' });
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = C.muted;
+      ctx.font = '600 26px Consolas, monospace';
+      ctx.fillText('VK CONTEST ANALYZER', W / 2, 70);
+
+      ctx.fillStyle = C.fg;
+      ctx.font = 'bold 40px Consolas, monospace';
+      ctx.fillText(String(contestName).toUpperCase(), W / 2, 130);
+
+      if (operator) {
+        ctx.fillStyle = C.accent2;
+        ctx.font = 'bold 30px Consolas, monospace';
+        ctx.fillText(operator, W / 2, 175);
+      }
+
+      ctx.fillStyle = C.accent;
+      ctx.font = 'bold 150px Consolas, monospace';
+      ctx.fillText((snap.score || 0).toLocaleString(), W / 2, 350);
+      ctx.fillStyle = C.muted;
+      ctx.font = '600 22px Consolas, monospace';
+      ctx.fillText('FINAL SCORE', W / 2, 390);
+
+      const stats = [
+        [(snap.valid || 0).toLocaleString(), 'QSOs'],
+        [(snap.worked || 0).toLocaleString(), 'MULTS'],
+        [String((snap.personal_bests || {}).best_hour_rate || 0), 'BEST Q/HR'],
+      ];
+      const statW = W / stats.length;
+      stats.forEach(([val, label], i) => {
+        const cx = statW * i + statW / 2;
+        ctx.fillStyle = C.accent3;
+        ctx.font = 'bold 48px Consolas, monospace';
+        ctx.fillText(val, cx, 480);
+        ctx.fillStyle = C.muted;
+        ctx.font = '600 18px Consolas, monospace';
+        ctx.fillText(label, cx, 510);
+      });
+
+      ctx.fillStyle = C.muted;
+      ctx.font = '20px Consolas, monospace';
+      ctx.fillText(dateStr, W / 2, 590);
+
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      const fname = `vkcontest_scorecard_${new Date().toISOString().slice(0,10)}.png`;
+      await window.VKA.downloadBlob(blob, fname, '✓ Score Card Saved', '🖼');
+      if (btn) { btn.textContent = '✓'; setTimeout(() => { btn.textContent = '🖼 Score Card (PNG)'; btn.disabled = !_liveReady; }, 2000); }
+    } catch (err) {
+      window.VKA?.showToast?.('Score Card Failed', err.message, '✗', true);
+      if (btn) { btn.textContent = '🖼 Score Card (PNG)'; btn.disabled = !_liveReady; }
+    }
+  }
+
   document.getElementById('report-export-btn')?.addEventListener('click', exportReport);
+  document.getElementById('report-scorecard-btn')?.addEventListener('click', exportScoreCard);
 
   // Cheap live update on every snapshot tick (only while the tab is visible).
   window.addEventListener('vka:snapshot', e => { if (isTabActive()) updateLive(e.detail); });

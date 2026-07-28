@@ -38,6 +38,35 @@
 
     updateChart(labels, effic, colours, qsos, mults, be);
     updateTable(be, colours, totalScore);
+    renderBandAdvice();   // re-apply the row highlight against the just-rebuilt table immediately…
+    refreshBandAdvice();  // …then kick off a fresh fetch in case the recommendation has since changed
+  }
+
+  // ── "Best band right now" advisory — same /api/band_advice the Pace tab
+  // already surfaces (see pace.js's refreshBandAdvice), just also shown
+  // here where the rest of the per-band comparison already lives, so you
+  // don't have to flip tabs to see it next to the efficiency numbers it's
+  // based on.
+  let _bandAdvice = null, _bandAdviceFetching = false;
+  async function refreshBandAdvice() {
+    if (_bandAdviceFetching) return;
+    _bandAdviceFetching = true;
+    try {
+      const r = await fetch('/api/band_advice');
+      _bandAdvice = await r.json();
+    } catch (e) { /* keep stale value */ }
+    _bandAdviceFetching = false;
+    renderBandAdvice();
+  }
+  function renderBandAdvice() {
+    const el = document.getElementById('bands-advice');
+    if (!el) return;
+    if (!_bandAdvice || !_bandAdvice.recommended_band) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    el.textContent = `💡 Best band right now: ${_bandAdvice.recommended_band} — ${_bandAdvice.reason}`;
+    document.querySelectorAll('#bands-tbody tr').forEach(tr => {
+      tr.classList.toggle('band-advice-pick', tr.dataset.band === _bandAdvice.recommended_band);
+    });
   }
 
   function updateChart(labels, effic, colours, qsos, mults, be) {
@@ -173,6 +202,7 @@
       const effTitle   = lowSample ? ` title="Only ${r.qsos || 0} QSO${r.qsos===1?'':'s'} so far — too few to trust this ratio yet"` : '';
 
       const tr = document.createElement('tr');
+      tr.dataset.band = r.band;
       tr.style.background = rowBg;
       tr.style.borderLeft = `2px solid ${rowBorder}`;
       tr.innerHTML = `

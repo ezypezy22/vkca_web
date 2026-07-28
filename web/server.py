@@ -235,6 +235,13 @@ class AppState:
         # everything else shared across threads in this class.
         self.radio_info:    dict                  = {}
         self._radio_last_broadcast: float         = 0.0
+        # Set by radio_udp.run_radio_info_listener() if it couldn't bind its
+        # UDP port at all (most likely cause: another process — including a
+        # leftover/second copy of this app — already has it). Surfaced in the
+        # UI instead of just logging it, since an empty radio readout with no
+        # explanation otherwise looks identical to "N1MM+ just isn't
+        # broadcasting yet" and sends the operator chasing the wrong fix.
+        self.radio_bind_error: Optional[str]      = None
         # Enrich All batch progress — reset by _qrz_enrich_all() to the size
         # of that batch, then _qrz_batch_remaining counts down as the worker
         # finishes each item (see _qrz_worker_loop). The same worker/queue
@@ -392,7 +399,7 @@ class AppState:
     def _own_and_all_radios(self) -> dict:
         """Must be called with self._lock already held (same convention as
         _enrich_qsos — see its own comment). Returns
-        {"own": <entry>|None, "all": {key: entry, ...}}:
+        {"own": <entry>|None, "all": {key: entry, ...}, "bind_error": str|None}:
           - "all" is every radio seen recently, live and stale alike — the
             Operator HUD needs the full set to match against every
             operator's own callsign, including a since-gone-stale one it
@@ -419,7 +426,7 @@ class AppState:
             pool = active or candidates
             own = min(pool, key=lambda v: v.get("radio_nr", "1"))
 
-        return {"own": own, "all": dict(self.radio_info)}
+        return {"own": own, "all": dict(self.radio_info), "bind_error": self.radio_bind_error}
 
     # ── QRZ.com lookup enrichment ─────────────────────────────────────────────
     # Called with self._lock already held (see load_db()/poll_once() above) —
@@ -1728,6 +1735,16 @@ def _yoy_build_trajectory(cl: "ContestLog") -> Optional[dict]:
             cum_score[-1] = plugin.running_score_for_sparkline(acc)
             cum_mults[-1] = len(seen_mults)
 
+    # Per-band QSO mix — lets the Year-on-Year tab show whether this year's
+    # band strategy (e.g. mostly 20m/15m vs. spread across 40/20/15/10) has
+    # shifted from prior years, alongside the score/QSO/mult trajectories
+    # above. Built off `valid` (every QSO, not just the once-per-hour
+    # `acc` snapshots) so it's an exact final tally, not a bucket sample.
+    band_counts: dict = {}
+    for q in valid:
+        b = (q.get("band") or "?").upper()
+        band_counts[b] = band_counts.get(b, 0) + 1
+
     return {
         "elapsed_hrs":     elapsed_hrs,
         "utc_hrs":         utc_hrs,
@@ -1741,6 +1758,7 @@ def _yoy_build_trajectory(cl: "ContestLog") -> Optional[dict]:
         "final_score":     cum_score[-1] if cum_score else 0,
         "final_qsos":      cum_qsos[-1]  if cum_qsos  else 0,
         "final_mults":     cum_mults[-1] if cum_mults else 0,
+        "final_band_counts": band_counts,
         "total_hrs":       total_hrs,
     }
 
@@ -2707,6 +2725,11 @@ async def ws_cluster(ws: WebSocket):
                         dx_call = m.group(3)
                         comment = m.group(4).strip()
                         status, mult_val, region = _classify_spot(dx_call, freq, comment)
+                        # Best-effort prefix lookup (same table map_data uses for
+                        # worked stations) — lets the World Map plot live spots
+                        # alongside worked QSOs. None for anything unresolvable
+                        # (odd/nonstandard calls) rather than a wrong guess.
+                        latlon = _call_to_latlon(dx_call)
                         msg = {
                             "type":    "spot",
                             "spotter": m.group(1),
@@ -2719,6 +2742,8 @@ async def ws_cluster(ws: WebSocket):
                             "status":  status,
                             "mult":    mult_val,
                             "region":  region,
+                            "lat":     latlon[0] if latlon else None,
+                            "lon":     latlon[1] if latlon else None,
                         }
                     await ws.send_text(json.dumps(msg))
             except Exception:

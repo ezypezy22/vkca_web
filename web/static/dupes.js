@@ -42,10 +42,21 @@
       if (total === 0) {
         // Clean log — show positive message
         renderCleanLog(byBand, byCall);
+        const trendWrap = document.getElementById('dupes-trend-wrap');
+        if (trendWrap) trendWrap.style.display = 'none';
       } else {
         renderBandChart(byBand);
         renderCallTable(byCall);
-        renderDupeQsos(gen);
+        // Shared cache (see app.js's window.VKA.fetchQsos) — renderDupeQsos
+        // (the raw dupe-QSO list) and renderDupeTrend (the hourly trend
+        // below) both just need per-QSO dupe/time/band, and Worked/Debug/
+        // Rate may well have already fetched the same data this tick.
+        try {
+          const qsos = await window.VKA.fetchQsos();
+          if (gen !== _loadGeneration) return;
+          renderDupeQsos(qsos);
+          renderDupeTrend(qsos);
+        } catch {}
       }
     } catch(e) {
       if (gen !== _loadGeneration) return;
@@ -174,37 +185,92 @@
   }
 
   // Show the actual dupe QSOs in a separate table
-  async function renderDupeQsos(gen) {
+  function renderDupeQsos(qsos) {
     const wrap = document.getElementById('dupes-qso-wrap');
     if (!wrap) return;
-    try {
-      const res  = await fetch('/api/qsos');
-      const qsos = await res.json();
-      if (gen !== _loadGeneration) return;
-      const dupes = qsos.filter(q => q.dupe);
-      if (!dupes.length) { wrap.style.display='none'; return; }
-      wrap.style.display = '';
+    const dupes = qsos.filter(q => q.dupe);
+    if (!dupes.length) { wrap.style.display='none'; return; }
+    wrap.style.display = '';
 
-      const tbody = document.getElementById('dupes-qso-tbody');
-      if (!tbody) return;
-      tbody.innerHTML = '';
-      const frag = document.createDocumentFragment();
-      dupes.slice(0, 200).forEach(q => {
-        const band = (q.band||'').toUpperCase();
-        const col  = BAND_COLS[band]||C.muted;
-        const tr   = document.createElement('tr');
-        tr.style.opacity = '0.75';
-        tr.innerHTML = `
-          <td style="color:var(--accent2);font-weight:bold">${escapeHtml(q.call||'—')}</td>
-          <td style="color:${col}">${band.toLowerCase()}</td>
-          <td>${q.mode||'—'}</td>
-          <td style="color:var(--muted);font-size:0.85em">${String(q.time||'').substring(0,19).replace('T',' ')} UTC</td>
-          <td style="color:${col}">${escapeHtml(q.mult1||'—')}</td>
-          <td style="color:var(--muted);font-size:0.85em">${q.dupe_reason||'Duplicate contact'}</td>`;
-        frag.appendChild(tr);
-      });
-      tbody.appendChild(frag);
-    } catch {}
+    const tbody = document.getElementById('dupes-qso-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    dupes.slice(0, 200).forEach(q => {
+      const band = (q.band||'').toUpperCase();
+      const col  = BAND_COLS[band]||C.muted;
+      const tr   = document.createElement('tr');
+      tr.style.opacity = '0.75';
+      tr.innerHTML = `
+        <td style="color:var(--accent2);font-weight:bold">${escapeHtml(q.call||'—')}</td>
+        <td style="color:${col}">${band.toLowerCase()}</td>
+        <td>${q.mode||'—'}</td>
+        <td style="color:var(--muted);font-size:0.85em">${String(q.time||'').substring(0,19).replace('T',' ')} UTC</td>
+        <td style="color:${col}">${escapeHtml(q.mult1||'—')}</td>
+        <td style="color:var(--muted);font-size:0.85em">${q.dupe_reason||'Duplicate contact'}</td>`;
+      frag.appendChild(tr);
+    });
+    tbody.appendChild(frag);
+  }
+
+  // ── Dupe-rate trend — is the dupe rate climbing late in the contest?
+  // (a soft fatigue signal: tired ops re-call stations already worked more
+  // often). Hourly dupe count as a % of that hour's total contacts, same
+  // hour-bucketing convention (naive-UTC ISO string truncated to the hour)
+  // as rate.js's per-band chart above.
+  let trendChart = null;
+  function renderDupeTrend(qsos) {
+    const wrap = document.getElementById('dupes-trend-wrap');
+    const canvas = document.getElementById('chart-dupes-trend');
+    if (!wrap || !canvas) return;
+    const totalByHour = {}, dupeByHour = {};
+    qsos.forEach(q => {
+      if (!q.time) return;
+      const h = String(q.time).substring(0, 13);
+      totalByHour[h] = (totalByHour[h] || 0) + 1;
+      if (q.dupe) dupeByHour[h] = (dupeByHour[h] || 0) + 1;
+    });
+    const hours = Object.keys(totalByHour).sort();
+    if (!hours.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+
+    const labels = hours.map(h => h.substring(11, 13) + ':00');
+    const pctData = hours.map(h => (dupeByHour[h] || 0) / totalByHour[h] * 100);
+    const countData = hours.map(h => dupeByHour[h] || 0);
+
+    if (trendChart) {
+      trendChart.data.labels = labels;
+      trendChart.data.datasets[0].data = pctData;
+      trendChart.update();
+      return;
+    }
+
+    trendChart = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: { labels, datasets: [{
+        label: 'Dupe rate', data: pctData,
+        borderColor: C.accent2, backgroundColor: C.accent2 + '22',
+        fill: true, tension: 0.25, pointRadius: 2, pointBackgroundColor: C.accent2,
+      }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: 500, easing: 'easeOutQuart' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: C.bg3, bodyColor: C.fg, titleColor: C.accent2, borderWidth: 1,
+            callbacks: {
+              title: i => `Hour ${i[0].label}`,
+              label: i => ` ${i.raw.toFixed(1)}% (${countData[i.dataIndex]} dupes)`,
+            },
+          },
+        },
+        scales: {
+          x: { ticks:{color:C.muted,font:{size:9},maxRotation:45}, grid:{display:false} },
+          y: { ticks:{color:C.muted,font:{size:9},callback:v=>v+'%'}, grid:{color:C.bg3+'80'}, beginAtZero:true },
+        },
+      },
+    });
   }
 
   window.addEventListener('vka:snapshot', load);
