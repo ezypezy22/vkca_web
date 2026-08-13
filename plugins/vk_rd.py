@@ -60,7 +60,7 @@ _NIGHT_UTC_END   = 20   # 20:00 UTC (exclusive)
 _VK_RD_WORKABLE_PREFIXES = frozenset({
     "VK", "VH", "VI", "VJ", "VL", "VM", "VN", "VZ",
     "AX",
-    "ZK", "ZL", "ZM",
+    "ZL", "ZM",
     "P2",
 })
 
@@ -80,6 +80,16 @@ def _vkrd_band_pts(band: str) -> int:
         return 0
     if b in _TWO_PT_BANDS:
         return 2
+    # contest_log.py's _freq_to_band() has no named entries above 2m, so a
+    # numeric-frequency-encoded 23cm+ contact (e.g. Band column = "1296")
+    # comes through as a raw "1296.00MHz" string instead of "23CM" — without
+    # this fallback it would silently miss _TWO_PT_BANDS and score as 1pt.
+    if b.endswith("MHZ"):
+        try:
+            if float(b[:-3]) >= 1296.0:
+                return 2
+        except ValueError:
+            pass
     return 1
 
 
