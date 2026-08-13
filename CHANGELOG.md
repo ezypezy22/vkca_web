@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.7.24
+
+### Bugfixes
+
+3e3799b Remove ZK (Cook Islands/Niue) from VK Remembrance Day's workable-station list and fix 23cm+ contacts silently scoring as 1pt instead of 2pt when the source log encodes band as a raw frequency number
+
 ## 26.7.23
 
 ### Enhancements
