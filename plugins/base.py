@@ -182,6 +182,31 @@ class ContestPlugin(ABC):
         contests like ARRL 10M)."""
         return "A station may be worked once per band. Dupes score 0 pts and are not penalised."
 
+    # Hours after which a station may legitimately be worked again on the
+    # same band/mode, for contests whose dupe rule is a rolling per-QSO
+    # timer (e.g. WIA Remembrance Day: "not less than 3 hours between
+    # contacts on same band and mode") rather than a plain once-per-band-
+    # ever rule. None (the default) means no such rule applies.
+    #
+    # Distinct from session_config()'s block structure: that describes
+    # fixed progress/scoring periods shared by every station (used for the
+    # contest-wide countdown shown elsewhere in the app), not a per-
+    # contact reuse timer. The Worked tab's "reworkable in" countdown
+    # reads this field, not session_config(), to avoid exactly the
+    # confusion this replaced — the old countdown reused session_config()
+    # for every contest, showing e.g. "Next Block In 2h 27m" identically
+    # for every QSO regardless of when THAT specific contact happened,
+    # which is meaningless for a rolling per-contact rule like RD's.
+    rework_window_hours: Optional[float] = None
+
+    # The CONTEST: identifier a Cabrillo submission for this contest
+    # expects (the sponsor-defined ID, not this app's own display_name —
+    # e.g. RD's official UDC names it "WIA-Remembrance"). None means no
+    # known ID; the Cabrillo export dialog leaves that field blank/
+    # editable rather than guessing wrong and producing an unsubmittable
+    # file with a plausible-looking but incorrect contest ID.
+    cabrillo_contest_id: Optional[str] = None
+
     def post_snapshot(self, snap: dict, qsos: list) -> None:
         """
         Called by ContestLog.compute_snapshot() after the standard calculation.

@@ -242,6 +242,13 @@ class AppState:
         # explanation otherwise looks identical to "N1MM+ just isn't
         # broadcasting yet" and sends the operator chasing the wrong fix.
         self.radio_bind_error: Optional[str]      = None
+        # Set by _start_radio_listener() so a Settings-triggered port change
+        # can stop the currently-running listener thread before starting a
+        # new one on the new port — see that function for why a per-restart
+        # stop signal is needed rather than reusing _shutting_down (that one
+        # means "whole app is closing", not "just this one listener thread").
+        self._radio_listener_thread                = None   # threading.Thread
+        self._radio_listener_stop                  = None   # threading.Event
         # Enrich All batch progress — reset by _qrz_enrich_all() to the size
         # of that batch, then _qrz_batch_remaining counts down as the worker
         # finishes each item (see _qrz_worker_loop). The same worker/queue
@@ -646,22 +653,49 @@ def _qrz_worker_loop():
             time.sleep(1.0)  # politeness delay between requests
 
 
-@asynccontextmanager
-async def lifespan(application: FastAPI):
-    STATE._main_loop = asyncio.get_running_loop()
-    creds = _load_settings().get("qrz_credentials")
-    if creds:
-        STATE._qrz_client.set_credentials(creds.get("username"), creds.get("password"))
-    threading.Thread(target=_qrz_worker_loop, daemon=True, name="qrz-worker").start()
+def _start_radio_listener(port: int):
+    """(Re)starts the N1MM+ RadioInfo UDP listener on `port`. Safe to call
+    while one is already running (a Settings-triggered port change): signals
+    the current thread to stop and waits briefly for it to release the old
+    socket before binding the new one, so the two never overlap and briefly
+    fight over which one owns the port. Runs blocking I/O (thread join) —
+    call via run_in_executor from async handlers, same as the settings
+    read-modify-write helpers.
+    """
+    old_thread = STATE._radio_listener_thread
+    if old_thread and old_thread.is_alive():
+        STATE._radio_listener_stop.set()
+        old_thread.join(timeout=2.0)   # loop polls stop_check ~1x/sec (socket timeout)
+
+    with STATE._lock:
+        STATE.radio_info = {}   # stale entries from the old port would otherwise
+                                 # linger and look like a still-live readout
+    stop_event = threading.Event()
+    STATE._radio_listener_stop = stop_event
     # _freq_to_band_str is passed in rather than imported by radio_udp.py,
     # which deliberately doesn't import anything from this module (it's
     # imported BY this module to start this thread — importing back would
     # be circular). See radio_udp.py's own module docstring.
-    threading.Thread(
+    t = threading.Thread(
         target=radio_udp.run_radio_info_listener,
-        args=(STATE, _freq_to_band_str, lambda: STATE._shutting_down, _radio_info_maybe_broadcast),
+        args=(STATE, _freq_to_band_str,
+              lambda: STATE._shutting_down or stop_event.is_set(),
+              _radio_info_maybe_broadcast, port),
         daemon=True, name="n1mm-udp-listener",
-    ).start()
+    )
+    STATE._radio_listener_thread = t
+    t.start()
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    STATE._main_loop = asyncio.get_running_loop()
+    settings = _load_settings()
+    creds = settings.get("qrz_credentials")
+    if creds:
+        STATE._qrz_client.set_credentials(creds.get("username"), creds.get("password"))
+    threading.Thread(target=_qrz_worker_loop, daemon=True, name="qrz-worker").start()
+    _start_radio_listener(settings.get("radio_port") or radio_udp.DEFAULT_PORT)
     asyncio.create_task(_poll_loop())
     yield
 
@@ -887,6 +921,47 @@ async def api_remove_log_dir(body: dict):
     dirs = await asyncio.get_event_loop().run_in_executor(
         None, _settings_read_modify_write, _mutate)
     return {"ok": True, "dirs": dirs}
+
+
+# ── Radio Setup (N1MM+ RadioInfo UDP listener port) ───────────────────────────
+# Default is 12060, matching N1MM+'s own Config → Configure Ports →
+# Broadcast Data → Radio default — but that's a well-known enough port that
+# other ham radio software sometimes binds it for an unrelated feature (e.g.
+# SmartSDR's "Focus Helper" defaults to the same 12060). Letting the user
+# move this app's own listener elsewhere gives them a way out without
+# needing to touch the other program at all — they just also repoint N1MM+'s
+# own broadcast port to match.
+
+@app.get("/api/settings/radio_port")
+async def api_radio_port_get():
+    port = _load_settings().get("radio_port") or radio_udp.DEFAULT_PORT
+    with STATE._lock:
+        bind_error = STATE.radio_bind_error
+    return {"port": port, "default_port": radio_udp.DEFAULT_PORT, "bind_error": bind_error}
+
+
+@app.post("/api/settings/radio_port")
+async def api_radio_port_post(body: dict):
+    try:
+        port = int(body.get("port"))
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "Port must be a number."}, status_code=400)
+    if not (1 <= port <= 65535):
+        return JSONResponse({"error": "Port must be between 1 and 65535."}, status_code=400)
+
+    def _mutate(settings):
+        settings["radio_port"] = port
+
+    await asyncio.get_event_loop().run_in_executor(
+        None, _settings_read_modify_write, _mutate)
+    await asyncio.get_event_loop().run_in_executor(None, _start_radio_listener, port)
+    # run_radio_info_listener()'s bind() attempt happens synchronously at the
+    # very start of the thread — this just gives it a moment to actually run
+    # before reading back whether it succeeded.
+    await asyncio.sleep(0.3)
+    with STATE._lock:
+        bind_error = STATE.radio_bind_error
+    return {"ok": True, "port": port, "bind_error": bind_error}
 
 
 # ── QRZ.com lookup settings ───────────────────────────────────────────────────
@@ -2469,6 +2544,16 @@ async def api_plugin_meta():
     - display_name: plugin display name
     - bands: ordered list of bands this contest's rules allow, for the
       "What if?" band dropdown (see ContestPlugin.band_list())
+    - rework_window_hours: hours before a station may be reworked on the
+      same band/mode, for contests with a rolling per-contact dupe timer
+      instead of a fixed operating-block schedule — null if N/A (see
+      ContestPlugin.rework_window_hours). Drives the Worked tab's
+      "Time Left to Work" vs "Next Block In" countdown column.
+    - cabrillo_contest_id: sponsor-defined CONTEST: id for a Cabrillo
+      submission — null if unknown (see ContestPlugin.cabrillo_contest_id).
+    - my_call: the logging station's own callsign, read from the log's
+      Station table — null if unavailable. Both feed the Cabrillo export
+      dialog's pre-filled fields.
     """
     if not STATE.contest_log:
         return {"loaded": False}
@@ -2509,6 +2594,9 @@ async def api_plugin_meta():
         "uses_cq_zone_scoring": getattr(p, "uses_cq_zone_scoring", lambda: False)(),
         "gauge_defs":       gauge_list,
         "bands":            getattr(p, "band_list", lambda: [])(),
+        "rework_window_hours": getattr(p, "rework_window_hours", None),
+        "cabrillo_contest_id": getattr(p, "cabrillo_contest_id", None),
+        "my_call":          getattr(STATE.contest_log, "my_call", None),
     }
 
 

@@ -305,6 +305,16 @@ class ContestLog:
         m2_col    = col(["IsMultiplier2","ismultiplier2"])
         op_col    = col(["Operator","operator","OPERATOR"])
         continent_col = col(["Continent","continent","CONTINENT"])
+        # RST sent/received — not used by scoring for any current plugin
+        # (hence never captured before), but required on every line of a
+        # Cabrillo submission. N1MM stores these as plain SNT/RCV; "RCV"
+        # deliberately isn't reused as an exchange-column candidate here
+        # even though mult_col above also checks it as a last resort for
+        # loggers with no dedicated exchange column — for a logger that
+        # actually has both, RST and exchange are different values and
+        # this is the RST-specific read.
+        rst_sent_col = col(["SNT","snt","RSTSent","rstsent"])
+        rst_rcvd_col = col(["RCV","rcv","RSTRcvd","rstrcvd"])
 
         logging.info(
             "Using columns: call=%s band=%s freq=%s mode=%s time=%s "
@@ -315,7 +325,8 @@ class ContestLog:
 
         sel_cols = [call_col, band_col, freq_col, mode_col, time_col,
                     mult_col, zone_col, m1_col, m2_col,
-                    dupe_col, pts_col, id_col, op_col, continent_col]
+                    dupe_col, pts_col, id_col, op_col, continent_col,
+                    rst_sent_col, rst_rcvd_col]
         sel_cols += sect_pref_cols
         sel_cols = [cn for cn in sel_cols if cn]
         seen = set(); sel_cols_dedup = []
@@ -586,6 +597,11 @@ class ContestLog:
             continent = str(d.get(continent_col) or "").strip().upper() \
                 if continent_col else ""
 
+            # ── RST + raw frequency (Cabrillo export only) ──────────────────
+            rst_sent = str(d.get(rst_sent_col) or "").strip() if rst_sent_col else ""
+            rst_rcvd = str(d.get(rst_rcvd_col) or "").strip() if rst_rcvd_col else ""
+            raw_freq = d.get(freq_col) if freq_col else None
+
             if call and t:
                 _dupe_is_heuristic.append(dupe_is_heuristic)
                 self.qsos.append({
@@ -614,6 +630,9 @@ class ContestLog:
                     "qso_id":      str(d.get(id_col) or "") if id_col else "",
                     "operator":    operator,
                     "continent":   continent,
+                    "rst_sent":    rst_sent,
+                    "rst_rcvd":    rst_rcvd,
+                    "freq":        raw_freq,
                     "_table":      target,
                     # Populated asynchronously by web/server.py's QRZ lookup
                     # worker — never set here, ContestLog stays network-free.

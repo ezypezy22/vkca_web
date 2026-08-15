@@ -93,7 +93,7 @@ Users are responsible for verifying all information against N1MM before making d
   ctx.fillStyle='#8b949e'; ctx.font='13px Consolas,monospace';
   ctx.fillText('by VK2YI', W/2, 178);
   ctx.fillStyle='#00d4aa'; ctx.font='bold 13px Consolas,monospace';
-  ctx.fillText('v26.8.1', W/2, 202);
+  ctx.fillText('v26.8.2', W/2, 202);
 
   // ── Progress bar animation ─────────────────────────────────────────────────
   const bar = document.getElementById('splash-bar');
@@ -496,6 +496,12 @@ Users are responsible for verifying all information against N1MM before making d
   // placeholder in the titlebar's tight space.
   const radioBadge = document.getElementById('radio-freq-badge');
   const _radioBadgeDefaultTitle = radioBadge?.title || '';
+  // Jumps straight to the port field that fixes the most common cause of
+  // this badge showing up at all (another program already holding the
+  // port — see settings.js's Radio Setup tab) — one click from "why is
+  // this broken" to the actual fix, instead of hunting through Settings.
+  radioBadge?.addEventListener('click', () => window.VKA?.openSettings?.('radio'));
+  if (radioBadge) radioBadge.style.cursor = 'pointer';
   function updateRadioBadge(d) {
     if (!radioBadge) return;
     const r = window.VKA.formatRadio(d && d.radio_info && d.radio_info.own);

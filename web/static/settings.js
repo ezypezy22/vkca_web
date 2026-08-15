@@ -29,18 +29,23 @@
   // would fire spurious handlers elsewhere in the app.
   const stepQrz     = document.getElementById('settings-step-qrz');
   const stepLogDirs = document.getElementById('settings-step-logdirs');
+  const stepRadio   = document.getElementById('settings-step-radio');
   const tabQrz      = document.getElementById('settings-tab-qrz');
   const tabLogDirs  = document.getElementById('settings-tab-logdirs');
+  const tabRadio    = document.getElementById('settings-tab-radio');
   const footerQrz   = document.getElementById('settings-footer-qrz');
 
   function showSettingsStep(step) {
     stepQrz?.classList.toggle('hidden', step !== 'qrz');
     stepLogDirs?.classList.toggle('hidden', step !== 'logdirs');
+    stepRadio?.classList.toggle('hidden', step !== 'radio');
     tabQrz?.classList.toggle('active', step === 'qrz');
     tabLogDirs?.classList.toggle('active', step === 'logdirs');
+    tabRadio?.classList.toggle('active', step === 'radio');
     footerQrz?.classList.toggle('hidden', step !== 'qrz');
     if (step === 'qrz') { refreshStatus(); pollTick(); }
     else if (step === 'logdirs') { loadLogDirs(); }
+    else if (step === 'radio') { loadRadioPort(); }
   }
 
   function openSettings(step) {
@@ -53,6 +58,7 @@
 
   tabQrz?.addEventListener('click', () => showSettingsStep('qrz'));
   tabLogDirs?.addEventListener('click', () => showSettingsStep('logdirs'));
+  tabRadio?.addEventListener('click', () => showSettingsStep('radio'));
   btnOpen.addEventListener('click', () => openSettings('qrz'));
   document.getElementById('btn-settings-close')?.addEventListener('click', closeSettings);
 
@@ -307,5 +313,62 @@
       if (data.path)  { addFolderInput.value = data.path; folderError.classList.add('hidden'); }
     } catch(e) { showFolderError(`Browse failed: ${e.message}`); }
     finally { btnBrowseFolder.disabled=false; btnBrowseFolder.textContent='📁'; }
+  });
+
+  // ── Radio Setup (N1MM+ RadioInfo UDP listener port) ─────────────────────
+  const radioPortInput  = document.getElementById('radio-port-input');
+  const radioPortError  = document.getElementById('radio-port-error');
+  const radioPortStatus = document.getElementById('radio-port-status');
+  const btnRadioSave    = document.getElementById('btn-radio-port-save');
+
+  function setRadioPortStatus(port, bindError) {
+    if (!radioPortStatus) return;
+    radioPortStatus.textContent = bindError
+      ? `⚠ ${bindError}`
+      : `✓ Listening on port ${port}.`;
+    radioPortStatus.style.color = bindError ? 'var(--red)' : 'var(--green)';
+  }
+
+  async function loadRadioPort() {
+    if (!radioPortInput) return;
+    try {
+      const res  = await fetch('/api/settings/radio_port');
+      const data = await res.json();
+      radioPortInput.value = data.port;
+      setRadioPortStatus(data.port, data.bind_error);
+    } catch (e) { console.warn('loadRadioPort failed:', e); }
+  }
+
+  btnRadioSave?.addEventListener('click', async () => {
+    radioPortError.classList.add('hidden');
+    const port = parseInt(radioPortInput.value, 10);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      radioPortError.textContent = 'Enter a port number between 1 and 65535.';
+      radioPortError.classList.remove('hidden');
+      return;
+    }
+    btnRadioSave.disabled = true;
+    try {
+      const res  = await fetch('/api/settings/radio_port', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({port}),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        radioPortError.textContent = data.error || 'Failed to save port.';
+        radioPortError.classList.remove('hidden');
+        return;
+      }
+      setRadioPortStatus(data.port, data.bind_error);
+      if (!data.bind_error) {
+        window.VKA?.showToast?.('Radio port updated',
+          `Now listening on ${data.port} — remember to also update N1MM+'s own Broadcast Data → Radio port to match.`, '📡');
+      }
+    } catch (e) {
+      radioPortError.textContent = `Save failed: ${e.message}`;
+      radioPortError.classList.remove('hidden');
+    } finally {
+      btnRadioSave.disabled = false;
+    }
   });
 })();

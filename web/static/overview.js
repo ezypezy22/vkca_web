@@ -52,6 +52,17 @@
     Chart.defaults.color = T.muted;
     // Rebuild charts that exist
     if (regionChart) { regionChart.destroy(); regionChart = null; }
+    // bandDonutChart's per-tick update (updateBandDonut()) intentionally
+    // skips a full rebuild when the set of worked bands hasn't changed,
+    // to stop it re-animating on every snapshot poll — but that fast path
+    // only refreshes slice values/colours, not the chart's borderColor or
+    // legend text colour baked in at creation time. Without forcing a
+    // rebuild here, a theme switch leaves the donut's slice borders and
+    // legend stuck on the *previous* theme's colours (e.g. near-black
+    // dividers surviving into Light theme) even though every other panel
+    // switches instantly.
+    if (bandDonutChart) { bandDonutChart.destroy(); bandDonutChart = null; _bandDonutShape=''; }
+    applyGlowMapTheme();
     if (_snap) render(_snap);
     redrawAll();
   }
@@ -909,9 +920,59 @@
     const el=document.getElementById('glow-map-container'); if(!el) return;
     _glowMap.invalidateSize();
     const w=el.clientWidth||900;
-    const fitZoom=Math.max(0,Math.min(8,Math.log2(w/256)));
-    _glowMap.setZoom(fitZoom);
+    // The +0.004 is deliberate, not a stray magic number: an exact fit
+    // (world pixel width == container width, centered at lon 0 so the
+    // viewport's left edge should land exactly on the world's own left
+    // edge) leaves zero floating-point margin — a sub-pixel rounding
+    // error in Leaflet's own pixel-bounds math can tip that edge just
+    // negative, requesting an out-of-range tile column (x:-1), observed
+    // reliably after a tile layer swap (applyGlowMapTheme()). Zooming in
+    // a hair beyond exact-fit makes the world very slightly *larger* than
+    // the container instead of exactly equal, so that edge sits safely
+    // inside world bounds instead of balanced on the boundary — a few px
+    // of imperceptible overfit versus a visible missing edge tile.
+    const fitZoom=Math.max(0,Math.min(8,Math.log2(w/256)+0.004));
     _glowMap.setView([10,0],fitZoom,{animate:false});
+  }
+
+  // NASA GIBS VIIRS "Earth at Night" city-lights composite for dark themes
+  // — the real imagery the original mockup is a crop of, not a hand-
+  // rolled recreation of it. Note the {z}/{y}/{x} order (GIBS WMTS REST
+  // path segments are TileMatrix/TileRow/TileCol, i.e. z/y/x, not the
+  // usual slippy-map z/x/y). Light theme swaps to CartoDB's Positron —
+  // the same soft light-gray basemap style the rest of Light theme's
+  // panels use, since a vivid night-lights image (or a daytime true-
+  // colour satellite image, the closest "real imagery" equivalent) reads
+  // as visually loud/high-contrast against Light theme's soft, pastel UI.
+  const GLOW_TILE_DARK ='https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg';
+  const GLOW_TILE_LIGHT='https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+  let _glowTileLayer=null;
+
+  // Perceptual luminance of the panel background, not a hardcoded theme
+  // name check — robust to any future theme addition without needing to
+  // list it here. Only "Light" is currently bright; Dark/High Contrast/
+  // both colorblind-safe variants are all near-black backgrounds.
+  function isLightTheme(){
+    const hex=(T.bg2||'#161b22').replace('#','');
+    const r=parseInt(hex.substr(0,2),16), g=parseInt(hex.substr(2,2),16), b=parseInt(hex.substr(4,2),16);
+    return (0.299*r+0.587*g+0.114*b)/255 > 0.6;
+  }
+  function applyGlowMapTheme(){
+    if(!_glowMap) return;
+    const light=isLightTheme();
+    if(_glowTileLayer){ _glowMap.removeLayer(_glowTileLayer); _glowTileLayer=null; }
+    _glowTileLayer=light
+      ? L.tileLayer(GLOW_TILE_LIGHT,{subdomains:'abcd',maxZoom:19,minZoom:0,noWrap:true,attribution:'CARTO'})
+      : L.tileLayer(GLOW_TILE_DARK,{maxZoom:8,minZoom:0,noWrap:true,attribution:'NASA GIBS'});
+    _glowTileLayer.addTo(_glowMap);
+    // Re-fit (not just re-add) after a layer swap on an already-live map
+    // at a fractional zoom (zoomSnap:0) — observed requesting an out-of-
+    // range tile column (x:-1) for the new layer without this, a stale-
+    // internal-state symptom of the same kind fitGlowMapBounds() already
+    // guards against on resize/tab-visibility changes elsewhere; an
+    // explicit setView() forces Leaflet to fully recompute the tile grid
+    // against the new layer instead of reusing whatever it last computed.
+    fitGlowMapBounds();
   }
 
   function initGlowMap(){
@@ -923,14 +984,7 @@
       touchZoom:false,scrollWheelZoom:false,doubleClickZoom:false,
       boxZoom:false,keyboard:false,worldCopyJump:false,
     });
-    // NASA GIBS VIIRS "Earth at Night" city-lights composite — the real
-    // imagery the reference mockup is a crop of, not a hand-rolled
-    // recreation of it. Note the {z}/{y}/{x} order (GIBS WMTS REST path
-    // segments are TileMatrix/TileRow/TileCol, i.e. z/y/x, not the usual
-    // slippy-map z/x/y).
-    L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg',{
-      maxZoom:8,minZoom:0,noWrap:true,attribution:'NASA GIBS',
-    }).addTo(_glowMap);
+    applyGlowMapTheme();
     _glowMarkerLayer=L.layerGroup().addTo(_glowMap);
     fitGlowMapBounds();
     // A plain window 'resize' listener only catches the browser window

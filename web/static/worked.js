@@ -1,9 +1,21 @@
 /**
  * worked.js — Full QSO log (all worked, not just last 5)
  * Paginated with filter for performance on large logs.
- * Adds the old desktop app's "Block" / live-ticking "Next Block In" countdown
- * (which operating block this QSO falls in, and when the current block ends)
- * plus multi-select delete.
+ * Adds the old desktop app's "Block" / live-ticking countdown column, plus
+ * multi-select delete.
+ *
+ * The countdown means one of two different things depending on the
+ * contest, and shows accordingly:
+ *   - Most contests: a fixed operating-block schedule (session_config()) —
+ *     "Next Block In", same countdown for every QSO in the same block.
+ *   - Contests with a rolling per-contact re-work rule instead (e.g. WIA
+ *     Remembrance Day's "not less than 3 hours between contacts on the
+ *     same band/mode" — see ContestPlugin.rework_window_hours) — "Time
+ *     Left to Work", each row counting down independently from ITS OWN
+ *     QSO time, not a shared block boundary. Showing the block-schedule
+ *     countdown for a contest that has no actual blocks (as this used to,
+ *     unconditionally) read as flatly wrong: every row showed the same
+ *     countdown regardless of when that specific contact happened.
  */
 ;(function () {
   'use strict';
@@ -21,6 +33,10 @@
   let _contestStart = null;   // Date
   let _durationMins = null;
   let _labelPrefix  = 'B';
+  // Rework-window config, pulled from /api/plugin_meta (see
+  // ContestPlugin.rework_window_hours) — null means this contest uses the
+  // block schedule above instead.
+  let _reworkWindowHours = null;
 
   const tbody       = document.getElementById('worked-tbody');
   const countEl     = document.getElementById('worked-count');
@@ -32,6 +48,9 @@
   const selectAllChk  = document.getElementById('worked-select-all');
   const exportCsvBtn  = document.getElementById('worked-export-csv-btn');
   const exportAdifBtn = document.getElementById('worked-export-adif-btn');
+  const thBlock       = document.getElementById('worked-th-block');
+  const thCountdown   = document.getElementById('worked-th-countdown');
+  const countdownHint = document.getElementById('worked-countdown-hint');
 
   function fmt(isoStr) {
     if (!isoStr) return '—';
@@ -55,14 +74,81 @@
     _labelPrefix  = ss.label_prefix || 'B';
   }
 
-  function blockInfo(qsoTimeIso) {
-    if (!_contestStart || !_durationMins || !qsoTimeIso) return null;
+  async function readPluginMeta() {
+    try {
+      const res  = await fetch('/api/plugin_meta');
+      const meta = await res.json();
+      _reworkWindowHours = meta.loaded ? (meta.rework_window_hours || null) : null;
+    } catch { _reworkWindowHours = null; }
+    if (thBlock)     thBlock.style.display = _reworkWindowHours ? 'none' : '';
+    if (thCountdown) thCountdown.textContent = _reworkWindowHours ? 'Time Left to Work' : 'Next Block In';
+    if (countdownHint) countdownHint.textContent = _reworkWindowHours
+      ? `— Time Left to Work = when this station's own ${_reworkWindowHours}h rework window ends`
+      : '— Next Block In = when this operating block ends';
+  }
+
+  // Per-QSO "next workable" info — either this row's own rework-window
+  // deadline (its own QSO time + rework_window_hours, independent of
+  // every other row) or the shared block boundary it falls in, whichever
+  // this contest uses (see the file header comment for why these differ).
+  function countdownInfo(qsoTimeIso) {
+    if (!qsoTimeIso) return null;
     const t = new Date(qsoTimeIso+'Z');   // server times are naive UTC
+    if (_reworkWindowHours) {
+      return { label: null, end: new Date(t.getTime() + _reworkWindowHours * 3600000) };
+    }
+    if (!_contestStart || !_durationMins) return null;
     const elapsedMins = (t - _contestStart) / 60000;
     if (elapsedMins < 0) return null;
     const bn = Math.floor(elapsedMins / _durationMins);
-    const blockEnd = new Date(_contestStart.getTime() + (bn + 1) * _durationMins * 60000);
-    return { label: `${_labelPrefix}${bn + 1}`, blockEnd };
+    const end = new Date(_contestStart.getTime() + (bn + 1) * _durationMins * 60000);
+    return { label: `${_labelPrefix}${bn + 1}`, end };
+  }
+
+  // Mode bucket for grouping rework-window contacts — mirrors
+  // plugins/vk_rd.py's _vkrd_dupe_mode_key() ("CW and RTTY count as one
+  // mode; SSB and FM count as one mode"). Only meaningful in rework-
+  // window mode; block-mode contests don't group rows at all.
+  function reworkModeKey(mode) {
+    const m = (mode || '').toUpperCase();
+    return (m === 'CW' || m.includes('RTTY') || m.includes('FSK')) ? 'CW_DIGITAL' : 'PHONE';
+  }
+
+  // Stamps every loaded QSO with its countdown target as a plain number
+  // (q._countdownAt, ms epoch) so the click-to-sort column (applySort())
+  // can compare it like any other field — sorting by "time left" is the
+  // same ordering as sorting by this absolute deadline, since "now" is a
+  // constant offset shared by every row at sort time.
+  //
+  // In rework-window mode specifically, only the most recent *valid*
+  // (non-dupe) contact per (call, band, mode-group) gets a real countdown.
+  // Two things get filtered out of contention here, not just one:
+  //   - An older contact superseded by a later one already had its own
+  //     rework window exercised, so showing "Workable" on it reads as if
+  //     that opportunity is still outstanding when it's actually done.
+  //   - A too-early rework attempt (q.dupe) is itself invalid — it never
+  //     legitimately reset anything, so it can't be treated as "the
+  //     current state" either (matches plugins/vk_rd.py recalc_pts()'s
+  //     own prev_valid_time, which skips dupe rows for the same reason).
+  // Both cases render as "—" instead.
+  function annotateCountdowns() {
+    let latest = null;
+    if (_reworkWindowHours) {
+      latest = new Map();   // group key -> most recent non-dupe QSO in it
+      _allQsos.forEach(q => {
+        if (!q.time || q.dupe) return;
+        const key = `${(q.call||'').toUpperCase()}|${(q.band||'').toUpperCase()}|${reworkModeKey(q.mode)}`;
+        const cur = latest.get(key);
+        if (!cur || new Date(q.time+'Z') > new Date(cur.time+'Z')) latest.set(key, q);
+      });
+      latest = new Set(latest.values());
+    }
+    _allQsos.forEach(q => {
+      const ci = countdownInfo(q.time);
+      const show = ci && (!latest || latest.has(q));
+      q._countdownAt    = show ? ci.end.getTime() : null;
+      q._countdownLabel = ci ? ci.label : null;
+    });
   }
 
   // Bumped on every load() call so an older, slower-to-resolve fetch can't
@@ -71,13 +157,22 @@
   // _loadGeneration pattern (see issue #64).
   let _loadGeneration = 0;
 
+  // Fetched at most once per loaded contest (reset on vka:loaded below) —
+  // load() itself runs on every snapshot poll, and rework_window_hours
+  // can't change without a contest switch, so re-fetching it every few
+  // seconds would just be wasted requests.
+  let _metaLoaded = false;
+  window.addEventListener('vka:loaded', () => { _metaLoaded = false; });
+
   async function load() {
     const gen = ++_loadGeneration;
     readSessionConfig();
+    if (!_metaLoaded) { _metaLoaded = true; await readPluginMeta(); }
     try {
       const data = await window.VKA.fetchQsos();
       if (gen !== _loadGeneration) return;
       _allQsos  = data;
+      annotateCountdowns();
       _page     = 0;
       applyFilter();
     } catch(e) {
@@ -100,12 +195,13 @@
     render();
   }
 
-  // Click-to-sort column headers — numeric columns (pts) compare as
-  // numbers, everything else (including time, an ISO string, which sorts
-  // correctly as text) compares case-insensitively as text.
+  // Click-to-sort column headers — numeric columns (pts, the countdown's
+  // underlying ms-epoch deadline) compare as numbers, everything else
+  // (including time, an ISO string, which sorts correctly as text)
+  // compares case-insensitively as text.
   function applySort() {
     if (!_sortCol) return;
-    const col = _sortCol, dir = _sortDir, numeric = col === 'pts';
+    const col = _sortCol, dir = _sortDir, numeric = col === 'pts' || col === '_countdownAt';
     _filtered = [..._filtered].sort((a, b) => {
       let av = a[col], bv = b[col];
       if (numeric) { av = av || 0; bv = bv || 0; return (av - bv) * dir; }
@@ -157,13 +253,18 @@
     if (nextBtn)  nextBtn.disabled     = _page >= pages - 1;
     if (selectAllChk) selectAllChk.checked = false;
 
+    // Matches thBlock's own display:none toggle in readPluginMeta() — kept
+    // as a hidden <td> rather than omitted entirely, so every row still
+    // has the same cell count/positions as the header regardless of mode.
+    const blockTdStyle = _reworkWindowHours ? 'display:none' : 'color:var(--accent3)';
+
     tbody.innerHTML = '';
     const frag = document.createDocumentFragment();
     slice.forEach(q => {
       const band = (q.band||'').toUpperCase();
       const col  = BAND_COLS[band] || 'var(--muted)';
       const isDupe = q.dupe ? '✗' : '';
-      const bi = blockInfo(q.time);
+      const endIso = q._countdownAt ? new Date(q._countdownAt).toISOString() : '';
       const tr   = document.createElement('tr');
       if (q.dupe) tr.style.opacity = '0.4';
       tr.innerHTML = `
@@ -177,8 +278,8 @@
         <td>${renderQrzCell(q.qrz_grid,  q.qrz_status)}</td>
         <td>${renderQrzCell(q.qrz_state, q.qrz_status)}</td>
         <td style="color:var(--muted);font-size:0.85em">${fmt(q.time)}</td>
-        <td style="color:var(--accent3)">${bi ? bi.label : '—'}</td>
-        <td class="worked-countdown" data-block-end="${bi ? bi.blockEnd.toISOString() : ''}" style="font-size:0.85em">${bi ? fmtRemaining(bi.blockEnd - new Date()) : '—'}</td>
+        <td style="${blockTdStyle}">${q._countdownLabel || '—'}</td>
+        <td class="worked-countdown" data-block-end="${endIso}" style="font-size:0.85em">${q._countdownAt ? fmtRemaining(q._countdownAt - Date.now()) : '—'}</td>
         <td style="color:var(--red);font-size:0.85em">${isDupe}</td>`;
       frag.appendChild(tr);
     });

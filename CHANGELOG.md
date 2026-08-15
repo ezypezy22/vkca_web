@@ -1,5 +1,23 @@
 # Changelog
 
+## 26.8.2
+
+### Enhancements
+
+46d8ca6 Replace Overview's abstract DXCC map with real NASA night-lights imagery, theme-aware (light basemap in Light theme), fit exactly to the panel with zero dead space at any window width
+46d8ca6 Add a Tips dialog next to the Postcontest Report header listing every rotating corner-hint tip in one place
+46d8ca6 Thicken the QSOs-by-band donut ring, enlarge its center total, and give the panel an accent-toned glow instead of a flat background
+01dd3ad Add hover tooltips (callsign, country, band, QSO count, mult) and a band-color legend directly on the DXCC map
+Add Cabrillo log export to the Worked tab, including RST/frequency capture the app never tracked before, since it wasn't needed for scoring
+Add independent 3-hour rolling dupe-window scoring for WIA Remembrance Day, computed from actual QSO timestamps rather than trusting N1MM's own dupe flag, which can't express a rolling re-open window (only permanent-dupe or no-check-at-all)
+Add a "Time Left to Work" per-QSO countdown to Worked for contests with a rolling dupe window (RD), replacing the generic block countdown that showed the same value for every row regardless of when that contact happened; older rows superseded by a later contact show "—" instead of a stale "Workable"
+
+### Bugfixes
+
+01dd3ad Fix Leaflet tooltips rendering with a default white background instead of the app's dark theme, caused by leaflet.min.css loading after style.css in the page — also fixes the same latent issue on the World Map tab
+Fix the QSOs-by-band donut keeping stale border/legend colours after a theme switch when the set of worked bands hadn't changed
+Fix WIA Remembrance Day silently falling back to the generic plugin when N1MM's contest-name string used a hyphen or space instead of an underscore
+
 ## 26.8.1
 
 ### Bugfixes

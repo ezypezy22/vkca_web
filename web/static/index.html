@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VK Contest Analyzer v26.8.1</title>
+<title>VK Contest Analyzer v26.8.2</title>
 <!-- Leaflet's own CSS first, so style.css's dark-theme overrides for
      .leaflet-tooltip/.leaflet-popup/etc. (equal specificity, single class
      selectors) win the cascade by load order — it was previously linked
@@ -46,7 +46,7 @@
   <!-- Row 1: identity + primary action -->
   <div id="tb-row1">
     <div id="titlebar-logo" class="pywebview-drag-region">⬡</div>
-    <div id="titlebar-title" class="pywebview-drag-region">VK CONTEST ANALYZER <span style="color:var(--muted);font-size:0.75em">v26.8.1</span></div>
+    <div id="titlebar-title" class="pywebview-drag-region">VK CONTEST ANALYZER <span style="color:var(--muted);font-size:0.75em">v26.8.2</span></div>
     <div id="titlebar-status" class="pywebview-drag-region">
       <span id="status-dot" class="dot dot--disconnected"></span>
       <span id="status-text">No log loaded</span>
@@ -1016,10 +1016,11 @@
     <div class="panel-header">
       <span style="color:var(--accent3)">●</span> ALL WORKED QSOs
       <span class="badge" id="worked-count">0</span>
-      <span style="color:var(--muted);font-size:0.77em;margin-left:6px">— Next Block In = when this operating block ends</span>
+      <span id="worked-countdown-hint" style="color:var(--muted);font-size:0.77em;margin-left:6px">— Next Block In = when this operating block ends</span>
       <input id="worked-filter" class="filter-input" placeholder="Filter call, band, mode…" type="text">
       <button id="worked-export-csv-btn" class="btn btn--ghost btn--sm" style="margin-left:8px">⬇ CSV</button>
       <button id="worked-export-adif-btn" class="btn btn--ghost btn--sm">⬇ ADIF</button>
+      <button id="worked-export-cabrillo-btn" class="btn btn--ghost btn--sm">⬇ Cabrillo</button>
       <button id="worked-delete-btn" class="btn btn--ghost btn--sm" style="margin-left:8px;color:var(--red);border-color:var(--red)" disabled>🗑 Delete Selected</button>
       <div style="margin-left:8px;display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:0.77em">
         <button id="worked-prev" class="btn btn--ghost btn--sm" disabled>‹ Prev</button>
@@ -1040,7 +1041,7 @@
           <th class="sortable-th" data-sort="qrz_grid">Grid</th>
           <th class="sortable-th" data-sort="qrz_state">State</th>
           <th class="sortable-th" data-sort="time">Time (UTC)</th>
-          <th>Block</th><th>Next Block In</th><th>Dupe</th>
+          <th id="worked-th-block">Block</th><th id="worked-th-countdown" class="sortable-th" data-sort="_countdownAt">Next Block In</th><th>Dupe</th>
         </tr></thead>
         <tbody id="worked-tbody"></tbody>
       </table>
@@ -1219,6 +1220,106 @@
   </div>
 </div>
 
+<!-- ── Cabrillo export dialog ─────────────────────────────────────────────── -->
+<div id="cabrillo-dialog" class="dialog-overlay hidden">
+  <div class="dialog dialog--wide">
+    <div class="dialog-title">⬇ Export Cabrillo Log</div>
+    <div class="dialog-body dialog-body--scroll">
+      <div class="dialog-hint" id="cabrillo-hint">Fields left blank are omitted from the file — fill in whatever your submission requires.</div>
+
+      <div class="dialog-section-label">Contest &amp; callsign</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="dialog-label">Contest ID</label>
+          <input id="cab-contest-id" class="dialog-input" type="text" placeholder="e.g. WIA-Remembrance"></div>
+        <div><label class="dialog-label">Callsign</label>
+          <input id="cab-callsign" class="dialog-input" type="text"></div>
+      </div>
+
+      <div class="dialog-section-label" style="margin-top:12px">Category</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div><label class="dialog-label">Operator</label>
+          <select id="cab-cat-operator" class="dialog-input">
+            <option value="SINGLE-OP">Single-Op</option>
+            <option value="MULTI-OP">Multi-Op</option>
+            <option value="CHECKLOG">Checklog</option>
+          </select></div>
+        <div><label class="dialog-label">Power</label>
+          <select id="cab-cat-power" class="dialog-input">
+            <option value="HIGH">High</option>
+            <option value="LOW">Low</option>
+            <option value="QRP">QRP</option>
+          </select></div>
+        <div><label class="dialog-label">Assisted</label>
+          <select id="cab-cat-assisted" class="dialog-input">
+            <option value="NON-ASSISTED">Non-Assisted</option>
+            <option value="ASSISTED">Assisted</option>
+          </select></div>
+        <div><label class="dialog-label">Band</label>
+          <select id="cab-cat-band" class="dialog-input">
+            <option value="ALL">All</option>
+            <option value="160M">160m</option><option value="80M">80m</option>
+            <option value="40M">40m</option><option value="20M">20m</option>
+            <option value="15M">15m</option><option value="10M">10m</option>
+            <option value="6M">6m</option><option value="2M">2m</option>
+          </select></div>
+        <div><label class="dialog-label">Mode</label>
+          <select id="cab-cat-mode" class="dialog-input">
+            <option value="MIXED">Mixed</option>
+            <option value="SSB">SSB</option><option value="CW">CW</option>
+            <option value="RTTY">RTTY</option><option value="DIGI">Digital</option>
+          </select></div>
+        <div><label class="dialog-label">Station</label>
+          <select id="cab-cat-station" class="dialog-input">
+            <option value="FIXED">Fixed</option>
+            <option value="PORTABLE">Portable</option>
+            <option value="MOBILE">Mobile</option>
+            <option value="ROVER">Rover</option>
+            <option value="EXPEDITION">Expedition</option>
+          </select></div>
+      </div>
+
+      <div class="dialog-section-label" style="margin-top:12px">Exchange &amp; score</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="dialog-label">Sent exchange (same for every QSO)</label>
+          <input id="cab-sent-exch" class="dialog-input" type="text" placeholder="e.g. 006"></div>
+        <div><label class="dialog-label">Claimed score</label>
+          <input id="cab-claimed-score" class="dialog-input" type="text"></div>
+      </div>
+
+      <div class="dialog-section-label" style="margin-top:12px">Operator info (optional)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="dialog-label">Name</label>
+          <input id="cab-name" class="dialog-input" type="text"></div>
+        <div><label class="dialog-label">Club</label>
+          <input id="cab-club" class="dialog-input" type="text"></div>
+        <div><label class="dialog-label">Email</label>
+          <input id="cab-email" class="dialog-input" type="text"></div>
+        <div><label class="dialog-label">Operators (space-separated)</label>
+          <input id="cab-operators" class="dialog-input" type="text"></div>
+        <div><label class="dialog-label">Address</label>
+          <input id="cab-address" class="dialog-input" type="text"></div>
+        <div><label class="dialog-label">City</label>
+          <input id="cab-city" class="dialog-input" type="text"></div>
+        <div><label class="dialog-label">State/Province</label>
+          <input id="cab-state" class="dialog-input" type="text"></div>
+        <div><label class="dialog-label">Postal code</label>
+          <input id="cab-postal" class="dialog-input" type="text"></div>
+        <div><label class="dialog-label">Country</label>
+          <input id="cab-country" class="dialog-input" type="text"></div>
+      </div>
+
+      <div class="dialog-section-label" style="margin-top:12px">Soapbox (optional)</div>
+      <textarea id="cab-soapbox" class="dialog-textarea" rows="2"></textarea>
+
+      <div class="dialog-hint" style="margin-top:10px" id="cab-freq-warning"></div>
+    </div>
+    <div class="dialog-footer">
+      <button id="btn-cabrillo-cancel" class="btn btn--ghost">Close</button>
+      <button id="btn-cabrillo-download" class="btn btn--primary">⬇ Download .log</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Settings dialog (QRZ.com lookup + log search folders) ────────────────── -->
 <div id="settings-dialog" class="dialog-overlay hidden">
   <div class="dialog dialog--wide">
@@ -1227,6 +1328,7 @@
       <div class="settings-tabs">
         <button id="settings-tab-qrz" class="btn btn--ghost btn--sm active" type="button">🔍 QRZ Lookup</button>
         <button id="settings-tab-logdirs" class="btn btn--ghost btn--sm" type="button">📁 Log Folders</button>
+        <button id="settings-tab-radio" class="btn btn--ghost btn--sm" type="button">📡 Radio Setup</button>
       </div>
 
       <div id="settings-step-qrz">
@@ -1264,6 +1366,21 @@
         <div id="folder-error" class="dialog-error hidden"></div>
         <button id="btn-add-folder" class="btn btn--primary" style="margin-top:12px;width:100%">+ Add Folder</button>
       </div>
+
+      <div id="settings-step-radio" class="hidden">
+        <div class="dialog-hint">
+          This app listens for N1MM+'s "RadioInfo" UDP broadcast to show live frequency/band in the
+          titlebar, HUD, and Overview. Default port is <code>12060</code>, matching N1MM+'s own default —
+          change this if another program is already using that port (e.g. SmartSDR's "Focus Helper"
+          defaults to 12060 too), and update N1MM+'s own <b>Config → Configure Ports → Broadcast Data →
+          Radio</b> port to match whatever you set here.
+        </div>
+        <label class="dialog-label">UDP Port</label>
+        <input id="radio-port-input" class="dialog-input" type="number" min="1" max="65535" placeholder="12060">
+        <div id="radio-port-error" class="dialog-error hidden"></div>
+        <div id="radio-port-status" class="dialog-hint" style="margin-top:8px"></div>
+        <button id="btn-radio-port-save" class="btn btn--primary" style="margin-top:12px;width:100%">💾 Save &amp; Apply</button>
+      </div>
     </div>
     <div class="dialog-footer">
       <div id="settings-footer-qrz" style="display:flex;gap:8px">
@@ -1297,6 +1414,7 @@
 <script src="/static/report-issue.js"></script>
 <script src="/static/settings.js"></script>
 <script src="/static/tips.js"></script>
+<script src="/static/cabrillo.js"></script>
 <script src="/static/worldmap.js"></script>
 </body>
 </html>

@@ -649,8 +649,18 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
    an extremely narrow visible latitude band — narrow enough to clip
    QSO markers across most of Europe/Russia/Canada. 5/2 keeps the visible
    band wide enough to cover virtually all DX-relevant latitudes while
-   still being zero-dead-space at every window width, not just one. ── */
-.glow-map-panel{flex:1 1 76%;padding:0;overflow:hidden;aspect-ratio:5/2;}
+   still being zero-dead-space at every window width, not just one.
+   max-height caps how far that scales on a wide/high-res monitor —
+   without it, height = width × 0.4 has no ceiling, so a large enough
+   window makes this one panel tall enough to push every other Overview
+   tile off-screen below the fold. Capped, the map simply shows a
+   narrower latitude slice on very wide windows instead of consuming the
+   whole tab — fitGlowMapBounds() still fits it to the panel's actual
+   width regardless of which dimension ends up constraining the box.
+   400px (not the aspect-ratio's own ~0.4×width, which was still ~475px
+   even at an ordinary window width) — still comfortably applies at
+   typical window sizes, not just wide monitors. ── */
+.glow-map-panel{flex:1 1 76%;padding:0;overflow:hidden;aspect-ratio:5/2;max-height:400px;}
 #glow-map-container{width:100%;height:100%;}
 #panel-glow-map .leaflet-control-container{display:none;}
 #panel-glow-map .leaflet-container{background:var(--bg2)!important;border-radius:var(--radius);}

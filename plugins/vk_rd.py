@@ -101,6 +101,15 @@ def _vkrd_mode_mult(mode: str) -> int:
     return 1
 
 
+def _vkrd_dupe_mode_key(mode: str) -> str:
+    """Mode bucket for the rolling dupe-window check — "CW and RTTY count
+    as one mode; SSB and FM count as one mode" per the rule. Same CW/RTTY
+    classification as _vkrd_mode_mult(), just returning a bucket label
+    instead of a point multiplier, so the two can't disagree with each
+    other about what counts as "the same mode"."""
+    return "CW_DIGITAL" if _vkrd_mode_mult(mode) == 2 else "PHONE"
+
+
 def _in_night_bonus(t) -> bool:
     """True if the QSO time falls in the 1500–2000 UTC night-bonus window."""
     if t is None:
@@ -136,12 +145,36 @@ class VKRDPlugin(ContestPlugin):
     """
 
     def identify(self, contest_name: str) -> bool:
-        cn = contest_name.upper()
-        return "VK_RD" in cn or "VKRD" in cn or "REMEMBRANCE" in cn
+        # Normalized (letters/digits only) rather than checking "VK_RD" as
+        # a literal substring — N1MM's own contest-name strings aren't
+        # guaranteed to use underscores specifically (a live 2026 session
+        # reported this contest silently falling through to the generic
+        # plugin, most plausibly because its real ContestName used a
+        # hyphen or space instead, e.g. "VK-RD-SSB" or "VK RD Contest",
+        # neither of which contains the literal substring "VK_RD").
+        # Stripping separators before matching makes any of those forms
+        # equivalent instead of having to enumerate each one by hand.
+        cn = re.sub(r"[^A-Z0-9]", "", contest_name.upper())
+        return "VKRD" in cn or "REMEMBRANCE" in cn
 
     @property
     def display_name(self) -> str:
         return "WIA Remembrance Day"
+
+    # RD's dupe rule is a rolling per-contact timer, not a fixed operating
+    # block — see rework_window_hours' own docstring in plugins/base.py.
+    rework_window_hours = 3.0
+
+    # Matches the official UDC file's own CabrilloName field
+    # (VK_RD_RTTY.UDC), i.e. what the WIA's own Cabrillo robot expects.
+    cabrillo_contest_id = "WIA-Remembrance"
+
+    @property
+    def dupe_rule_text(self) -> str:
+        return ("A station may be reworked once at least 3 hours have passed "
+                "since your last contact with them on the same band and mode "
+                "(SSB/FM count as one mode; CW/RTTY count as one mode). "
+                "QSOs inside that window score 0 pts and are not penalised.")
 
     @staticmethod
     def contest_saturday(year: int) -> date_:
@@ -186,6 +219,40 @@ class VKRDPlugin(ContestPlugin):
         return False
 
     def recalc_pts(self, qsos: list) -> None:
+        # N1MM's own dupe flag can't be trusted for this contest: RD's
+        # actual rule is a rolling per-contact window (reworkable after
+        # rework_window_hours, not "never again"), and N1MM's stock UDC
+        # dupe engine can only express "permanent per-band/mode dupe"
+        # (DupeType=3) or "no check at all" (DupeType=4) — neither
+        # matches a window that reopens. DupeType=4's DupeQSOMinutesAgo
+        # was confirmed live to only show an operator warning, not
+        # actually zero points for a too-early rework, and DupeType=3
+        # incorrectly keeps blocking genuine reworks made *after* the
+        # window has elapsed. Recomputing dupe status independently here,
+        # from the QSOs' own real timestamps, is correct regardless of
+        # whatever N1MM's live DupeType is currently set to.
+        window = timedelta(hours=self.rework_window_hours)
+        groups: dict = defaultdict(list)
+        for q in qsos:
+            if _is_vkrd_workable(q.get("call", "")) and q.get("time") is not None:
+                key = (q["call"].upper(), (q.get("band") or "").upper(),
+                       _vkrd_dupe_mode_key(q.get("mode", "")))
+                groups[key].append(q)
+        for group in groups.values():
+            group.sort(key=lambda q: q["time"])
+            # Only a genuinely valid contact resets the clock — a too-early
+            # rework attempt is itself invalid, so it can't be the contact
+            # the *next* attempt gets measured against either. Without this
+            # guard (advancing prev_time on every row regardless of its own
+            # dupe status), a stray early attempt sitting between two
+            # legitimate ones would wrongly zero the later one too, even
+            # once 3+ hours had genuinely passed since the last valid QSO.
+            prev_valid_time = None
+            for q in group:
+                q["dupe"] = 1 if prev_valid_time is not None and (q["time"] - prev_valid_time) < window else 0
+                if not q["dupe"]:
+                    prev_valid_time = q["time"]
+
         for q in qsos:
             if q["dupe"] or not _is_vkrd_workable(q.get("call", "")):
                 q["pts"] = 0
