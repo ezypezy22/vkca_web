@@ -746,6 +746,229 @@
     addPopoutButton(el);
   }
 
+  // ── Top DXCC — resolved from each QSO's callsign server-side (see
+  // /api/top_countries), independent of what the loaded contest's own
+  // mult1 means, so it reads the same way for any contest type. Polled on
+  // a timer rather than every snapshot tick — it's a full-log scan on the
+  // server, and a country leaderboard doesn't need sub-10-second freshness.
+  let _topDxccTimer=null;
+  async function fetchTopDxcc(){
+    try {
+      const res=await fetch('/api/top_countries');
+      renderTopDxcc(await res.json());
+    } catch(e) { /* leave the panel showing its last known state */ }
+  }
+  function startTopDxccPolling(){
+    fetchTopDxcc();
+    if(_topDxccTimer) clearInterval(_topDxccTimer);
+    _topDxccTimer=setInterval(fetchTopDxcc,15000);
+  }
+  function renderTopDxcc(rows){
+    const el=ip('panel-top-dxcc'); if(!el) return;
+    if(!rows||!rows.length){
+      el.innerHTML=hdr('[ &#127760; ]',T.green,'TOP DXCC')+
+        `<div style="color:${T.muted};font-size:0.85em;padding:8px 0">No countries resolved yet.</div>`;
+      addPopoutButton(el); return;
+    }
+    const maxQ=rows[0].qsos||1;
+    const rowsHtml=rows.slice(0,10).map(r=>`
+      <tr>
+        <td>${escapeHtml(r.country)}</td>
+        <td style="width:60%">
+          <div class="ibar"><div style="flex:1;height:6px;background:${T.bg3};border-radius:3px;overflow:hidden">
+            <div style="width:${Math.round(r.qsos/maxQ*100)}%;height:100%;background:${T.green}"></div>
+          </div></div>
+        </td>
+        <td class="tr" style="color:${T.green};font-weight:bold">${r.qsos}</td>
+      </tr>`).join('');
+    el.innerHTML=hdr('[ &#127760; ]',T.green,'TOP DXCC')+
+      `<table class="ip-tbl">${rowsHtml}</table>`;
+    addPopoutButton(el);
+  }
+
+  // ── QSOs by band — donut (Overview) ────────────────────────────────────
+  // Destroying and rebuilding on every tick (this panel updates on every
+  // snapshot poll, every few seconds) turned out to be the wrong default:
+  // it re-triggers the entry animation and visibly flickers/redraws the
+  // whole donut on every poll, even when the underlying counts hadn't
+  // changed at all. Rebuild is only actually needed the first time (fresh
+  // canvas) and when the *set* of worked bands changes (a new band's
+  // slice/legend entry appears, or the sort-by-qsos order shifts) — that's
+  // the actual shape of the original bug this guarded against (Chart.js's
+  // legend laid out against a stale canvas size after this panel's grid
+  // row settled to its final height post-load). Same band set as last
+  // tick just gets its values updated in place with animation off.
+  let bandDonutChart=null, _bandDonutShape='';
+  function updateBandDonut(snap){
+    const canvas=document.getElementById('chart-band-donut'); if(!canvas) return;
+    const be=(snap?.band_efficiency||[]).filter(r=>r.qsos>0).sort((a,b)=>b.qsos-a.qsos);
+    const totalEl=document.getElementById('donut-center-total');
+    const total=be.reduce((a,r)=>a+(r.qsos||0),0);
+    if(totalEl) totalEl.innerHTML=`<div class="dc-total">${total.toLocaleString()}</div><div class="dc-label">QSOs</div>`;
+    if(!be.length){
+      // Switching to an empty/fresh log: clear out whatever the previous
+      // log's chart was showing rather than leaving its stale slices and
+      // legend on screen (vka:loaded doesn't touch this chart itself).
+      if(bandDonutChart){ bandDonutChart.destroy(); bandDonutChart=null; }
+      _bandDonutShape='';
+      return;
+    }
+    const labels=be.map(r=>r.band.toLowerCase());
+    const data=be.map(r=>r.qsos);
+    const colours=be.map(r=>BAND_COLS[(r.band||'').toUpperCase()]||T.muted);
+    // Order-independent (sorted alphabetically), not the qsos-count display
+    // order those labels are already in — a pure rank swap between two
+    // already-worked bands (20m overtakes 40m this tick) must not by
+    // itself force a rebuild, only the actual *set* of worked bands
+    // changing should.
+    const shape=labels.slice().sort().join(',');
+    if(bandDonutChart && shape===_bandDonutShape){
+      bandDonutChart.data.labels=labels;
+      bandDonutChart.data.datasets[0].data=data;
+      bandDonutChart.data.datasets[0].backgroundColor=colours;
+      bandDonutChart.update('none');
+      return;
+    }
+    _bandDonutShape=shape;
+    if(bandDonutChart){ bandDonutChart.destroy(); bandDonutChart=null; }
+    bandDonutChart=new Chart(canvas.getContext('2d'),{
+      type:'doughnut',
+      data:{labels,datasets:[{data,backgroundColor:colours,borderColor:T.bg2,borderWidth:2}]},
+      options:{
+        responsive:true,maintainAspectRatio:false,cutout:'58%',
+        animation:{duration:500,easing:'easeOutQuart'},
+        plugins:{
+          // fg (bright), not muted (dim grey) — this legend lives in a
+          // narrow 24%-width column, where a low-contrast colour at small
+          // size reads as illegible/"black" against the dark panel
+          // background rather than as a deliberate muted style. color is
+          // set both on labels (the option Chart.js reads) and per-item
+          // as fontColor (the legacy field its draw() checks first, ahead
+          // of the option) — belt and suspenders against any legend
+          // rendering path that prefers the per-item field.
+          legend:{display:true,position:'bottom',
+            labels:{color:T.fg,font:{size:12,weight:'bold'},boxWidth:11,padding:7,
+              generateLabels:chart=>chart.data.labels.map((l,i)=>({
+                text:`${l} ${chart.data.datasets[0].data[i]}`,
+                fillStyle:chart.data.datasets[0].backgroundColor[i],
+                strokeStyle:chart.data.datasets[0].backgroundColor[i],
+                fontColor:T.fg,
+                index:i,
+              }))}},
+          tooltip:{backgroundColor:T.bg3,bodyColor:T.fg,borderWidth:1,
+            callbacks:{label:c=>{
+              const v=c.raw,pct=total>0?(v/total*100).toFixed(1):'0';
+              return ` ${v} QSOs (${pct}%)`;
+            }}},
+        },
+      },
+    });
+  }
+
+  // ── QSOs by DXCC — hero glow map (Overview) ─────────────────────────────
+  // Reverted back to this from a from-scratch canvas dot-matrix renderer
+  // (real coastline data, hand-rolled heatmap) that spent many rounds
+  // chasing an exact match to a mockup image — worth recording why: every
+  // fix was verified working by direct pixel sampling on this end, yet
+  // each still came back "still blurry" against a screenshot that likely
+  // wasn't a faithful capture of what was actually on screen (the app's
+  // own Snapshot button goes through html2canvas, which doesn't reproduce
+  // <canvas> content reliably) — an unfalsifiable loop neither side could
+  // actually close. A real, proven, boring Leaflet map with glowing
+  // markers is worse at pretending to be that mockup image but isn't
+  // fighting an un-debuggable capture pipeline to get there.
+  const GLOW_LOAD_THROTTLE_MS=15000;
+  let _glowMap=null, _glowMarkerLayer=null, _glowLastLoadAt=0;
+
+  // fitBounds() was tried here (fitting a real lat/lon box against both the
+  // panel's width AND height) and made things actively worse against the
+  // old abstract dark tile source: it zoomed out enough to fit height,
+  // leaving the world narrower than the panel with dead margins each side
+  // that clashed visually against the old tiles' background colour.
+  //
+  // Rounding to a whole zoom level (ceil fills the width but over-crops
+  // latitude; floor shows more latitude but leaves dead space on the
+  // sides) was the tradeoff before this — neither is actually necessary.
+  // zoomSnap:0 on the map (see initGlowMap) lets Leaflet hold any
+  // fractional zoom, so the world width can be set to exactly match the
+  // container: zero dead space AND no extra cropping. Leaflet still loads
+  // whichever integer-zoom tiles are nearest and scales them a hair via
+  // CSS to hit the exact size — imperceptible, and still real imagery.
+  //
+  // Centered on longitude 0, not some "interesting" offset: once the
+  // world's pixel width matches the container's almost exactly, the
+  // visible span is nearly the full 360°, so any non-zero center leaves
+  // no slack to absorb the antimeridian wraparound — with noWrap:true
+  // (no duplicate world copies) that wrapped sliver just renders as a
+  // dead gap on one edge. Lon 0 makes the visible span exactly one world
+  // copy with no wraparound needed, and happens to split the seam through
+  // the empty Pacific — the conventional world-map centering for exactly
+  // this reason.
+  function fitGlowMapBounds(){
+    if(!_glowMap) return;
+    const el=document.getElementById('glow-map-container'); if(!el) return;
+    _glowMap.invalidateSize();
+    const w=el.clientWidth||900;
+    const fitZoom=Math.max(0,Math.min(8,Math.log2(w/256)));
+    _glowMap.setZoom(fitZoom);
+    _glowMap.setView([10,0],fitZoom,{animate:false});
+  }
+
+  function initGlowMap(){
+    if(_glowMap || typeof L==='undefined') return;
+    const el=document.getElementById('glow-map-container'); if(!el) return;
+    _glowMap=L.map('glow-map-container',{
+      center:[10,0],zoom:2,zoomSnap:0,
+      zoomControl:false,attributionControl:false,dragging:false,
+      touchZoom:false,scrollWheelZoom:false,doubleClickZoom:false,
+      boxZoom:false,keyboard:false,worldCopyJump:false,
+    });
+    // NASA GIBS VIIRS "Earth at Night" city-lights composite — the real
+    // imagery the reference mockup is a crop of, not a hand-rolled
+    // recreation of it. Note the {z}/{y}/{x} order (GIBS WMTS REST path
+    // segments are TileMatrix/TileRow/TileCol, i.e. z/y/x, not the usual
+    // slippy-map z/x/y).
+    L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg',{
+      maxZoom:8,minZoom:0,noWrap:true,attribution:'NASA GIBS',
+    }).addTo(_glowMap);
+    _glowMarkerLayer=L.layerGroup().addTo(_glowMap);
+    fitGlowMapBounds();
+    // A plain window 'resize' listener only catches the browser window
+    // itself changing size — it misses every other reason this panel's
+    // actual pixel width can change after the initial fit: the zoom
+    // slider's root font-size restore-on-launch (persisted, so it can run
+    // after this first fit), a tile getting dragged to reorder the row,
+    // even DPI changes. All of those left the map's Leaflet-computed size
+    // stale against the container's real size, which reads as the map
+    // being oddly zoomed or cut off along one edge. A ResizeObserver on
+    // the container itself catches its size changing for any reason.
+    if(typeof ResizeObserver!=='undefined'){
+      new ResizeObserver(()=>fitGlowMapBounds()).observe(el);
+    } else {
+      window.addEventListener('resize',fitGlowMapBounds);
+    }
+  }
+  function glowSpotIcon(col){
+    return L.divIcon({className:'map-spot-icon',
+      html:`<span class="map-spot-dot" style="--col:${col}"></span>`,
+      iconSize:[16,16],iconAnchor:[8,8]});
+  }
+  async function updateGlowMap(){
+    if(!_glowMap) return;
+    if(Date.now()-_glowLastLoadAt<GLOW_LOAD_THROTTLE_MS) return;
+    _glowLastLoadAt=Date.now();
+    try{
+      const res=await fetch('/api/map_data');
+      const data=await res.json();
+      _glowMarkerLayer.clearLayers();
+      data.forEach(d=>{
+        if(d.lat==null||d.lon==null) return;
+        const col=BAND_COLS[(d.band||'').toUpperCase()]||T.muted;
+        L.marker([d.lat,d.lon],{icon:glowSpotIcon(col)}).addTo(_glowMarkerLayer);
+      });
+    } catch(e){ /* leave whatever's already plotted */ }
+  }
+
   async function fetchLiveRank(){
     try {
       const res = await fetch('/api/live_rank');
@@ -2055,7 +2278,7 @@
   }
   function playBestRateSound(){
     if (!_soundEnabled) return;
-    beep(880, 0, 1.5, 0.15);
+    beep(880, 0, 1.5, 0.08);
   }
 
   // One chime note: a fundamental plus a quiet octave-up partial (a cheap
@@ -2091,7 +2314,7 @@
     const notes = [1047, 1319, 1568, 2093, 2637, 3136];
     notes.forEach((freq,i)=>{
       const isLast = i === notes.length - 1;
-      chimeNote(freq, i*0.12, isLast ? 1.6 : 0.9, 0.13);
+      chimeNote(freq, i*0.12, isLast ? 1.6 : 0.9, 0.07);
     });
   }
 
@@ -2158,8 +2381,8 @@
     if (!_soundEnabled) return;
     // Two short neutral pings — deliberately not the celebratory chime;
     // this is a warning, not a reward.
-    beep(660, 0,    0.18, 0.14);
-    beep(660, 0.22, 0.18, 0.14);
+    beep(660, 0,    0.18, 0.07);
+    beep(660, 0.22, 0.18, 0.07);
   }
 
   function checkEndTimeAlert(snap){
@@ -2206,8 +2429,8 @@
     if (!_soundEnabled) return;
     // Two short low pings — distinct from both the celebratory chime and
     // the end-time warning's higher-pitched pings.
-    beep(440, 0,   0.25, 0.12);
-    beep(370, 0.3, 0.35, 0.12);
+    beep(440, 0,   0.25, 0.06);
+    beep(370, 0.3, 0.35, 0.06);
   }
 
   function checkDeadAir(snap){
@@ -2255,7 +2478,7 @@
     // Three low, unhurried descending tones — deliberately calmer than the
     // dead-air/end-time alert pings; this is a wellbeing nudge, not an
     // emergency.
-    beep(392,0,0.3,0.1); beep(349,0.35,0.3,0.1); beep(294,0.7,0.45,0.1);
+    beep(392,0,0.3,0.05); beep(349,0.35,0.3,0.05); beep(294,0.7,0.45,0.05);
   }
 
   function checkOperatorFatigue(snap){
@@ -2288,6 +2511,8 @@
     updateInsightBar(snap);
     updateExtraAnalytics(snap);
     updateContestOverPanel(snap);
+    updateBandDonut(snap);
+    initGlowMap(); updateGlowMap();
     // Each panel above replaces its own innerHTML on every refresh, which
     // wipes out the pop-out button appended as a child — re-add it (addPopoutButton
     // no-ops if one's already present).
@@ -2310,6 +2535,10 @@
   });
   window.addEventListener('vka:tabchange',e=>{
     if(e.detail.tab!=='overview') return;
+    // The glow map's container was display:none while this tab was
+    // inactive — Leaflet cached whatever size it had (possibly 0×0) and
+    // needs telling to re-measure and re-fit now that it's visible again.
+    if (_glowMap) setTimeout(fitGlowMapBounds,50);
     if (_replaying && _lastReplaySnap) { render(_lastReplaySnap); return; }
     const snap=window.VKA.lastSnap(); if(snap) render(snap);
   });
@@ -2317,12 +2546,13 @@
     _metaLoaded=false;_firstSnap=true;resetCelebrations();resetEndTimeAlerts();resetHudSparklines();resetDeadAirTracking();resetOperatorFatigueTracking();
     _seenOperators.clear();
     for (const k in _numAnimState) delete _numAnimState[k];
-    // panel-live-rank doesn't exist in either HUD window's DOM — polling
-    // there just fires an unnecessary COSB-scraping request every load
-    // (see issue #72).
-    if (!HUD_MODE && !OPERATOR_HUD_MODE && !SPECTATOR_MODE) startLiveRankPolling();
+    _glowLastLoadAt=0;   // force the next updateGlowMap() past the throttle for the new log
+    // panel-live-rank/panel-top-dxcc don't exist in either HUD window's DOM
+    // — polling there just fires unnecessary requests every load (see issue #72).
+    if (!HUD_MODE && !OPERATOR_HUD_MODE && !SPECTATOR_MODE) { startLiveRankPolling(); startTopDxccPolling(); }
   });
 
   if (!HUD_MODE && !OPERATOR_HUD_MODE) startLiveRankPolling();
+  if (!HUD_MODE && !OPERATOR_HUD_MODE && !SPECTATOR_MODE) startTopDxccPolling();
 
 })();

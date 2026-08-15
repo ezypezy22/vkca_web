@@ -604,6 +604,57 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
 .ip-div{height:1px;background:var(--bg3);margin:4px 0;}
 .ibar{display:flex;align-items:center;gap:5px;}
 
+/* ── QSOs-by-band donut (Overview) ──────────────────────────────────────── */
+.donut-wrap{position:relative;height:140px;}
+.donut-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;pointer-events:none;font-family:var(--font-mono);}
+.donut-center .dc-total{font-size:1.9em;font-weight:bold;color:var(--fg);line-height:1;}
+.donut-center .dc-label{font-size:0.7em;color:var(--muted);letter-spacing:.06em;
+  text-transform:uppercase;margin-top:3px;}
+
+/* ── Hero row (Overview) — the glow map at ~3/4 width with the band donut
+   alongside it at ~1/4, rather than the map alone filling the row. Both
+   share the row's full height (see .glow-map-panel/.hero-row-side below)
+   so the donut isn't left looking like an afterthought squeezed under its
+   own short fixed height next to a much taller map. Row height is NOT
+   fixed — it's driven by the map panel's own aspect-ratio (below), so it
+   stays correct at any window width instead of only the one size this
+   was tuned against. ── */
+.hero-row{display:flex;gap:var(--gap);flex-shrink:0;}
+.hero-row-side{flex:0 0 24%;display:flex;flex-direction:column;}
+.hero-row-side .donut-wrap{flex:1;height:auto;min-height:0;}
+
+/* Sits right next to the glow map's own strong visual (real satellite
+   imagery), where a flat var(--bg2) panel reads as bare by comparison —
+   a soft glow keyed to this panel's own header colour (--accent, same
+   teal as its "QSOs BY BAND" title) instead of the generic .info-panel
+   treatment, echoing the accent-glow language already used on gauge
+   cards/celebration flashes elsewhere rather than inventing a new one. */
+#panel-band-donut{
+  background:radial-gradient(ellipse 120% 85% at 50% 28%,
+      color-mix(in srgb,var(--accent) 16%,var(--bg2)) 0%,
+      var(--bg2) 72%);
+  border-top-color:var(--accent);
+}
+
+/* ── Glow map (Overview "QSOs by DXCC") — same glowing-dot language as the
+   World Map's live spots (.map-spot-dot), plotted on a big non-interactive
+   Leaflet instance (real basemap tiles, not a from-scratch renderer — see
+   overview.js's own comment on initGlowMap() for why). A hero panel (not
+   one of the small draggable info-panel tiles below it) — deliberately
+   sized to be the first thing that draws the eye on Overview.
+   aspect-ratio, not a fixed height: overview.js fits the map to exactly
+   this panel's width with zero dead space (see fitGlowMapBounds()), and
+   since Mercator tiles are square at any zoom, a too-short panel forces
+   an extremely narrow visible latitude band — narrow enough to clip
+   QSO markers across most of Europe/Russia/Canada. 5/2 keeps the visible
+   band wide enough to cover virtually all DX-relevant latitudes while
+   still being zero-dead-space at every window width, not just one. ── */
+.glow-map-panel{flex:1 1 76%;padding:0;overflow:hidden;aspect-ratio:5/2;}
+#glow-map-container{width:100%;height:100%;}
+#panel-glow-map .leaflet-control-container{display:none;}
+#panel-glow-map .leaflet-container{background:var(--bg2)!important;border-radius:var(--radius);}
+
 /* ── Region bars ─────────────────────────────────────────────────────────── */
 .panel-box{background:var(--bg2);border:1px solid var(--bg3);
   border-top:2px solid var(--accent);border-radius:var(--radius);
@@ -948,6 +999,11 @@ body:has(#tab-map.active) #content {
   cursor:pointer; transition:all .15s; }
 .map-band-btn:hover,.map-band-btn.active { background:var(--accent); color:var(--bg);
   border-color:var(--accent); }
+.rate-bands-mode-btn { background:var(--bg3); color:var(--muted); border:1px solid #30363d;
+  border-radius:4px; padding:2px 8px; font-family:var(--font-mono); font-size:0.69em;
+  cursor:pointer; transition:all .15s; text-transform:none; letter-spacing:normal; }
+.rate-bands-mode-btn:hover,.rate-bands-mode-btn.active { background:var(--green); color:var(--bg);
+  border-color:var(--green); }
 .map-legend { display:flex; flex-wrap:wrap; gap:8px; margin-left:auto; }
 .map-legend-item { display:flex; align-items:center; gap:3px;
   font-family:var(--font-mono); font-size:0.69em; }
@@ -1071,6 +1127,19 @@ body:has(#tab-map.active) #content {
 .corner-hint .ch-text b { color: var(--fg); }
 .corner-hint .ch-close { cursor:pointer; color:var(--muted); padding:0 4px; flex-shrink:0; }
 .corner-hint .ch-close:hover { color:var(--fg); }
+
+/* ── Tips dialog ──────────────────────────────────────────────────────────── */
+.tip-list { display:flex; flex-direction:column; gap:8px; }
+.tip-row {
+  display:flex; align-items:flex-start; gap:10px;
+  background:var(--bg2); border:1px solid #30363d; border-radius:var(--radius);
+  padding:10px 14px; font-family:var(--font-mono); font-size:0.82em; line-height:1.5;
+}
+.tip-row-icon  { font-size:1.1em; flex-shrink:0; margin-top:1px; color:var(--accent3); }
+.tip-row-body  { flex:1; min-width:0; }
+.tip-row-title { color:var(--accent3); font-weight:bold; margin-bottom:4px; }
+.tip-row-text  { color:var(--muted); }
+.tip-row-text b { color:var(--fg); }
 
 /* ── Splash ───────────────────────────────────────────────────────────────── */
 #splash-overlay {

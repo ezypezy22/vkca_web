@@ -202,13 +202,18 @@
     });
   }
 
-  // ── QSOs per hour, stacked by band — same hour buckets as renderRateChart
-  // (r.hour from /api/rate), just split per-band instead of just totalled,
-  // so a good hour's actual source band is visible instead of hidden inside
-  // one flat bar. Computed client-side from the full QSO list rather than a
+  // ── QSOs per hour, by band — same hour buckets as renderRateChart (r.hour
+  // from /api/rate), just split per-band instead of just totalled, so a
+  // good hour's actual source band is visible instead of hidden inside one
+  // flat bar. Computed client-side from the full QSO list rather than a
   // new backend endpoint — one pass over the array, via the shared cache
   // (see app.js's window.VKA.fetchQsos) other tabs already populate.
+  // Two render modes share that same one pass — a stacked bar (good for
+  // "how much of this hour was which band") and a multi-line overlay (good
+  // for "which band's rate rose/fell when") — toggled without refetching.
   let _bandStackGen = 0;
+  let _bandChartMode = 'stack';
+  let _lastBandChartData = null;   // {labels, bands} — cached for mode-switch redraw, no refetch
   async function renderBandStackChart(rateData) {
     const canvas = document.getElementById('chart-rate-bands');
     if (!canvas || !rateData.length) return;
@@ -239,7 +244,12 @@
       const d = new Date(r.hour + 'Z');
       return `${String(d.getUTCHours()).padStart(2,'0')}:00`;
     });
-    const datasets = bands.map(b => ({
+    _lastBandChartData = { labels, bands, counts };
+    drawBandChart();
+  }
+
+  function stackDatasets(bands, counts) {
+    return bands.map(b => ({
       label: b.toLowerCase(),
       data: counts[b],
       backgroundColor: (BAND_COLS[b] || C.muted) + 'cc',
@@ -247,20 +257,52 @@
       borderWidth: 1,
       stack: 'bands',
     }));
+  }
 
-    if (bandStackChart) {
+  function lineDatasets(bands, counts) {
+    return bands.map(b => {
+      const col = BAND_COLS[b] || C.muted;
+      return {
+        label: b.toLowerCase(),
+        data: counts[b],
+        borderColor: col,
+        backgroundColor: col + '22',
+        borderWidth: 2,
+        fill: false,
+        tension: 0.3,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: col,
+        pointHoverBorderColor: '#fff',
+      };
+    });
+  }
+
+  // force=true (mode toggle) always destroy+recreate — a bar↔line type
+  // change can't be mutated in place the way same-mode data updates can.
+  function drawBandChart(force) {
+    const canvas = document.getElementById('chart-rate-bands');
+    if (!canvas || !_lastBandChartData) return;
+    const { labels, bands, counts } = _lastBandChartData;
+    const stacked = _bandChartMode === 'stack';
+    const datasets = stacked ? stackDatasets(bands, counts) : lineDatasets(bands, counts);
+    const chartType = stacked ? 'bar' : 'line';
+
+    if (bandStackChart && !force && bandStackChart.config.type === chartType) {
       bandStackChart.data.labels = labels;
       bandStackChart.data.datasets = datasets;
       bandStackChart.update();
       return;
     }
+    if (bandStackChart) { bandStackChart.destroy(); bandStackChart = null; }
 
     bandStackChart = new Chart(canvas.getContext('2d'), {
-      type: 'bar',
+      type: chartType,
       data: { labels, datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
         animation: { duration: 500, easing: 'easeOutQuart' },
+        interaction: stacked ? undefined : { mode: 'index', intersect: false },
         plugins: {
           legend: { display: true, position: 'bottom',
             labels: { color: C.muted, font: { size: 9 }, boxWidth: 10, padding: 8 } },
@@ -271,14 +313,24 @@
           },
         },
         scales: {
-          x: { stacked: true, ticks:{color:C.muted,font:{size:9},maxRotation:45},
+          x: { stacked, ticks:{color:C.muted,font:{size:9},maxRotation:45},
                grid:{color:C.bg3+'80'} },
-          y: { stacked: true, ticks:{color:C.muted,font:{size:9}},
+          y: { stacked, ticks:{color:C.muted,font:{size:9}},
                grid:{color:C.bg3+'80'}, beginAtZero:true },
         },
       },
     });
   }
+
+  document.querySelectorAll('.rate-bands-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.mode === _bandChartMode) return;
+      document.querySelectorAll('.rate-bands-mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _bandChartMode = btn.dataset.mode;
+      drawBandChart(true);
+    });
+  });
 
   function renderSessionTable(sessions) {
     const tbody = document.getElementById('rate-sess-tbody');

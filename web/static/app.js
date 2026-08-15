@@ -1388,7 +1388,7 @@ Users are responsible for verifying all information against N1MM before making d
   const HINT_SOUND_KEY = 'vka_overview_sound';
   const KNOCK_SFX_URL       = '/static/sfx/knock.mp3';
   const KNOCK_PLAYBACK_RATE = 1.35;   // pitch/speed up the recording
-  const KNOCK_GAIN          = 2.2;    // beyond a plain <audio> element's 1.0 volume ceiling
+  const KNOCK_GAIN          = 1.1;    // beyond a plain <audio> element's 1.0 volume ceiling
   let _hintAudioCtx = null;
   function getHintAudioCtx() {
     _hintAudioCtx = _hintAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
@@ -1579,6 +1579,9 @@ Users are responsible for verifying all information against N1MM before making d
     { id: 'yoy', title: 'Year-over-year comparison',
       body: 'The <b>Year on Year</b> tab compares this session&rsquo;s pace against your own past results in the same contest.' },
   ];
+  window.VKA = window.VKA || {};
+  window.VKA.helperTips = HELPER_TIPS;
+
   const HELPER_INTERVAL_MS  = 30 * 60 * 1000;
   const HELPER_COOLDOWN_MS  = 5 * 60 * 60 * 1000;
   const HELPER_AUTO_HIDE_MS = 60000;

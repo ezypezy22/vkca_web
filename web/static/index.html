@@ -293,6 +293,24 @@
       </div>
     </div>
 
+    <div class="hero-row">
+      <div class="info-panel glow-map-panel" id="panel-glow-map">
+        <div class="ip-hdr" style="position:absolute;top:10px;left:14px;z-index:500;pointer-events:none;
+             background:rgba(13,17,23,.55);padding:2px 10px;border-radius:4px">
+          <span style="color:var(--accent3)">[ &#127760; ]</span>
+          <span class="ip-title" style="color:var(--accent3)">QSOs BY DXCC</span></div>
+        <div id="glow-map-container"></div>
+      </div>
+      <div class="info-panel hero-row-side" id="panel-band-donut">
+        <div class="ip-hdr"><span style="color:var(--accent)">[ &#9711; ]</span>
+          <span class="ip-title" style="color:var(--accent)">QSOs BY BAND</span></div>
+        <div class="donut-wrap">
+          <canvas id="chart-band-donut"></canvas>
+          <div class="donut-center" id="donut-center-total"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="info-panels-row">
       <div class="info-panel" id="panel-contest-time">
         <div class="ip-hdr"><span style="color:var(--accent3)">[ T ]</span>
@@ -337,6 +355,11 @@
       <div class="info-panel" id="panel-radio">
         <div class="ip-hdr"><span style="color:var(--accent3)">[ &asymp; ]</span>
           <span class="ip-title" style="color:var(--accent3)">RADIO</span></div>
+        <div class="skeleton-block"><div class="skeleton-line" style="width:92%"></div><div class="skeleton-line" style="width:68%"></div></div>
+      </div>
+      <div class="info-panel" id="panel-top-dxcc">
+        <div class="ip-hdr"><span style="color:var(--green)">[ &#127760; ]</span>
+          <span class="ip-title" style="color:var(--green)">TOP DXCC</span></div>
         <div class="skeleton-block"><div class="skeleton-line" style="width:92%"></div><div class="skeleton-line" style="width:68%"></div></div>
       </div>
     </div>
@@ -414,7 +437,8 @@
         <span style="color:var(--accent)">●</span> END-OF-CONTEST REPORT
       </div>
       <span id="report-generated" style="font-family:var(--font-mono);font-size:0.77em;color:var(--muted)"></span>
-      <button id="report-scorecard-btn" class="tb-btn" style="margin-left:auto" disabled>🖼 Score Card (PNG)</button>
+      <button id="btn-tips" class="tb-btn" style="margin-left:auto">💡 Tips</button>
+      <button id="report-scorecard-btn" class="tb-btn" disabled>🖼 Score Card (PNG)</button>
       <button id="report-export-btn" class="tb-btn tb-btn--primary" disabled>⬇ Export Report (HTML)</button>
     </div>
 
@@ -624,7 +648,12 @@
       <div style="position:relative;height:220px"><canvas id="chart-rate-mults"></canvas></div>
     </div>
     <div class="panel-box" style="min-height:260px">
-      <div class="panel-header"><span style="color:var(--green)">●</span> QSOs PER HOUR BY BAND</div>
+      <div class="panel-header"><span style="color:var(--green)">●</span> QSOs PER HOUR BY BAND
+        <div class="rate-bands-mode-toggle" style="margin-left:auto;display:flex;gap:4px">
+          <button class="rate-bands-mode-btn active" data-mode="stack">Stacked</button>
+          <button class="rate-bands-mode-btn" data-mode="line">Lines</button>
+        </div>
+      </div>
       <div style="position:relative;height:220px"><canvas id="chart-rate-bands"></canvas></div>
     </div>
     <div class="panel-box">
@@ -1168,6 +1197,20 @@
   </div>
 </div>
 
+<!-- ── Tips dialog ────────────────────────────────────────────────────────── -->
+<div id="tips-dialog" class="dialog-overlay hidden">
+  <div class="dialog dialog--wide">
+    <div class="dialog-title">💡 Tips</div>
+    <div class="dialog-body dialog-body--scroll">
+      <div class="dialog-hint">Everything the app occasionally surfaces as a rotating corner tip, all in one place.</div>
+      <div class="tip-list" id="tip-list"></div>
+    </div>
+    <div class="dialog-footer">
+      <button id="btn-tips-close" class="btn btn--ghost">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Settings dialog (QRZ.com lookup + log search folders) ────────────────── -->
 <div id="settings-dialog" class="dialog-overlay hidden">
   <div class="dialog dialog--wide">
@@ -1246,6 +1289,7 @@
 <script src="/static/report.js"></script>
 <script src="/static/report-issue.js"></script>
 <script src="/static/settings.js"></script>
+<script src="/static/tips.js"></script>
 <script src="/static/worldmap.js"></script>
 </body>
 </html>

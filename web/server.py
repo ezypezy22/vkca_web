@@ -3171,6 +3171,146 @@ def _call_to_latlon(callsign: str):
     return None
 
 
+# DXCC/country name per prefix — same key set as _PFX above, since a "Top
+# Countries Worked" list needs a human-readable name rather than a
+# coordinate. Deliberately independent of any plugin's own mult1 (which
+# means a country prefix for CQWW-style contests, but a US state, VK shire,
+# CQ zone, etc. for others) — resolving straight from the callsign means
+# this works the same way for every contest, not just DXCC-mult ones.
+_PFX_COUNTRY = {
+    "KH6": "Hawaii", "KH8": "American Samoa", "KP4": "Puerto Rico",
+    "FK8": "New Caledonia", "FK7": "New Caledonia", "FO8": "French Polynesia",
+    "KH0": "Mariana Islands", "KH2": "Guam", "KL7": "Alaska",
+    "P29": "Papua New Guinea", "ZK2": "Niue", "3D2": "Fiji", "5W1": "Samoa",
+    "T30": "Kiribati", "V63": "Micronesia", "V73": "Marshall Islands",
+    "YJ8": "Vanuatu", "E51": "Cook Islands", "E52": "Cook Islands",
+    "ZL8": "Kermadec Islands", "ZL9": "New Zealand Subantarctic Islands",
+    "FK": "New Caledonia", "FG": "Guadeloupe", "FH": "Mayotte",
+    "FM": "Martinique", "FO": "French Polynesia", "FP": "St. Pierre & Miquelon",
+    "FR": "Reunion Island", "FW": "Wallis & Futuna", "FY": "French Guiana",
+    "ZL": "New Zealand", "ZS": "South Africa", "ZP": "Paraguay",
+    "ZA": "Albania", "ZB": "Gibraltar", "ZF": "Cayman Islands",
+    "ZK": "New Zealand", "ZD": "St. Helena",
+    "VE": "Canada", "VK": "Australia", "VO": "Canada", "VR": "Hong Kong",
+    "VU": "India", "V3": "Belize", "V5": "Namibia", "V6": "Micronesia",
+    "V7": "Marshall Islands", "V8": "Brunei",
+    "G": "England", "GM": "Scotland", "GW": "Wales", "GD": "Isle of Man",
+    "GJ": "Jersey", "GU": "Guernsey",
+    "DL": "Germany", "DJ": "Germany", "DK": "Germany", "DA": "Germany",
+    "DB": "Germany", "DC": "Germany", "DF": "Germany", "DG": "Germany",
+    "DH": "Germany",
+    "JA": "Japan", "JE": "Japan", "JH": "Japan", "JR": "Japan",
+    "JD": "Ogasawara",
+    "BY": "China", "BG": "China", "BH": "China", "BV": "Taiwan", "BU": "Taiwan",
+    "UA": "Russia", "RA": "Russia", "RK": "Russia", "RL": "Russia",
+    "RM": "Russia", "RN": "Russia", "RO": "Russia", "RQ": "Russia",
+    "RT": "Russia", "RU": "Russia", "RV": "Russia", "RW": "Russia",
+    "RX": "Russia", "RY": "Russia", "RZ": "Russia", "UA9": "Russia",
+    "UI": "Russia", "UK": "Uzbekistan", "UN": "Kazakhstan", "UR": "Ukraine",
+    "OH": "Finland", "OG": "Finland", "OZ": "Denmark", "OX": "Greenland",
+    "OY": "Faroe Islands", "OE": "Austria", "OK": "Czech Republic",
+    "OL": "Czech Republic", "OM": "Slovakia",
+    "ON": "Belgium", "OO": "Belgium", "OP": "Belgium", "OQ": "Belgium",
+    "OR": "Belgium", "OS": "Belgium", "OT": "Belgium",
+    "SM": "Sweden", "SK": "Sweden", "SP": "Poland", "SN": "Poland",
+    "SQ": "Poland", "SV": "Greece", "SW": "Greece",
+    "PA": "Netherlands", "PB": "Netherlands", "PD": "Netherlands",
+    "PE": "Netherlands", "PH": "Netherlands",
+    "PY": "Brazil", "PP": "Brazil", "PQ": "Brazil", "PR": "Brazil",
+    "PS": "Brazil", "PU": "Brazil", "PW": "Brazil", "PX": "Brazil",
+    "EA": "Spain", "EB": "Spain", "EC": "Spain", "EI": "Ireland",
+    "EJ": "Ireland", "EK": "Armenia", "EP": "Iran", "ER": "Moldova",
+    "ES": "Estonia", "EU": "Belarus", "EW": "Belarus", "EX": "Kyrgyzstan",
+    "EY": "Tajikistan", "EZ": "Turkmenistan",
+    "HA": "Hungary", "HB": "Switzerland", "HC": "Ecuador", "HH": "Haiti",
+    "HI": "Dominican Republic", "HK": "Colombia", "HL": "South Korea",
+    "DS": "South Korea", "HP": "Panama", "HR": "Honduras", "HS": "Thailand",
+    "HV": "Vatican", "HZ": "Saudi Arabia",
+    "LA": "Norway", "LB": "Norway", "LC": "Norway",
+    "LU": "Argentina", "LV": "Argentina", "LW": "Argentina",
+    "LX": "Luxembourg", "LY": "Lithuania", "LZ": "Bulgaria",
+    "I": "Italy", "IS": "Sardinia", "IG": "Italy",
+    "YA": "Afghanistan", "YB": "Indonesia", "YC": "Indonesia", "YI": "Iraq",
+    "YJ": "Vanuatu", "YK": "Syria", "YL": "Latvia", "YN": "Nicaragua",
+    "YO": "Romania", "YT": "Serbia", "YU": "Serbia", "YV": "Venezuela",
+    "TA": "Turkey", "TF": "Iceland", "TI": "Costa Rica", "TK": "Corsica",
+    "TL": "Central African Republic", "TN": "Congo", "TR": "Gabon",
+    "TT": "Chad", "TU": "Ivory Coast", "TY": "Benin", "TZ": "Mali",
+    "XE": "Mexico", "XW": "Laos", "XV": "Vietnam", "XU": "Cambodia",
+    "XT": "Burkina Faso",
+    "4X": "Israel", "4Z": "Israel",
+    "5A": "Libya", "5B": "Cyprus", "5H": "Tanzania", "5N": "Nigeria",
+    "5R": "Madagascar", "5T": "Mauritania", "5U": "Niger", "5V": "Togo",
+    "5W": "Samoa", "5X": "Uganda", "5Z": "Kenya",
+    "6W": "Senegal", "6Y": "Jamaica",
+    "7P": "Lesotho", "7Q": "Malawi", "7X": "Algeria",
+    "8P": "Barbados", "8Q": "Maldives", "8R": "Guyana",
+    "9A": "Croatia", "9G": "Ghana", "9H": "Malta", "9J": "Zambia",
+    "9K": "Kuwait", "9L": "Sierra Leone", "9M": "Malaysia", "9N": "Nepal",
+    "9Q": "DR Congo", "9V": "Singapore", "9W": "Malaysia", "9X": "Rwanda",
+    "9Y": "Trinidad & Tobago",
+    "A2": "Botswana", "A3": "Tonga", "A4": "Oman", "A5": "Bhutan",
+    "A6": "United Arab Emirates", "A7": "Qatar", "A9": "Bahrain",
+    "CE": "Chile", "CO": "Cuba", "CT": "Portugal", "CU": "Azores",
+    "CX": "Uruguay",
+    "D2": "Angola", "D4": "Cape Verde", "D6": "Comoros",
+    "E7": "Bosnia-Herzegovina",
+    "OA": "Peru", "OB": "Peru",
+    "P2": "Papua New Guinea", "P4": "Aruba",
+    "T7": "San Marino", "JT": "Mongolia",
+    "F": "France", "W": "United States", "K": "United States",
+    "N": "United States", "R": "Russia",
+}
+
+
+def _call_to_country(callsign: str):
+    """Best-effort callsign to DXCC/country name — mirrors _call_to_latlon's
+    longest-prefix-first matching (same tables), just resolving a name
+    instead of coordinates. See its own module-level docstring/comment for
+    why this exists independently of any plugin's mult1."""
+    call = callsign.upper().strip()
+
+    if call[:1] in ("W", "K", "N") and len(call) > 1 and call[1] in _US_CALL_AREA:
+        return "United States"
+    if (len(call) > 2 and call[0] == "P" and call[1] in _BR_LETTERS
+            and call[2] in _BR_CALL_AREA):
+        return "Brazil"
+    if call[:2] in ("XE", "XF") and len(call) > 2 and call[2] in _MX_CALL_AREA:
+        return "Mexico"
+    if call[:2] in _AU_PREFIXES and len(call) > 2 and call[2] in _AU_CALL_AREA:
+        return "Australia"
+
+    for n in [4, 3, 2, 1]:
+        if n <= len(call) and call[:n] in _PFX_COUNTRY:
+            return _PFX_COUNTRY[call[:n]]
+    if call[:2] in _AU_PREFIXES:
+        return "Australia"
+    return None
+
+
+@app.get("/api/top_countries")
+async def api_top_countries():
+    """Top worked DXCC/countries by QSO count — resolved straight from each
+    QSO's callsign (see _call_to_country), not from mult1, so this works
+    the same way regardless of what the loaded contest's own multiplier is."""
+    with STATE._lock:
+        if not STATE.contest_log:
+            return []
+        qsos = list(STATE.contest_log.qsos)
+    counts: dict = {}
+    for q in qsos:
+        if q.get("dupe"):
+            continue
+        call = q.get("call", "")
+        if not call:
+            continue
+        country = _call_to_country(call)
+        if not country:
+            continue
+        counts[country] = counts.get(country, 0) + 1
+    top = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:15]
+    return [{"country": c, "qsos": n} for c, n in top]
+
 
 @app.get("/api/map_data")
 async def api_map_data():

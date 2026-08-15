@@ -190,7 +190,7 @@
       const gain = _audioCtx.createGain();
       osc.type = 'sine';
       osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.15, _audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.07, _audioCtx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.0001, _audioCtx.currentTime + 0.25);
       osc.connect(gain).connect(_audioCtx.destination);
       osc.start();
