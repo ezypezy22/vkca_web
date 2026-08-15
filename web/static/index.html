@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VK Contest Analyzer v26.8.1</title>
+<!-- Leaflet's own CSS first, so style.css's dark-theme overrides for
+     .leaflet-tooltip/.leaflet-popup/etc. (equal specificity, single class
+     selectors) win the cascade by load order — it was previously linked
+     near the bottom of <body>, after style.css, which silently let
+     Leaflet's default white tooltip background win instead. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="/static/style.css">
 <script>
   // Applied synchronously, before paint, so a popped-out tile/HUD window
@@ -299,6 +305,8 @@
              background:rgba(13,17,23,.55);padding:2px 10px;border-radius:4px">
           <span style="color:var(--accent3)">[ &#127760; ]</span>
           <span class="ip-title" style="color:var(--accent3)">QSOs BY DXCC</span></div>
+        <div id="glow-map-legend" class="map-legend" style="position:absolute;top:10px;right:14px;z-index:500;
+             pointer-events:none;background:rgba(13,17,23,.55);padding:2px 10px;border-radius:4px;margin:0"></div>
         <div id="glow-map-container"></div>
       </div>
       <div class="info-panel hero-row-side" id="panel-band-donut">
@@ -1269,7 +1277,6 @@
 </div>
 
 <!-- ── Scripts ─────────────────────────────────────────────────────────────── -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet.geodesic@2.7.1/dist/leaflet.geodesic.umd.min.js"></script>

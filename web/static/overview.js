@@ -964,9 +964,54 @@
       data.forEach(d=>{
         if(d.lat==null||d.lon==null) return;
         const col=BAND_COLS[(d.band||'').toUpperCase()]||T.muted;
-        L.marker([d.lat,d.lon],{icon:glowSpotIcon(col)}).addTo(_glowMarkerLayer);
+        const band=(d.band||'?').toLowerCase();
+        // Tooltip flips to below the marker instead of always above it
+        // when the marker sits near the top of the panel — .glow-map-panel
+        // needs overflow:hidden to keep the map's own tiles contained
+        // (see fitGlowMapBounds()'s comment), which was silently clipping
+        // an always-above tooltip for any marker near that edge (northern
+        // Europe/Canada/Russia are exactly where markers cluster).
+        const py=_glowMap.latLngToContainerPoint([d.lat,d.lon]).y;
+        const flip=py<80;
+        // Same tooltip markup as the World Map tab's own live-spot markers
+        // (worldmap.js addLiveSpot()) — a plain string, not that one's lazy
+        // function form, since this layer is fully torn down and rebuilt
+        // on every poll rather than mutating existing markers.
+        L.marker([d.lat,d.lon],{icon:glowSpotIcon(col)})
+          .bindTooltip(`
+            <div style="font-family:Consolas,monospace;font-size:11px;line-height:1.6">
+              <b style="color:${col}">${escapeHtml(d.call)}</b>
+              ${d.country?` · ${escapeHtml(d.country)}`:''}<br>
+              ${band} · ${d.count} QSO${d.count===1?'':'s'}
+              ${d.mult?`<br>mult: ${escapeHtml(d.mult)}`:''}
+            </div>`, {direction:flip?'bottom':'top',offset:flip?[0,8]:[0,-8]})
+          .addTo(_glowMarkerLayer);
       });
+      updateGlowLegend(data);
     } catch(e){ /* leave whatever's already plotted */ }
+  }
+  // Same idiom as the World Map tab's own updateLegend() (worldmap.js) —
+  // dot colour meant "which band" was only explained by a separate panel
+  // (the QSOs-by-band donut, elsewhere on the page); a legend directly on
+  // this map makes it self-explanatory without having to hover every dot
+  // or cross-reference another panel.
+  function updateGlowLegend(data){
+    const el=document.getElementById('glow-map-legend'); if(!el) return;
+    const counts={};
+    data.forEach(d=>{
+      const band=(d.band||'?').toUpperCase();
+      counts[band]=(counts[band]||0)+(d.count||0);
+    });
+    el.innerHTML=Object.entries(counts)
+      .sort((a,b)=>b[1]-a[1]).slice(0,8)
+      .map(([band,n])=>{
+        const col=BAND_COLS[band]||T.muted;
+        return `<span class="map-legend-item">
+          <span class="map-legend-dot" style="background:${col}"></span>
+          <span style="color:${col}">${band.toLowerCase()}</span>
+          <span class="map-legend-count">${n}</span>
+        </span>`;
+      }).join('');
   }
 
   async function fetchLiveRank(){

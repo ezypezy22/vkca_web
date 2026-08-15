@@ -3331,7 +3331,8 @@ async def api_map_data():
         if call not in agg:
             agg[call] = {"call": call, "band": q.get("band", "?"),
                          "lat": ll[0], "lon": ll[1], "count": 0,
-                         "mult": q.get("mult1", "")}
+                         "mult": q.get("mult1", ""),
+                         "country": _call_to_country(call) or ""}
         agg[call]["count"] += 1
     return list(agg.values())
 
