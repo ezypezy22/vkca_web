@@ -11,6 +11,7 @@ import re
 import json
 import math
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from abc import ABC, abstractmethod
@@ -54,6 +55,21 @@ def _freq_to_band(freq_raw):
     elif 50.0 <= f < 54.0:  return "6M"
     elif 144  <= f < 148:   return "2M"
     else:                    return f"{f:.2f}MHz"
+
+
+# Inverse of _freq_to_band's band-name half — a nominal mid-band frequency
+# per band label, for logentry.js's entry form (band, not frequency, is
+# what the operator picks). Matches the same band labels used throughout
+# the app (band_list()/BAND_COLS), not a general-purpose band table.
+_BAND_TO_MHZ = {
+    "160M": 1.85, "80M": 3.6, "60M": 5.35, "40M": 7.1, "30M": 10.12,
+    "20M": 14.1, "17M": 18.1, "15M": 21.2, "12M": 24.9, "10M": 28.4,
+    "6M": 50.1, "2M": 144.1, "70CM": 432.1,
+}
+
+
+def _band_to_mhz(band: str) -> float:
+    return _BAND_TO_MHZ.get((band or "").upper(), 0.0)
 
 
 # ── VK call area / state helpers ─────────────────────────────────────────────
@@ -175,6 +191,108 @@ class ContestLog:
         except Exception as e:
             logging.info("station_call(%r) failed: %s", db_path, e)
             return None
+
+    @staticmethod
+    def create_new_log(db_path, contest_name: str, my_call: str, cq_zone: int = 0) -> None:
+        """
+        Create a brand-new, empty contest log at `db_path` for standalone
+        logging mode (this app as the sole writer — never a file N1MM might
+        also have open, see web/server.py's STATE.is_standalone_log gate).
+
+        The DXLOG schema below is the REAL N1MM schema (confirmed via
+        `PRAGMA table_info` against sample .s3db files in this repo), not a
+        trimmed-down alternative — a file created here should be
+        indistinguishable, column-for-column, from one N1MM itself wrote.
+        Two things worth calling out since they're easy to get wrong:
+          - The declared PRIMARY KEY is (TS, Call), not ID — ID is a 32-hex-
+            char GUID unique via a separate index, matching how
+            delete_qso() already looks rows up by it.
+          - Run1Run2 is NOT NULL with no default; every insert must supply
+            it explicitly (add_qso() below always writes 0).
+        ContestInstance/Station only carry the columns this app's own
+        load()/station_call() actually read, plus whatever else is NOT NULL
+        — no attempt to fully replicate N1MM's real (much larger) schema
+        for those two, unlike DXLOG.
+        """
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.executescript("""
+                CREATE TABLE DXLOG (
+                    TS DATETIME NOT NULL, Call VARCHAR(15) NOT NULL, Freq DOUBLE NULL,
+                    QSXFreq DOUBLE DEFAULT 0, Mode VARCHAR(6), ContestName VARCHAR(10) DEFAULT 'NORMAL',
+                    SNT VARCHAR(10), RCV VARCHAR(15), CountryPrefix VARCHAR(8) DEFAULT '',
+                    StationPrefix VARCHAR(15) DEFAULT '', QTH VARCHAR(25) DEFAULT '', Name VARCHAR(20) DEFAULT '',
+                    Comment VARCHAR(60) DEFAULT '', NR INTEGER DEFAULT 0, Sect VARCHAR(8) DEFAULT '',
+                    Prec VARCHAR(1) DEFAULT '', CK TINYINT DEFAULT 0, ZN TINYINT DEFAULT 0,
+                    SentNr INTEGER DEFAULT 0, Points INTEGER DEFAULT 0, IsMultiplier1 TINYINT DEFAULT 0,
+                    IsMultiplier2 INTEGER DEFAULT 0, Power VARCHAR(8), Band FLOAT DEFAULT 0,
+                    WPXPrefix VARCHAR(8), Exchange1 VARCHAR(20), RadioNR TINYINT DEFAULT 1,
+                    ContestNR INTEGER, isMultiplier3 INTEGER, MiscText VARCHAR(20),
+                    IsRunQSO TINYINT(1) DEFAULT 0, ContactType VARCHAR(1),
+                    Run1Run2 TINYINT NOT NULL,
+                    GridSquare VARCHAR(6), Operator VARCHAR(20), Continent VARCHAR(2),
+                    RoverLocation VARCHAR(10), RadioInterfaced INTEGER, NetworkedCompNr INTEGER,
+                    NetBiosName VARCHAR(255), IsOriginal BOOLEAN,
+                    ID TEXT(16) NOT NULL DEFAULT '0000000000000000', CLAIMEDQSO INTEGER DEFAULT 1,
+                    PRIMARY KEY (TS, Call)
+                );
+                CREATE UNIQUE INDEX ID_INDEX ON DXLOG(ID COLLATE BINARY ASC);
+
+                CREATE TABLE ContestInstance (
+                    ContestID INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ContestName VARCHAR(10),
+                    StartDate DATETIME,
+                    ContestNR INT
+                );
+
+                CREATE TABLE Station (
+                    Call NVARCHAR(20) PRIMARY KEY,
+                    CQZone SMALLINT NOT NULL
+                );
+            """)
+            now = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+            conn.execute(
+                "INSERT INTO ContestInstance (ContestName, StartDate, ContestNR) VALUES (?, ?, 1)",
+                (contest_name, now.strftime("%Y-%m-%d %H:%M:%S")),
+            )
+            conn.execute(
+                "INSERT INTO Station (Call, CQZone) VALUES (?, ?)",
+                (my_call.strip().upper(), cq_zone),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def add_qso(self, call: str, band: str, mode: str, rst_sent: str,
+                rst_rcvd: str, exchange: str) -> str:
+        """
+        Insert one new QSO into this (standalone-only, see the caller's own
+        gate in web/server.py) log at the current time, and return its new
+        ID. Same connect/execute/commit/close pattern as delete_qso() — no
+        connection pooling anywhere else in this codebase to match either.
+        Deliberately does NOT touch self.qsos or recompute anything itself;
+        callers reload (ContestLog(...) again / STATE.load_db() again) so
+        the existing dupe/scoring pipeline recomputes from scratch exactly
+        as it would for a QSO N1MM itself had logged — no second, parallel
+        implementation of dupe-checking here.
+        """
+        new_id = uuid.uuid4().hex
+        ts = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+        band_mhz = _band_to_mhz(band)
+        conn = sqlite3.connect(self.db_path)
+        try:
+            conn.execute(
+                """INSERT INTO DXLOG
+                   (TS, Call, Band, Mode, SNT, RCV, Exchange1, ContestNR, Run1Run2, ID)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""",
+                (ts.strftime("%Y-%m-%d %H:%M:%S"), call.strip().upper(), band_mhz,
+                 mode.strip().upper(), rst_sent.strip(), rst_rcvd.strip(),
+                 exchange.strip(), self.contest_nr, new_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return new_id
 
     def __init__(self, db_path, contest_nr=None, plugin: ContestPlugin = None):
         self.db_path    = db_path

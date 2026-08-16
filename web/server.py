@@ -60,7 +60,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
 # Direct import — no tkinter mocking needed
-from contest_log import ContestLog
+from contest_log import ContestLog, cqz_from_call
 from plugins.loader import plugin_for, get_all_plugins
 from plugins.generic import GenericPlugin
 import cosb
@@ -242,6 +242,13 @@ class AppState:
         # explanation otherwise looks identical to "N1MM+ just isn't
         # broadcasting yet" and sends the operator chasing the wrong fix.
         self.radio_bind_error: Optional[str]      = None
+        # True only for a log created via POST /api/new_log (standalone
+        # logging mode — see that endpoint and POST /api/qsos/add). Reset
+        # False on every ordinary /api/load, since that's always opening a
+        # file this app didn't create and shouldn't ever write into — the
+        # single source of truth the Log Entry tab's visibility and its
+        # own API's write-gate both check.
+        self.is_standalone_log: bool               = False
         # Set by _start_radio_listener() so a Settings-triggered port change
         # can stop the currently-running listener thread before starting a
         # new one on the new port — see that function for why a per-restart
@@ -309,7 +316,7 @@ class AppState:
     # ── Full load (creates ContestLog + compute_snapshot) ────────────────────
 
     def load_db(self, path: str, contest_nr: Optional[int] = None,
-                plugin=None) -> dict:
+                plugin=None, standalone: bool = False) -> dict:
         path = str(Path(path).resolve())
         err  = self.validate_path(path)
         if err:
@@ -332,6 +339,12 @@ class AppState:
                 self.contest_log   = cl
                 self.last_mtime    = mtime
                 self.last_snapshot = snapshot
+                # standalone=True only from /api/new_log's own call — every
+                # ordinary load (including a reload of an already-standalone
+                # log, which passes it through explicitly) is a file this
+                # app didn't create, so the Log Entry tab/its API must stay
+                # gated off unless this exact flag says otherwise.
+                self.is_standalone_log = standalone
             return {"ok": True, "path": path}
         except Exception as exc:
             log.exception("load_db failed")
@@ -1404,6 +1417,132 @@ async def api_load(body: dict):
     if "ok" in result:
         await _broadcast(STATE.snapshot())
     return result
+
+
+# ── Standalone logging mode ───────────────────────────────────────────────────
+# A second, opt-in way to get QSOs into this app besides opening an existing
+# N1MM log: create a brand-new .s3db this app is the sole writer of, then log
+# contacts into it via /api/qsos/add. Never writes into a file that wasn't
+# created this way (STATE.is_standalone_log, set only by load_db(...,
+# standalone=True) below) — this app has no precedent anywhere for a second
+# process (N1MM) also writing to the same SQLite file at the same time, and
+# a brand-new file sidesteps that risk entirely rather than trying to solve it.
+
+@app.get("/api/contest_types")
+async def api_contest_types():
+    """List every registered contest plugin's display_name, for the "+ New
+    Log" contest-type picker. A chosen name round-trips back through
+    plugin_for() exactly like scan_contests()'s own `plugin` field already
+    does for an opened file — plugins/loader.py's own startup self-check
+    already guarantees that round-trip for every registered plugin, so no
+    separate name-to-plugin mapping is needed here."""
+    names = sorted(p.display_name for p in get_all_plugins() if not isinstance(p, GenericPlugin))
+    return {"contests": names}
+
+
+@app.post("/api/new_log")
+async def api_new_log(body: dict):
+    """Create a brand-new standalone contest log and load it, exactly like
+    opening an existing one. Body: {path, contest_display_name, my_call}."""
+    path                  = (body.get("path") or "").strip()
+    contest_display_name  = (body.get("contest_display_name") or "").strip()
+    my_call               = (body.get("my_call") or "").strip()
+    if not path:
+        return JSONResponse({"error": "No path supplied"}, status_code=400)
+    if not contest_display_name:
+        return JSONResponse({"error": "No contest type selected"}, status_code=400)
+    if not my_call:
+        return JSONResponse({"error": "No callsign supplied"}, status_code=400)
+
+    p = Path(path)
+    if p.exists():
+        return JSONResponse({"error": f"File already exists: {path}"}, status_code=400)
+    if p.suffix.lower() not in AppState._VALID_SUFFIXES:
+        return JSONResponse(
+            {"error": f"Expected a .s3db/.db/.sqlite file, got: {p.name}"}, status_code=400)
+
+    plugin  = plugin_for(contest_display_name, my_call)
+    cq_zone = cqz_from_call(my_call) or 0
+
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.get_event_loop().run_in_executor(
+            None, ContestLog.create_new_log, str(p), contest_display_name, my_call, cq_zone)
+    except Exception as exc:
+        log.exception("create_new_log failed")
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, STATE.load_db, str(p), 1, plugin, True)
+    if "ok" in result:
+        await _broadcast(STATE.snapshot())
+    return result
+
+
+def _add_qso(call: str, band: str, mode: str, rst_sent: str, rst_rcvd: str, exchange: str) -> dict:
+    with STATE._lock:
+        cl = STATE.contest_log
+        if not cl or not STATE.is_standalone_log:
+            return {"error": "Logging is only available for a log created via + New Log."}
+        try:
+            new_id = cl.add_qso(call, band, mode, rst_sent, rst_rcvd, exchange)
+        except Exception as e:
+            log.exception("add_qso failed")
+            return {"error": str(e)}
+    # Reload (not just append to cl.qsos in place) so the existing dupe/
+    # scoring pipeline recomputes the new QSO exactly as it would for one
+    # N1MM had logged — no second, parallel dupe-checking implementation
+    # here. Mirrors _delete_qsos()'s own "recompute the cached snapshot
+    # immediately, don't wait for the next poll" reasoning.
+    result = STATE.load_db(STATE.db_path, STATE.contest_nr, STATE.plugin, True)
+    if "error" in result:
+        return result
+    return {"ok": True, "qso_id": new_id}
+
+
+@app.post("/api/qsos/add")
+async def api_qsos_add(body: dict):
+    """Log one new QSO into the current standalone log. Body: {call, band,
+    mode, rst_sent, rst_rcvd, exchange}. 400s if the currently-loaded log
+    isn't one this app created (STATE.is_standalone_log) — the guardrail
+    that keeps this feature from ever writing into an opened N1MM file."""
+    call = (body.get("call") or "").strip()
+    band = (body.get("band") or "").strip()
+    mode = (body.get("mode") or "").strip()
+    if not call or not band or not mode:
+        return JSONResponse({"error": "Call, band, and mode are required."}, status_code=400)
+
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, _add_qso, call, band, mode,
+        body.get("rst_sent") or "", body.get("rst_rcvd") or "", body.get("exchange") or "")
+    if "error" in result:
+        return JSONResponse(result, status_code=400)
+    await _broadcast(STATE.snapshot())
+    return result
+
+
+@app.get("/api/browse_save_file")
+async def api_browse_save_file():
+    """Trigger the OS native save-file dialog via pywebview — used to pick
+    where a new standalone log gets created. Mirrors api_browse_folder/the
+    existing OPEN-dialog browse endpoint exactly, just with SAVE instead."""
+    win = STATE._webview_window
+    if win is None:
+        return JSONResponse({"error": "PyWebView window not ready"}, status_code=503)
+    try:
+        import webview as _wv
+        result = win.create_file_dialog(
+            dialog_type=_wv.FileDialog.SAVE,
+            save_filename="new_contest.s3db",
+            file_types=("Contest Log Files (*.s3db)", "All files (*.*)"),
+        )
+        if not result:
+            return {"path": None}
+        chosen = str(result if isinstance(result, str) else result[0])
+        return {"path": chosen}
+    except Exception as exc:
+        log.exception("browse_save_file failed")
+        return JSONResponse({"error": str(exc)}, status_code=500)
 
 
 # ── Data endpoints ────────────────────────────────────────────────────────────
@@ -2554,6 +2693,8 @@ async def api_plugin_meta():
     - my_call: the logging station's own callsign, read from the log's
       Station table — null if unavailable. Both feed the Cabrillo export
       dialog's pre-filled fields.
+    - is_standalone_log: True only for a log created via POST /api/new_log
+      (see STATE.is_standalone_log) — gates the Log Entry tab's visibility.
     """
     if not STATE.contest_log:
         return {"loaded": False}
@@ -2597,6 +2738,7 @@ async def api_plugin_meta():
         "rework_window_hours": getattr(p, "rework_window_hours", None),
         "cabrillo_contest_id": getattr(p, "cabrillo_contest_id", None),
         "my_call":          getattr(STATE.contest_log, "my_call", None),
+        "is_standalone_log": STATE.is_standalone_log,
     }
 
 

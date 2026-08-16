@@ -990,9 +990,11 @@ Users are responsible for verifying all information against N1MM before making d
     scanKnownLocations();
   }
   function hideDialog() { overlay.classList.add('hidden'); errDiv.classList.add('hidden'); _selectedContest=null; btnConfirm.disabled=true; }
+  const stepNew = document.getElementById('step-new');
   function showStep(step) {
     stepPath.classList.toggle('hidden',step!=='path');
     stepPicker.classList.toggle('hidden',step!=='picker');
+    stepNew?.classList.toggle('hidden',step!=='new');
     btnConfirm.style.display=step==='picker'?'':'none';
   }
   function showError(msg) { errDiv.textContent=msg; errDiv.classList.remove('hidden'); }
@@ -1107,6 +1109,76 @@ Users are responsible for verifying all information against N1MM before making d
     if (data.error) { showError(data.error); throw new Error(data.error); }
     return data;
   }
+
+  // ── "+ New Log" (standalone logging mode) ──────────────────────────────
+  const newLogContestSel = document.getElementById('new-log-contest');
+  const newLogCallInput  = document.getElementById('new-log-call');
+  const newLogPathInput  = document.getElementById('new-log-path');
+  const newLogErr        = document.getElementById('new-log-error');
+  const btnNewLog        = document.getElementById('btn-new-log');
+  const btnNewLogCreate  = document.getElementById('btn-new-log-create');
+  const btnNewLogBrowse  = document.getElementById('btn-new-log-browse');
+
+  function showNewLogError(msg) { newLogErr.textContent=msg; newLogErr.classList.remove('hidden'); }
+
+  function suggestNewLogPath() {
+    if (!newLogPathInput) return;
+    const call = (newLogCallInput?.value||'LOG').trim().toUpperCase().replace(/[^A-Z0-9]/g,'') || 'LOG';
+    const contest = (newLogContestSel?.value||'contest').replace(/[^A-Za-z0-9]+/g,'_');
+    const date = new Date().toISOString().slice(0,10);
+    newLogPathInput.value = `${call}_${contest}_${date}.s3db`;
+  }
+
+  btnNewLog?.addEventListener('click', async () => {
+    newLogErr.classList.add('hidden');
+    showStep('new');
+    if (newLogContestSel && !newLogContestSel.options.length) {
+      try {
+        const res = await fetch('/api/contest_types');
+        const data = await res.json();
+        (data.contests||[]).forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name; opt.textContent = name;
+          newLogContestSel.appendChild(opt);
+        });
+        suggestNewLogPath();
+      } catch(e) { showNewLogError(`Could not load contest list: ${e.message}`); }
+    }
+  });
+  document.getElementById('btn-new-back')?.addEventListener('click', ()=>showStep('path'));
+  newLogContestSel?.addEventListener('change', suggestNewLogPath);
+  newLogCallInput?.addEventListener('input', suggestNewLogPath);
+
+  btnNewLogBrowse?.addEventListener('click', async () => {
+    btnNewLogBrowse.disabled=true; btnNewLogBrowse.textContent='…';
+    try {
+      const res = await fetch('/api/browse_save_file');
+      const data = await res.json();
+      if (data.error) { showNewLogError(data.error); return; }
+      if (data.path)  { newLogPathInput.value=data.path; newLogErr.classList.add('hidden'); }
+    } catch(e) { showNewLogError(`Browse failed: ${e.message}`); }
+    finally { btnNewLogBrowse.disabled=false; btnNewLogBrowse.textContent='📁'; }
+  });
+
+  btnNewLogCreate?.addEventListener('click', async () => {
+    const contest_display_name = newLogContestSel?.value||'';
+    const my_call = (newLogCallInput?.value||'').trim().toUpperCase();
+    const path    = (newLogPathInput?.value||'').trim();
+    newLogErr.classList.add('hidden');
+    if (!contest_display_name) { showNewLogError('Choose a contest.'); return; }
+    if (!my_call)              { showNewLogError('Enter your callsign.'); return; }
+    if (!path)                 { showNewLogError('Enter or browse to where the new log should be saved.'); return; }
+    btnNewLogCreate.disabled=true; btnNewLogCreate.textContent='Creating…';
+    try {
+      const res = await fetch('/api/new_log', {method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({path, contest_display_name, my_call})});
+      const data = await res.json();
+      if (data.error) { showNewLogError(data.error); return; }
+      _currentContestName = contest_display_name;
+      hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown();
+    } catch(e) { showNewLogError(`Create failed: ${e.message}`); }
+    finally { btnNewLogCreate.disabled=false; btnNewLogCreate.textContent='Create & Start Logging'; }
+  });
 
 
   // ── Theme selector ────────────────────────────────────────────────────────

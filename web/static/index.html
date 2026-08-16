@@ -229,6 +229,13 @@
   <button class="tab-btn" data-tab="worked">
     <span class="tab-icon">📋</span><span class="tab-label">Worked</span>
   </button>
+  <!-- Hidden by default (not just gated by JS after data arrives) — this
+       tab is only ever relevant for a standalone log this app created
+       itself (see STATE.is_standalone_log), the rare case, unlike every
+       other tab here which defaults visible since it applies to any log. -->
+  <button class="tab-btn" data-tab="logentry" style="display:none">
+    <span class="tab-icon">📝</span><span class="tab-label">Log Entry</span>
+  </button>
   <button class="tab-btn" data-tab="report">
     <span class="tab-icon">📑</span><span class="tab-label">Postcontest Report</span>
   </button>
@@ -1048,6 +1055,53 @@
     </div>
   </section>
 
+  <!-- ══ LOG ENTRY ══ (standalone logging mode only — see tab-btn's own
+       comment above; STATE.is_standalone_log gates both this tab's
+       visibility and the /api/qsos/add endpoint itself) ── -->
+  <section id="tab-logentry" class="tab-panel">
+    <div class="panel-box" style="max-width:520px">
+      <div class="panel-header"><span style="color:var(--accent)">●</span> LOG A QSO</div>
+      <form id="logentry-form">
+        <label class="dialog-label">Callsign</label>
+        <input id="le-call" class="dialog-input" type="text" autocomplete="off" style="text-transform:uppercase" required>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><label class="dialog-label">Band</label>
+            <select id="le-band" class="dialog-input"></select></div>
+          <div><label class="dialog-label">Mode</label>
+            <select id="le-mode" class="dialog-input">
+              <option value="SSB">SSB</option><option value="CW">CW</option>
+              <option value="RTTY">RTTY</option><option value="FM">FM</option>
+              <option value="FT8">FT8</option><option value="DIGITAL">Digital (other)</option>
+            </select></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><label class="dialog-label">RST Sent</label>
+            <input id="le-rst-sent" class="dialog-input" type="text" value="59"></div>
+          <div><label class="dialog-label">RST Rcvd</label>
+            <input id="le-rst-rcvd" class="dialog-input" type="text" value="59"></div>
+        </div>
+
+        <label class="dialog-label">Exchange</label>
+        <input id="le-exchange" class="dialog-input" type="text" autocomplete="off">
+
+        <div id="le-error" class="dialog-error hidden" style="margin-top:8px"></div>
+        <button id="le-submit" type="submit" class="btn btn--primary" style="margin-top:14px;width:100%">📝 Log QSO</button>
+      </form>
+    </div>
+
+    <div class="panel-box" style="max-width:520px;margin-top:var(--gap)">
+      <div class="panel-header"><span style="color:var(--accent3)">●</span> RECENTLY LOGGED</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Call</th><th>Band</th><th>Mode</th><th>Exch</th><th>Time (UTC)</th></tr></thead>
+          <tbody id="le-recent-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- ══ WORLD MAP ══ -->
   <section id="tab-map" class="tab-panel">
     <div class="map-toolbar panel-box" style="flex-direction:row;align-items:center;gap:10px;flex-shrink:0">
@@ -1149,6 +1203,8 @@
         </div>
         <div id="load-error" class="dialog-error hidden"></div>
         <button id="btn-scan" class="btn btn--primary" style="margin-top:12px;width:100%">Scan for Contests →</button>
+        <div class="dialog-hint" style="text-align:center;margin:10px 0 2px">— or —</div>
+        <button id="btn-new-log" class="btn btn--ghost" style="width:100%">+ New Log (use this app as a standalone logger)</button>
       </div>
       <div id="step-picker" class="hidden">
         <div class="picker-header">
@@ -1156,6 +1212,27 @@
           <span class="dialog-label" style="margin:0" id="picker-path-label"></span>
         </div>
         <div class="contest-list-wrap"><div id="contest-list" class="contest-list"></div></div>
+      </div>
+      <div id="step-new" class="hidden">
+        <div class="picker-header">
+          <button id="btn-new-back" class="btn btn--ghost btn--sm">← Back</button>
+          <span class="dialog-label" style="margin:0">New Standalone Log</span>
+        </div>
+        <div class="dialog-hint">
+          Creates a brand-new log file that this app fully owns — not a file N1MM (or anything
+          else) has open. Log contacts directly from the new "Log Entry" tab once created.
+        </div>
+        <label class="dialog-label">Contest</label>
+        <select id="new-log-contest" class="dialog-input"></select>
+        <label class="dialog-label">Your callsign</label>
+        <input id="new-log-call" class="dialog-input" type="text" autocomplete="off" style="text-transform:uppercase">
+        <label class="dialog-label">Save new log as</label>
+        <div class="path-row">
+          <input id="new-log-path" class="dialog-input" type="text">
+          <button id="btn-new-log-browse" class="btn btn--ghost btn--icon" title="Browse…">📁</button>
+        </div>
+        <div id="new-log-error" class="dialog-error hidden"></div>
+        <button id="btn-new-log-create" class="btn btn--primary" style="margin-top:12px;width:100%">Create &amp; Start Logging</button>
       </div>
     </div>
     <div class="dialog-footer">
@@ -1415,6 +1492,7 @@
 <script src="/static/settings.js"></script>
 <script src="/static/tips.js"></script>
 <script src="/static/cabrillo.js"></script>
+<script src="/static/logentry.js"></script>
 <script src="/static/worldmap.js"></script>
 </body>
 </html>

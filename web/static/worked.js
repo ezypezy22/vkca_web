@@ -162,7 +162,7 @@
   // can't change without a contest switch, so re-fetching it every few
   // seconds would just be wasted requests.
   let _metaLoaded = false;
-  window.addEventListener('vka:loaded', () => { _metaLoaded = false; });
+  window.addEventListener('vka:loaded', () => { _metaLoaded = false; _page = 0; });
 
   async function load() {
     const gen = ++_loadGeneration;
@@ -173,7 +173,6 @@
       if (gen !== _loadGeneration) return;
       _allQsos  = data;
       annotateCountdowns();
-      _page     = 0;
       applyFilter();
     } catch(e) {
       if (gen !== _loadGeneration) return;
@@ -191,7 +190,6 @@
           (r.mult1||'').toLowerCase().includes(q))
       : _allQsos;
     applySort();
-    _page = 0;
     render();
   }
 
@@ -370,7 +368,7 @@
   exportCsvBtn?.addEventListener('click', () => exportCsv().catch(e => console.warn('CSV export failed:', e)));
   exportAdifBtn?.addEventListener('click', () => exportAdif().catch(e => console.warn('ADIF export failed:', e)));
 
-  filterEl?.addEventListener('input', applyFilter);
+  filterEl?.addEventListener('input', () => { _page = 0; applyFilter(); });
   prevBtn?.addEventListener('click', () => { _page--; render(); });
   nextBtn?.addEventListener('click', () => { _page++; render(); });
   deleteBtn?.addEventListener('click', deleteSelected);

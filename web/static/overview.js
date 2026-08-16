@@ -243,6 +243,9 @@
       // worked/(worked+missing) are meaningless here (missing is always 0).
       _hasFixedMultList = meta.has_missing_tab !== false;
       setTabVisible('missing', meta.has_missing_tab!==false);
+      // Standalone logging mode only (see index.html's tab-btn comment) —
+      // hidden for every ordinary opened-from-N1MM log, the common case.
+      setTabVisible('logentry', !!meta.is_standalone_log);
       // "What if?" simulates working a MISSING mult, so it's only meaningful
       // for contests with a fixed, enumerable mult list (has_missing_tab) —
       // for open-ended ones (e.g. WPX prefixes) there's nothing to list, so
