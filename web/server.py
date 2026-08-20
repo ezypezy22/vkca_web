@@ -986,6 +986,33 @@ async def api_radio_port_post(body: dict):
     return {"ok": True, "port": port, "bind_error": bind_error}
 
 
+# ── Overview panel layout (drag-reorder + hide/show) ──────────────────────────
+# Persists what was previously localStorage-only (overview.js's tile reorder/
+# hide system) so a custom layout survives a fresh profile/cache clear, same
+# durability guarantee every other setting here already has. One flat dict
+# keyed by section — {"spark":[...tileKeys], "info":[...], "ea":[...],
+# "gauge":[...], "hidden":[...tileKeys]} — written as a whole on every save
+# since these are infrequent, user-driven edits (drag end / hide toggle).
+
+@app.get("/api/settings/panel_layout")
+async def api_panel_layout_get():
+    return {"layout": _load_settings().get("panel_layout") or {}}
+
+
+@app.post("/api/settings/panel_layout")
+async def api_panel_layout_post(body: dict):
+    layout = body.get("layout")
+    if not isinstance(layout, dict):
+        return JSONResponse({"error": "Invalid layout."}, status_code=400)
+
+    def _mutate(settings):
+        settings["panel_layout"] = layout
+
+    await asyncio.get_event_loop().run_in_executor(
+        None, _settings_read_modify_write, _mutate)
+    return {"ok": True}
+
+
 # ── QRZ.com lookup settings ───────────────────────────────────────────────────
 # See web/qrz.py for the API client and the _qrz_* helpers/worker above STATE
 # for the enrichment pipeline itself. Credentials live in the same plaintext

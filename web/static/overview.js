@@ -268,7 +268,7 @@
 
   function setTabVisible(id,v){const b=document.querySelector(`.tab-btn[data-tab="${id}"]`);if(b)b.style.display=v?'':'none';}
 
-  function buildGaugeRow(defs) {
+  async function buildGaugeRow(defs) {
     const row=document.getElementById('gauge-row'); if(!row) return;
     row.innerHTML='';
     row.style.gridTemplateColumns=`repeat(${defs.length},1fr)`;
@@ -299,10 +299,13 @@
       }
     });
     Array.from(row.children).forEach(addPopoutButton);
+    Array.from(row.children).forEach(addHideButton);
     markDraggable(row);
-    applyTileOrder(row,'vkca_layout_gauge');
-    setupReorder(row,'vkca_layout_gauge');
+    await _layoutReady;
+    applyTileOrder(row,'gauge');
+    setupReorder(row,'gauge');
     applyPopoutFilter();
+    applyHiddenTiles();
     setTimeout(redrawAll,50);
   }
 
@@ -1306,14 +1309,58 @@
   // ══ TILE REORDERING (drag-and-drop, persisted per-section) ═════════════════
   function tileKey(el){ return el.dataset.tileKey || el.id || ''; }
 
-  function saveTileOrder(container,storageKey){
-    const order=Array.from(container.children).map(tileKey).filter(Boolean);
-    try{ localStorage.setItem(storageKey,JSON.stringify(order)); }catch{}
+  // Server-persisted layout (order per section + hidden-tile keys) via
+  // /api/settings/panel_layout (web/server.py) — previously localStorage-only,
+  // which didn't survive a fresh profile/cache clear. _layoutReady gates the
+  // very first apply of a section's order/hidden state on the initial GET
+  // (+ one-time migration of any pre-existing localStorage layout) having
+  // resolved; every save after that is fire-and-forget, same as the old
+  // localStorage.setItem calls this replaces.
+  const LEGACY_LAYOUT_KEYS={
+    spark:'vkca_layout_spark', info:'vkca_layout_info', ea:'vkca_layout_ea',
+    gauge:'vkca_layout_gauge', hidden:'vkca_hidden_tiles',
+  };
+  let _layout={spark:[],info:[],ea:[],gauge:[],hidden:[]};
+
+  function _readLegacyArray(key){
+    try{ const v=JSON.parse(localStorage.getItem(key)||'null'); return Array.isArray(v)?v:[]; }
+    catch{ return []; }
   }
 
-  function applyTileOrder(container,storageKey){
-    let saved;
-    try{ saved=JSON.parse(localStorage.getItem(storageKey)||'null'); }catch{ saved=null; }
+  function saveLayout(){
+    fetch('/api/settings/panel_layout',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({layout:_layout}),
+    }).catch(()=>{});
+  }
+
+  async function loadLayout(){
+    let layout={};
+    try{
+      const res=await fetch('/api/settings/panel_layout');
+      const data=await res.json();
+      layout=data.layout||{};
+    }catch(e){ console.warn('overview: loadLayout failed:',e); }
+
+    let migrated=false;
+    if (!Object.keys(layout).length){
+      Object.entries(LEGACY_LAYOUT_KEYS).forEach(([section,key])=>{
+        const arr=_readLegacyArray(key);
+        if (arr.length){ layout[section]=arr; migrated=true; }
+      });
+    }
+    _layout={spark:[],info:[],ea:[],gauge:[],hidden:[],...layout};
+    if (migrated) saveLayout();
+  }
+  const _layoutReady=loadLayout();
+
+  function saveTileOrder(container,section){
+    _layout[section]=Array.from(container.children).map(tileKey).filter(Boolean);
+    saveLayout();
+  }
+
+  function applyTileOrder(container,section){
+    const saved=_layout[section];
     if(!saved||!saved.length) return;
     const byKey=new Map(Array.from(container.children).map(c=>[tileKey(c),c]));
     saved.forEach(k=>{ const el=byKey.get(k); if(el){ container.appendChild(el); byKey.delete(k); } });
@@ -1327,7 +1374,7 @@
     });
   }
 
-  function setupReorder(container,storageKey){
+  function setupReorder(container,section){
     if(!container||container._reorderBound) return;
     container._reorderBound=true;
     container.classList.add('reorderable-row');
@@ -1349,7 +1396,7 @@
       container.insertBefore(dragEl,before?tile:tile.nextSibling);
     });
     container.addEventListener('dragend',()=>{
-      if(dragEl){ dragEl.classList.remove('dragging'); dragEl=null; saveTileOrder(container,storageKey); }
+      if(dragEl){ dragEl.classList.remove('dragging'); dragEl=null; saveTileOrder(container,section); }
     });
   }
 
@@ -1407,32 +1454,23 @@
 
   // ══ HIDE/SHOW INDIVIDUAL PANELS ═════════════════════════════════════════════
   // Brings back the old desktop app's per-panel collapse toggle (lost in the
-  // web rewrite — only the pop-out half survived). Scoped to the three
-  // static, tile-based rows (spark/info/ea cards) plus the standalone Region
-  // Completion panel; gauges are excluded since gauge-row is rebuilt fresh
-  // per plugin/snapshot with positional ids, not stable per-gauge keys.
-  const HIDDEN_TILES_KEY='vkca_hidden_tiles';
-
-  function loadHiddenTiles(){
-    try{ return new Set(JSON.parse(localStorage.getItem(HIDDEN_TILES_KEY)||'[]')); }
-    catch{ return new Set(); }
-  }
-  let _hiddenTiles=loadHiddenTiles();
-  function saveHiddenTiles(){
-    try{ localStorage.setItem(HIDDEN_TILES_KEY,JSON.stringify(Array.from(_hiddenTiles))); }catch{}
-  }
-
+  // web rewrite — only the pop-out half survived). Covers the four
+  // tile-based rows (gauge/spark/info/ea cards) plus the standalone Region
+  // Completion panel. Gauge cards get a stable per-instance key derived from
+  // their label (set in buildGaugeRow()), same as every other tile.
   function applyHiddenTiles(){
-    document.querySelectorAll('.spark-card,.info-panel,.ea-card').forEach(el=>{
-      el.classList.toggle('tile-hidden',_hiddenTiles.has(tileKey(el)));
+    document.querySelectorAll('.gauge-card,.spark-card,.info-panel,.ea-card').forEach(el=>{
+      el.classList.toggle('tile-hidden',_layout.hidden.includes(tileKey(el)));
     });
     const bars=document.getElementById('bars-row');
-    if (bars) bars.classList.toggle('tile-hidden',_hiddenTiles.has('bars-row'));
+    if (bars) bars.classList.toggle('tile-hidden',_layout.hidden.includes('bars-row'));
   }
 
   function setTileHidden(key,hidden){
-    if (hidden) _hiddenTiles.add(key); else _hiddenTiles.delete(key);
-    saveHiddenTiles();
+    const idx=_layout.hidden.indexOf(key);
+    if (hidden && idx===-1) _layout.hidden.push(key);
+    else if (!hidden && idx!==-1) _layout.hidden.splice(idx,1);
+    saveLayout();
     applyHiddenTiles();
     buildPanelsMenu();   // keep the open menu's checkboxes in sync
   }
@@ -1462,6 +1500,7 @@
   }
 
   const PANEL_MENU_GROUPS=[
+    {label:'Gauges',      sel:'.gauge-row > *'},
     {label:'Sparklines',  sel:'.spark-row > *'},
     {label:'Info Panels', sel:'.info-panels-row > *'},
     {label:'Analytics',   sel:'.extra-analytics-row > *'},
@@ -1474,7 +1513,7 @@
       const row=document.createElement('label');
       row.className='panels-menu-row';
       const cb=document.createElement('input');
-      cb.type='checkbox'; cb.checked=!_hiddenTiles.has(key);
+      cb.type='checkbox'; cb.checked=!_layout.hidden.includes(key);
       cb.addEventListener('change',()=>setTileHidden(key,!cb.checked));
       row.appendChild(cb);
       row.appendChild(document.createTextNode(label));
@@ -1513,30 +1552,32 @@
   });
 
   const REORDER_SECTIONS=[
-    {sel:'.spark-row',          key:'vkca_layout_spark'},
-    {sel:'.info-panels-row',    key:'vkca_layout_info'},
-    {sel:'.extra-analytics-row',key:'vkca_layout_ea'},
+    {sel:'.spark-row',          section:'spark'},
+    {sel:'.info-panels-row',    section:'info'},
+    {sel:'.extra-analytics-row',section:'ea'},
   ];
-  const GAUGE_LAYOUT_KEY='vkca_layout_gauge';
 
   function initReorder(){
-    REORDER_SECTIONS.forEach(({sel,key})=>{
+    REORDER_SECTIONS.forEach(({sel,section})=>{
       const el=document.querySelector(sel); if(!el) return;
       Array.from(el.children).forEach(addPopoutButton);
       Array.from(el.children).forEach(addHideButton);
       markDraggable(el);
-      applyTileOrder(el,key);
-      setupReorder(el,key);
+      applyTileOrder(el,section);
+      setupReorder(el,section);
     });
     applyPopoutFilter();
     applyHiddenTiles();
   }
-  initReorder();
+  // Gated on the initial layout GET (+ legacy-localStorage migration, see
+  // loadLayout()) so the very first reorder/hide pass uses real saved state
+  // instead of momentarily showing (and then yanking back from) defaults.
+  _layoutReady.then(initReorder);
 
   document.getElementById('btn-reset-layout')?.addEventListener('click',()=>{
-    REORDER_SECTIONS.forEach(({key})=>{ try{ localStorage.removeItem(key); }catch{} });
-    try{ localStorage.removeItem(GAUGE_LAYOUT_KEY); }catch{}
-    try{ localStorage.removeItem(HIDDEN_TILES_KEY); }catch{}
+    Object.values(LEGACY_LAYOUT_KEYS).forEach(key=>{ try{ localStorage.removeItem(key); }catch{} });
+    _layout={spark:[],info:[],ea:[],gauge:[],hidden:[]};
+    saveLayout();
     location.reload();
   });
 
