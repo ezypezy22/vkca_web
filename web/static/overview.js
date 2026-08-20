@@ -944,23 +944,28 @@
     // the container instead of exactly equal, so that edge sits safely
     // inside world bounds instead of balanced on the boundary — a few px
     // of imperceptible overfit versus a visible missing edge tile.
-    const widthZoom=Math.log2(w/256)+0.004;
+    const fitZoom=Math.max(0,Math.min(8,Math.log2(w/256)+0.004));
+
     // .glow-map-panel's max-height caps how tall this panel gets on a wide
     // window (see style.css) — past that point the box is wider than its
-    // nominal 5/2 aspect ratio, and a pure width-fit zoom then shows a
-    // vertical band too narrow to include VK/ZL's own latitudes at the
-    // bottom. heightZoom is the zoom ceiling that still keeps GLOW_SOUTH_LAT
-    // inside the container at its *actual* current height; taking the
-    // smaller of the two zooms only trades a little of the usual zero-dead-
-    // space-on-the-sides fit for guaranteed no-cropping-of-home-region, and
-    // only on the wide/short windows where the two actually conflict — at
-    // every "normal" window shape widthZoom already keeps the south in
-    // frame, so heightZoom never binds.
-    const project=(lat,zoom)=>_glowMap.project([lat,0],zoom).y;
-    const dyAtZoom0=project(GLOW_SOUTH_LAT,0)-project(GLOW_CENTER_LAT,0);
-    const heightZoom=Math.log2((h/2)/dyAtZoom0);
-    const fitZoom=Math.max(0,Math.min(8,Math.min(widthZoom,heightZoom)));
-    _glowMap.setView([GLOW_CENTER_LAT,0],fitZoom,{animate:false});
+    // nominal 5/2 aspect ratio, and centering on GLOW_CENTER_LAT at a pure
+    // width-fit zoom then doesn't leave enough room below it to reach
+    // GLOW_SOUTH_LAT (VK/ZL's own latitudes) before hitting the bottom
+    // edge. Zooming out to compensate was tried and reverted — it shrinks
+    // the world below the container's width, reopening the dead side
+    // margins fitBounds() was rejected for in the first place (see the
+    // comment above). Instead, pan the center south just far enough that
+    // GLOW_SOUTH_LAT lands exactly on the bottom edge, trading a little of
+    // the far north (much less DX-relevant than home territory) for a
+    // guaranteed no-crop of VK/ZL at full, dead-space-free zoom.
+    let centerLat=GLOW_CENTER_LAT;
+    const lon0X=_glowMap.project([0,0],fitZoom).x;
+    const southEdgeY=_glowMap.project([centerLat,0],fitZoom).y+h/2;
+    const neededY=_glowMap.project([GLOW_SOUTH_LAT,0],fitZoom).y;
+    if (southEdgeY<neededY){
+      centerLat=_glowMap.unproject(L.point(lon0X,neededY-h/2),fitZoom).lat;
+    }
+    _glowMap.setView([centerLat,0],fitZoom,{animate:false});
   }
 
   // NASA GIBS VIIRS "Earth at Night" city-lights composite for dark themes
