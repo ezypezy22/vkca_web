@@ -264,31 +264,77 @@ class ContestLog:
             conn.close()
 
     def add_qso(self, call: str, band: str, mode: str, rst_sent: str,
-                rst_rcvd: str, exchange: str) -> str:
+                rst_rcvd: str, exchange: str, is_run: bool = False) -> str:
         """
         Insert one new QSO into this (standalone-only, see the caller's own
         gate in web/server.py) log at the current time, and return its new
         ID. Same connect/execute/commit/close pattern as delete_qso() — no
         connection pooling anywhere else in this codebase to match either.
-        Deliberately does NOT touch self.qsos or recompute anything itself;
-        callers reload (ContestLog(...) again / STATE.load_db() again) so
-        the existing dupe/scoring pipeline recomputes from scratch exactly
-        as it would for a QSO N1MM itself had logged — no second, parallel
-        implementation of dupe-checking here.
+        Deliberately does NOT touch self.qsos or recompute anything itself
+        beyond the dupe check below; callers reload (ContestLog(...) again /
+        STATE.load_db() again) so the existing scoring pipeline recomputes
+        from scratch exactly as it would for a QSO N1MM itself had logged.
+
+        is_run is N1MM's actual Run/S&P flag (IsRunQSO) — not Run1Run2,
+        which is a different column (NOT NULL, always written as 0 here)
+        that this app has never needed to interpret.
+
+        Dupe detection: this app has no independent DXCC/CQ-zone lookup (see
+        e.g. plugins/wpx.py's recalc_pts() docstring — several plugins
+        deliberately trust N1MM's own already-computed Points/dupe data
+        rather than risk a wrong from-scratch country/continent rescore),
+        so a QSO logged here can never get a fully accurate contest score
+        for a country/continent-scored contest (WPX, CQWW, ARRL DX, IARU,
+        the digital-distance contests). "Same call worked again on the same
+        band" is unambiguous and needs no DXCC data at all, though — checked
+        directly against this log's own already-loaded self.qsos (kept
+        current because every add_qso() call is immediately followed by a
+        full reload) and written as an explicit ContactType='D', the same
+        raw signal load()'s dupe_col resolution already trusts unconditionally
+        — rather than relying on the ambiguous "pts==0 implies dupe"
+        heuristic, which a standalone-logged QSO's always-0 Points would
+        otherwise trip for every QSO, dupe or not.
         """
         new_id = uuid.uuid4().hex
-        ts = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+        call_u = call.strip().upper()
+        band_u = band.strip().upper()
+        mode_u = mode.strip().upper()
+        mode_scoped = getattr(self.plugin, "mode_scoped_dupes", False)
+        new_mode_key = self.plugin.dupe_mode_key({"mode": mode_u}) if mode_scoped else None
+        is_repeat = any(
+            not q["dupe"] and q["call"] == call_u and q["band"] == band_u
+            and (not mode_scoped or self.plugin.dupe_mode_key(q) == new_mode_key)
+            for q in self.qsos
+        )
+        contact_type = "D" if is_repeat else ""
+        # A neutral non-zero placeholder for a genuine non-repeat, not a
+        # real score (see the docstring above) — just enough to keep the
+        # base loader's pts==0-implies-dupe heuristic from misflagging it.
+        pts = 0 if is_repeat else 1
         band_mhz = _band_to_mhz(band)
         conn = sqlite3.connect(self.db_path)
         try:
-            conn.execute(
-                """INSERT INTO DXLOG
-                   (TS, Call, Band, Mode, SNT, RCV, Exchange1, ContestNR, Run1Run2, ID)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""",
-                (ts.strftime("%Y-%m-%d %H:%M:%S"), call.strip().upper(), band_mhz,
-                 mode.strip().upper(), rst_sent.strip(), rst_rcvd.strip(),
-                 exchange.strip(), self.contest_nr, new_id),
-            )
+            ts = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+            # PRIMARY KEY is (TS, Call) — second-resolution TS collides if
+            # the same call is logged twice within the same second (a fast
+            # manual re-entry, or a genuine dupe attempt). Advance by a
+            # second and retry rather than surfacing a raw SQLite error for
+            # what's actually a perfectly loggable QSO.
+            for _ in range(5):
+                try:
+                    conn.execute(
+                        """INSERT INTO DXLOG
+                           (TS, Call, Band, Mode, SNT, RCV, Exchange1, ContestNR,
+                            Run1Run2, IsRunQSO, ContactType, Points, ID)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)""",
+                        (ts.strftime("%Y-%m-%d %H:%M:%S"), call_u, band_mhz,
+                         mode_u, rst_sent.strip(), rst_rcvd.strip(),
+                         exchange.strip(), self.contest_nr, 1 if is_run else 0,
+                         contact_type, pts, new_id),
+                    )
+                    break
+                except sqlite3.IntegrityError:
+                    ts += timedelta(seconds=1)
             conn.commit()
         finally:
             conn.close()

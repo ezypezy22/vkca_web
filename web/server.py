@@ -199,12 +199,14 @@ class AppState:
         self._base_url:     Optional[str]         = None  # set after webview starts; used by /api/popout
         self._hud_window                          = None  # the single Mini HUD window, if open
         self._operator_hud_window                 = None  # the single Operator HUD window, if open
+        self._entry_window                        = None  # the single N1MM-style Entry Window, if open
         # Serializes each HUD's check-existing/reuse-or-create sequence below
         # so two concurrent /api/hud (or /api/operator_hud) requests can't
         # both see no existing window and each create one, orphaning the
         # first (see issue #51).
         self._hud_lock                            = asyncio.Lock()
         self._operator_hud_lock                   = asyncio.Lock()
+        self._entry_window_lock                   = asyncio.Lock()
         self.yoy_extra_paths: list                = []    # extra .s3db files added on the YOY tab
         self.pace_extra_paths: list               = []    # [{"path":..., "kind":"s3db"|"adif"|"cabrillo"}]
         self.fatigue_extra_paths: list            = []    # extra .s3db files added on the Fatigue tab
@@ -759,6 +761,13 @@ async def popout_page(key: str):
     """Serves the same SPA — index.html's bootstrap script detects this path
     and isolates the matching tile. See hud_page() for why this is a path,
     not a query string."""
+    return FileResponse(str(_STATIC / "index.html"))
+
+
+@app.get("/entry_window")
+async def entry_window_page():
+    """Same SPA-serving trick as /hud above, for the N1MM-style standalone
+    logging Entry Window."""
     return FileResponse(str(_STATIC / "index.html"))
 
 
@@ -1354,6 +1363,53 @@ async def _do_open_operator_hud():
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
+@app.post("/api/entry_window")
+async def api_entry_window():
+    """Open the N1MM-style standalone-logging Entry Window (/entry_window)
+    in its own pywebview window. Mirrors /api/hud's reuse/restore lifecycle,
+    but this window is a normal (non-frameless) one with a native titlebar
+    and close button — unlike the HUDs it's meant to be resized/moved like
+    any other window, so it needs none of _HudApi's custom drag/close
+    plumbing, and win.events.closed can just clear STATE._entry_window
+    directly rather than routing through a hide()-not-destroy() workaround."""
+    if STATE._webview_window is None or not STATE._base_url:
+        return JSONResponse({"error": "PyWebView window not ready"}, status_code=503)
+
+    async with STATE._entry_window_lock:
+        return await _do_open_entry_window()
+
+
+async def _do_open_entry_window():
+    existing = STATE._entry_window
+    if existing is not None:
+        def _restore():
+            try:
+                existing.show()
+            except Exception:
+                pass
+        await asyncio.get_event_loop().run_in_executor(None, _restore)
+        return {"ok": True, "reused": True}
+
+    def _open():
+        import webview as _wv
+        win = _wv.create_window(
+            title="VK Contest Analyzer — Entry Window",
+            url=f"{STATE._base_url}/entry_window",
+            width=900, height=300,
+            min_size=(700, 220),
+            background_color="#0d1117",   # matches this app's own dark bg (see style.css --bg)
+        )
+        STATE._entry_window = win
+        win.events.closed += lambda: setattr(STATE, "_entry_window", None)
+
+    try:
+        await asyncio.get_event_loop().run_in_executor(None, _open)
+        return {"ok": True}
+    except Exception as exc:
+        log.exception("entry_window failed")
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
 @app.post("/api/upload_log")
 async def api_upload_log(file: UploadFile = File(...)):
     """Browser-fallback file picker (no pywebview window available): saves
@@ -1479,13 +1535,14 @@ async def api_new_log(body: dict):
     return result
 
 
-def _add_qso(call: str, band: str, mode: str, rst_sent: str, rst_rcvd: str, exchange: str) -> dict:
+def _add_qso(call: str, band: str, mode: str, rst_sent: str, rst_rcvd: str, exchange: str,
+              is_run: bool = False) -> dict:
     with STATE._lock:
         cl = STATE.contest_log
         if not cl or not STATE.is_standalone_log:
             return {"error": "Logging is only available for a log created via + New Log."}
         try:
-            new_id = cl.add_qso(call, band, mode, rst_sent, rst_rcvd, exchange)
+            new_id = cl.add_qso(call, band, mode, rst_sent, rst_rcvd, exchange, is_run)
         except Exception as e:
             log.exception("add_qso failed")
             return {"error": str(e)}
@@ -1503,9 +1560,12 @@ def _add_qso(call: str, band: str, mode: str, rst_sent: str, rst_rcvd: str, exch
 @app.post("/api/qsos/add")
 async def api_qsos_add(body: dict):
     """Log one new QSO into the current standalone log. Body: {call, band,
-    mode, rst_sent, rst_rcvd, exchange}. 400s if the currently-loaded log
-    isn't one this app created (STATE.is_standalone_log) — the guardrail
-    that keeps this feature from ever writing into an opened N1MM file."""
+    mode, rst_sent, rst_rcvd, exchange, is_run}. is_run is optional (default
+    False) — only the N1MM-style Entry Window's Run/S&P toggle sends it; the
+    plain Log Entry tab form never does, so its QSOs are unaffected. 400s if
+    the currently-loaded log isn't one this app created
+    (STATE.is_standalone_log) — the guardrail that keeps this feature from
+    ever writing into an opened N1MM file."""
     call = (body.get("call") or "").strip()
     band = (body.get("band") or "").strip()
     mode = (body.get("mode") or "").strip()
@@ -1514,7 +1574,8 @@ async def api_qsos_add(body: dict):
 
     result = await asyncio.get_event_loop().run_in_executor(
         None, _add_qso, call, band, mode,
-        body.get("rst_sent") or "", body.get("rst_rcvd") or "", body.get("exchange") or "")
+        body.get("rst_sent") or "", body.get("rst_rcvd") or "", body.get("exchange") or "",
+        bool(body.get("is_run")))
     if "error" in result:
         return JSONResponse(result, status_code=400)
     await _broadcast(STATE.snapshot())

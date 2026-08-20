@@ -37,8 +37,9 @@ whole-contest elapsed/remaining time rather than a per-block countdown.
 
 from __future__ import annotations
 
+import calendar
 from collections import defaultdict
-from datetime import timedelta
+from datetime import date as date_, timedelta
 from typing import Optional
 
 from plugins.base import (
@@ -128,6 +129,23 @@ class CQWWDigiPlugin(ContestPlugin):
             label_prefix="B",
             start_hour=12,         # Saturday 12:00 UTC
         )
+
+    @staticmethod
+    def contest_saturday(year: int) -> date_:
+        """Last full weekend of August (confirmed against ww-digi.com/rules)
+        — e.g. 2026-08-29. Without this override, ContestLog.contest_start()
+        falls back to N1MM's own ContestInstance.StartDate, which reflects
+        when the operator's N1MM log instance was created rather than the
+        contest's real start — opening N1MM before the contest actually
+        begins (a normal setup habit) makes the app think the contest is
+        already live and never shows the Mini HUD's pre-contest countdown
+        (issue #74)."""
+        days_in  = calendar.monthrange(year, 8)[1]
+        last_day = date_(year, 8, days_in)
+        sat      = last_day - timedelta(days=(last_day.weekday() - 5) % 7)
+        if sat.day == days_in:   # Saturday landing exactly on the last day of
+            sat -= timedelta(weeks=1)   # August isn't a "full" weekend — back up one
+        return sat
 
     def uses_block_structure(self) -> bool:
         """

@@ -21,6 +21,7 @@
   else if (location.pathname === '/operator_hud') document.documentElement.classList.add('operator-hud-mode');
   else if (location.pathname.startsWith('/popout/')) document.documentElement.classList.add('popout-mode');
   else if (location.pathname === '/spectator') document.documentElement.classList.add('spectator-mode');
+  else if (location.pathname === '/entry_window') document.documentElement.classList.add('entry-window-mode');
 </script>
 </head>
 <body>
@@ -173,6 +174,70 @@
 <div id="operator-hud-bar">
   <button id="operator-hud-close" title="Close">✕</button>
   <div id="operator-hud-cards"></div>
+</div>
+
+<!-- ── N1MM-style Entry Window (only shown when loaded at /entry_window in
+     its own popped-out window — see entrywindow.js). Deliberately styled
+     with hardcoded colours, not this app's own --bg/--accent theme
+     variables — same precedent as the HUD windows' own hardcoded dark
+     background regardless of the app's active theme. ─────────────────── -->
+<div id="entry-window-view">
+  <div id="ew-header">
+    <span id="ew-radio-band" class="ew-radio-band">—</span>
+    <span id="ew-radio-freq">—</span>
+    <span id="ew-radio-mode">—</span>
+    <span id="ew-qso-count-wrap">NrOfQSOs<b id="ew-qso-count">0</b></span>
+  </div>
+  <div id="ew-body">
+    <div id="ew-bands"></div>
+    <div id="ew-main">
+      <div id="ew-runsp">
+        <label><input type="radio" name="ew-runsp" id="ew-run" checked> Run</label>
+        <label><input type="radio" name="ew-runsp" id="ew-sp"> S&amp;P</label>
+      </div>
+      <form id="ew-form">
+        <table id="ew-field-table">
+          <thead><tr><th>Call</th><th>SntRS(T)</th><th>RcvdRS(T)</th><th>RcvdExch</th></tr></thead>
+          <tbody><tr>
+            <td><input id="ew-call" type="text" autocomplete="off" style="text-transform:uppercase" required></td>
+            <td><input id="ew-rst-sent" type="text" value="59"></td>
+            <td><input id="ew-rst-rcvd" type="text" value="59"></td>
+            <td><input id="ew-exchange" type="text" autocomplete="off"></td>
+          </tr></tbody>
+        </table>
+        <div id="ew-error" class="hidden"></div>
+      </form>
+      <div id="ew-fkeys">
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F1 CQ</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F2 Contest</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F3 TNX</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F4 Spare</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F5 His Call</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F6 Spare</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F7 QRZ?</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F8 Agn?</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F9 Zone?</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F10 Spare</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F11 Spare</button>
+      </div>
+      <div id="ew-actions">
+        <button type="button" class="ew-fkey" disabled title="No CW/voice keying in standalone mode">Esc: Stop</button>
+        <button type="button" id="ew-wipe">Wipe</button>
+        <button type="submit" form="ew-form" id="ew-log-it">Log It</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">Edit</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">Mark</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">Store</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">Spot It</button>
+        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">QRZ</button>
+      </div>
+    </div>
+  </div>
+  <div id="ew-recent">
+    <table>
+      <thead><tr><th>Call</th><th>Band</th><th>Mode</th><th>Exch</th><th>Time (UTC)</th></tr></thead>
+      <tbody id="ew-recent-tbody"></tbody>
+    </table>
+  </div>
 </div>
 
 <!-- ── Spectator bar (only shown when loaded at /spectator by a read-only
@@ -1061,34 +1126,9 @@
   <section id="tab-logentry" class="tab-panel">
     <div class="panel-box" style="max-width:520px">
       <div class="panel-header"><span style="color:var(--accent)">●</span> LOG A QSO</div>
-      <form id="logentry-form">
-        <label class="dialog-label">Callsign</label>
-        <input id="le-call" class="dialog-input" type="text" autocomplete="off" style="text-transform:uppercase" required>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div><label class="dialog-label">Band</label>
-            <select id="le-band" class="dialog-input"></select></div>
-          <div><label class="dialog-label">Mode</label>
-            <select id="le-mode" class="dialog-input">
-              <option value="SSB">SSB</option><option value="CW">CW</option>
-              <option value="RTTY">RTTY</option><option value="FM">FM</option>
-              <option value="FT8">FT8</option><option value="DIGITAL">Digital (other)</option>
-            </select></div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div><label class="dialog-label">RST Sent</label>
-            <input id="le-rst-sent" class="dialog-input" type="text" value="59"></div>
-          <div><label class="dialog-label">RST Rcvd</label>
-            <input id="le-rst-rcvd" class="dialog-input" type="text" value="59"></div>
-        </div>
-
-        <label class="dialog-label">Exchange</label>
-        <input id="le-exchange" class="dialog-input" type="text" autocomplete="off">
-
-        <div id="le-error" class="dialog-error hidden" style="margin-top:8px"></div>
-        <button id="le-submit" type="submit" class="btn btn--primary" style="margin-top:14px;width:100%">📝 Log QSO</button>
-      </form>
+      <p style="color:var(--muted);margin-bottom:12px">QSOs are logged through the Entry Window — a separate, N1MM-style window you can park next to your radio.</p>
+      <button id="le-open-entry-window" type="button" class="btn btn--primary" style="width:100%" title="Open a separate N1MM-style entry window">🪟 Open Entry Window</button>
+      <div id="le-error" class="dialog-error hidden" style="margin-top:8px"></div>
     </div>
 
     <div class="panel-box" style="max-width:520px;margin-top:var(--gap)">
@@ -1493,6 +1533,7 @@
 <script src="/static/tips.js"></script>
 <script src="/static/cabrillo.js"></script>
 <script src="/static/logentry.js"></script>
+<script src="/static/entrywindow.js"></script>
 <script src="/static/worldmap.js"></script>
 </body>
 </html>

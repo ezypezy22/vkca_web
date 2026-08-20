@@ -1121,17 +1121,34 @@ Users are responsible for verifying all information against N1MM before making d
 
   function showNewLogError(msg) { newLogErr.textContent=msg; newLogErr.classList.remove('hidden'); }
 
+  // Cached after the first "+ New Log" open — same default N1MM Logger+
+  // folder Settings' "Manage Folders" already shows (see settings.js's
+  // loadLogDirs()), so a freshly-created standalone log lands somewhere the
+  // user already expects to find N1MM databases, not wherever this app
+  // happened to be launched from (a bare filename with no directory
+  // resolves relative to the process's own cwd — effectively undiscoverable
+  // in the packaged desktop build).
+  let _defaultLogDir = null;
+
   function suggestNewLogPath() {
     if (!newLogPathInput) return;
     const call = (newLogCallInput?.value||'LOG').trim().toUpperCase().replace(/[^A-Z0-9]/g,'') || 'LOG';
     const contest = (newLogContestSel?.value||'contest').replace(/[^A-Za-z0-9]+/g,'_');
     const date = new Date().toISOString().slice(0,10);
-    newLogPathInput.value = `${call}_${contest}_${date}.s3db`;
+    const filename = `${call}_${contest}_${date}.s3db`;
+    newLogPathInput.value = _defaultLogDir ? `${_defaultLogDir}\\${filename}` : filename;
   }
 
   btnNewLog?.addEventListener('click', async () => {
     newLogErr.classList.add('hidden');
     showStep('new');
+    if (_defaultLogDir === null) {
+      try {
+        const res = await fetch('/api/settings/log_dirs');
+        const data = await res.json();
+        _defaultLogDir = data.default_dir || '';
+      } catch(e) { _defaultLogDir = ''; }
+    }
     if (newLogContestSel && !newLogContestSel.options.length) {
       try {
         const res = await fetch('/api/contest_types');
@@ -1143,6 +1160,8 @@ Users are responsible for verifying all information against N1MM before making d
         });
         suggestNewLogPath();
       } catch(e) { showNewLogError(`Could not load contest list: ${e.message}`); }
+    } else {
+      suggestNewLogPath();
     }
   });
   document.getElementById('btn-new-back')?.addEventListener('click', ()=>showStep('path'));
@@ -1176,6 +1195,7 @@ Users are responsible for verifying all information against N1MM before making d
       if (data.error) { showNewLogError(data.error); return; }
       _currentContestName = contest_display_name;
       hideDialog(); emit('vka:loaded',{}); doRefresh(); resetCountdown();
+      window.VKA?.showToast?.('New log created', path, '📁');
     } catch(e) { showNewLogError(`Create failed: ${e.message}`); }
     finally { btnNewLogCreate.disabled=false; btnNewLogCreate.textContent='Create & Start Logging'; }
   });
@@ -1582,10 +1602,12 @@ Users are responsible for verifying all information against N1MM before making d
     return dismiss;
   }
 
-  // Main window only — a HUD popout is too small a surface for a multi-line
-  // tip, and one already-dismissed hint should cover the user, not one per
-  // window.
-  const IS_MAIN_WINDOW = location.pathname !== '/hud' && location.pathname !== '/operator_hud' && location.pathname !== '/spectator';
+  // Main window only — a HUD popout (or the Entry Window, which has no
+  // titlebar/Report Issue button of its own to point at) is too small a
+  // surface for a multi-line tip, and one already-dismissed hint should
+  // cover the user, not one per window.
+  const IS_MAIN_WINDOW = location.pathname !== '/hud' && location.pathname !== '/operator_hud'
+    && location.pathname !== '/spectator' && location.pathname !== '/entry_window';
 
   // ── Report Issue pointer ─────────────────────────────────────────────────
   // Deliberately NOT persisted via localStorage (no seenKey) — unlike the
