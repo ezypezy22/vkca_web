@@ -721,7 +721,13 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
    overflow:hidden; 440px still comfortably applies at typical window
    sizes, not just wide monitors, while leaving enough vertical headroom
    south of the equator to keep VK/ZL inside the frame. ── */
-.glow-map-panel{flex:1 1 76%;padding:0;overflow:hidden;aspect-ratio:5/2;max-height:440px;}
+/* isolation:isolate contains Leaflet's own internal pane z-indexes (up to
+   700, for markers/tooltips/popups) inside this panel's own stacking
+   context — without it, those panes compare directly against unrelated
+   positioned elements elsewhere on the page (e.g. .panels-menu's z-index:50)
+   and can paint on top of them regardless of DOM order once anything here
+   overlaps the map's screen position. */
+.glow-map-panel{flex:1 1 76%;padding:0;overflow:hidden;aspect-ratio:5/2;max-height:440px;isolation:isolate;}
 #glow-map-container{width:100%;height:100%;}
 #panel-glow-map .leaflet-control-container{display:none;}
 #panel-glow-map .leaflet-container{background:var(--bg2)!important;border-radius:var(--radius);}

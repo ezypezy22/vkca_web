@@ -921,11 +921,18 @@
   // copy with no wraparound needed, and happens to split the seam through
   // the empty Pacific — the conventional world-map centering for exactly
   // this reason.
+  const GLOW_CENTER_LAT=10;
+  // Southern bound the visible band must always reach — comfortably below
+  // ZL's own southernmost contacts (Stewart Island, ~-47.3) — this app's
+  // home region, and the whole reason a too-narrow band is a real bug here
+  // rather than an acceptable trim on some other latitude.
+  const GLOW_SOUTH_LAT=-48;
+
   function fitGlowMapBounds(){
     if(!_glowMap) return;
     const el=document.getElementById('glow-map-container'); if(!el) return;
     _glowMap.invalidateSize();
-    const w=el.clientWidth||900;
+    const w=el.clientWidth||900, h=el.clientHeight||360;
     // The +0.004 is deliberate, not a stray magic number: an exact fit
     // (world pixel width == container width, centered at lon 0 so the
     // viewport's left edge should land exactly on the world's own left
@@ -937,8 +944,23 @@
     // the container instead of exactly equal, so that edge sits safely
     // inside world bounds instead of balanced on the boundary — a few px
     // of imperceptible overfit versus a visible missing edge tile.
-    const fitZoom=Math.max(0,Math.min(8,Math.log2(w/256)+0.004));
-    _glowMap.setView([10,0],fitZoom,{animate:false});
+    const widthZoom=Math.log2(w/256)+0.004;
+    // .glow-map-panel's max-height caps how tall this panel gets on a wide
+    // window (see style.css) — past that point the box is wider than its
+    // nominal 5/2 aspect ratio, and a pure width-fit zoom then shows a
+    // vertical band too narrow to include VK/ZL's own latitudes at the
+    // bottom. heightZoom is the zoom ceiling that still keeps GLOW_SOUTH_LAT
+    // inside the container at its *actual* current height; taking the
+    // smaller of the two zooms only trades a little of the usual zero-dead-
+    // space-on-the-sides fit for guaranteed no-cropping-of-home-region, and
+    // only on the wide/short windows where the two actually conflict — at
+    // every "normal" window shape widthZoom already keeps the south in
+    // frame, so heightZoom never binds.
+    const project=(lat,zoom)=>_glowMap.project([lat,0],zoom).y;
+    const dyAtZoom0=project(GLOW_SOUTH_LAT,0)-project(GLOW_CENTER_LAT,0);
+    const heightZoom=Math.log2((h/2)/dyAtZoom0);
+    const fitZoom=Math.max(0,Math.min(8,Math.min(widthZoom,heightZoom)));
+    _glowMap.setView([GLOW_CENTER_LAT,0],fitZoom,{animate:false});
   }
 
   // NASA GIBS VIIRS "Earth at Night" city-lights composite for dark themes
