@@ -788,7 +788,10 @@
       addPopoutButton(el); return;
     }
     const maxQ=rows[0].qsos||1;
-    const rowsHtml=rows.slice(0,10).map(r=>`
+    // Sized to fill this tile at roughly the same height as the QSOs-by-band
+    // donut it now sits next to (see index.html's hero-row) — /api/top_countries
+    // already returns up to 15, the most this can ever show.
+    const rowsHtml=rows.slice(0,15).map(r=>`
       <tr>
         <td>${escapeHtml(r.country)}</td>
         <td style="width:60%">
@@ -815,6 +818,26 @@
   // legend laid out against a stale canvas size after this panel's grid
   // row settled to its final height post-load). Same band set as last
   // tick just gets its values updated in place with animation off.
+  // The overlay total ("1,281 / QSOs") sits on top of the canvas via plain
+  // CSS position:absolute — a static top:50%/left:50% (see .donut-center)
+  // only actually centers it on the ring when the ring itself is centered
+  // in the canvas, which it isn't: Chart.js's bottom legend eats vertical
+  // space from the plot area only, so the ring's true center sits *above*
+  // the canvas's own geometric center by however tall the legend rendered
+  // (which itself varies with how many bands wrapped onto how many legend
+  // lines). chart.chartArea is Chart.js's own record of exactly where the
+  // ring got drawn, in the same CSS-pixel space as .donut-wrap — reading
+  // it after every layout keeps the overlay locked to the ring's actual
+  // center instead of a fixed assumption that only happened to hold for
+  // one particular legend height.
+  function positionDonutCenter(chart){
+    const el=document.getElementById('donut-center-total');
+    if(!el||!chart?.chartArea) return;
+    const {left,right,top,bottom}=chart.chartArea;
+    el.style.left=`${(left+right)/2}px`;
+    el.style.top=`${(top+bottom)/2}px`;
+  }
+
   let bandDonutChart=null, _bandDonutShape='';
   function updateBandDonut(snap){
     const canvas=document.getElementById('chart-band-donut'); if(!canvas) return;
@@ -844,6 +867,7 @@
       bandDonutChart.data.datasets[0].data=data;
       bandDonutChart.data.datasets[0].backgroundColor=colours;
       bandDonutChart.update('none');
+      positionDonutCenter(bandDonutChart);
       return;
     }
     _bandDonutShape=shape;
@@ -879,7 +903,14 @@
             }}},
         },
       },
+      // Top-level plugins array (distinct from options.plugins' built-in
+      // legend/tooltip config above) — afterLayout fires on Chart.js's own
+      // responsive resize too, not just our own update() calls, so the
+      // overlay stays correctly placed even when the container resizes
+      // for a reason this code never directly triggered.
+      plugins:[{id:'centerTextPosition',afterLayout:positionDonutCenter}],
     });
+    positionDonutCenter(bandDonutChart);
   }
 
   // ── QSOs by DXCC — hero glow map (Overview) ─────────────────────────────
@@ -922,11 +953,17 @@
   // the empty Pacific — the conventional world-map centering for exactly
   // this reason.
   const GLOW_CENTER_LAT=10;
-  // Southern bound the visible band must always reach — comfortably below
-  // ZL's own southernmost contacts (Stewart Island, ~-47.3) — this app's
-  // home region, and the whole reason a too-narrow band is a real bug here
-  // rather than an acceptable trim on some other latitude.
+  // Latitude band the visible view must always reach both ends of —
+  // GLOW_SOUTH_LAT comfortably below ZL's own southernmost contacts
+  // (Stewart Island, ~-47.3), this app's home region; GLOW_NORTH_LAT past
+  // Norway's North Cape (~71.2, the effective top of mainland-Europe DX)
+  // so real Scandinavian/northern-Russian contacts don't get clipped
+  // either — an earlier version of this fix only protected the south
+  // bound, panning far enough south that GLOW_NORTH_LAT-range contacts
+  // (very real, not just empty Arctic) were the ones getting cropped
+  // instead.
   const GLOW_SOUTH_LAT=-48;
+  const GLOW_NORTH_LAT=72;
 
   function fitGlowMapBounds(){
     if(!_glowMap) return;
@@ -944,27 +981,40 @@
     // the container instead of exactly equal, so that edge sits safely
     // inside world bounds instead of balanced on the boundary — a few px
     // of imperceptible overfit versus a visible missing edge tile.
-    const fitZoom=Math.max(0,Math.min(8,Math.log2(w/256)+0.004));
+    const widthZoom=Math.log2(w/256)+0.004;
+    const yAt=(lat,zoom)=>_glowMap.project([lat,0],zoom).y;
 
-    // .glow-map-panel's max-height caps how tall this panel gets on a wide
-    // window (see style.css) — past that point the box is wider than its
-    // nominal 5/2 aspect ratio, and centering on GLOW_CENTER_LAT at a pure
-    // width-fit zoom then doesn't leave enough room below it to reach
-    // GLOW_SOUTH_LAT (VK/ZL's own latitudes) before hitting the bottom
-    // edge. Zooming out to compensate was tried and reverted — it shrinks
-    // the world below the container's width, reopening the dead side
-    // margins fitBounds() was rejected for in the first place (see the
-    // comment above). Instead, pan the center south just far enough that
-    // GLOW_SOUTH_LAT lands exactly on the bottom edge, trading a little of
-    // the far north (much less DX-relevant than home territory) for a
-    // guaranteed no-crop of VK/ZL at full, dead-space-free zoom.
-    let centerLat=GLOW_CENTER_LAT;
-    const lon0X=_glowMap.project([0,0],fitZoom).x;
-    const southEdgeY=_glowMap.project([centerLat,0],fitZoom).y+h/2;
-    const neededY=_glowMap.project([GLOW_SOUTH_LAT,0],fitZoom).y;
-    if (southEdgeY<neededY){
-      centerLat=_glowMap.unproject(L.point(lon0X,neededY-h/2),fitZoom).lat;
+    // .glow-map-panel's aspect-ratio/max-width/max-height (see style.css)
+    // are tuned so centering on GLOW_CENTER_LAT at a pure width-fit zoom
+    // should already comfortably cover both GLOW_NORTH_LAT and
+    // GLOW_SOUTH_LAT at every reachable panel width — this check (and the
+    // pan/zoom-reduction fallback below it) is the safety net for any case
+    // that math didn't quite account for, not the primary mechanism.
+    // Checked first, so every "normal" window shape keeps the exact same
+    // view as before this fix existed, rather than always recentering on
+    // the fixed bounds' own midpoint (which sits well north of 10°, and
+    // would otherwise visibly shift the default framing for every window,
+    // not just a constrained one).
+    let fitZoom=widthZoom, centerLat=GLOW_CENTER_LAT;
+    const fitsAtDefault=
+      yAt(GLOW_CENTER_LAT,widthZoom)-h/2<=yAt(GLOW_NORTH_LAT,widthZoom) &&
+      yAt(GLOW_CENTER_LAT,widthZoom)+h/2>=yAt(GLOW_SOUTH_LAT,widthZoom);
+    if (!fitsAtDefault){
+      // Pan (keep zoom fixed, slide the center so both bounds land equally
+      // inside the box) first — costs nothing but only works while the two
+      // bounds' pixel span still fits within h. Only once that's no longer
+      // true — a box short enough that no centering could fit both — does
+      // zoom get reduced, and only by exactly enough to make it fit; this
+      // is the sole path that reopens any dead space on the sides
+      // (fitBounds() was rejected for exactly this, see above), and only
+      // ever the minimum needed.
+      const neededSpan=yAt(GLOW_SOUTH_LAT,widthZoom)-yAt(GLOW_NORTH_LAT,widthZoom);
+      if (neededSpan>h) fitZoom=widthZoom-Math.log2(neededSpan/h);
+      const midY=(yAt(GLOW_NORTH_LAT,fitZoom)+yAt(GLOW_SOUTH_LAT,fitZoom))/2;
+      const lon0X=_glowMap.project([0,0],fitZoom).x;
+      centerLat=_glowMap.unproject(L.point(lon0X,midY),fitZoom).lat;
     }
+    fitZoom=Math.max(0,Math.min(8,fitZoom));
     _glowMap.setView([centerLat,0],fitZoom,{animate:false});
   }
 

@@ -678,7 +678,19 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
    stays correct at any window width instead of only the one size this
    was tuned against. ── */
 .hero-row{display:flex;gap:var(--gap);flex-shrink:0;}
-.hero-row-side{flex:0 0 24%;display:flex;flex-direction:column;}
+/* Shared by the band donut plus whichever other small info-panel tiles are
+   parked alongside it (see index.html) — each gets an equal share of
+   whatever width the map doesn't use, so raising .glow-map-panel's own
+   max-width doesn't reopen a dead gap here, it just hands this group more
+   room. Only the donut is built to stretch and fill the row's full height
+   (its own internal flex-column + donut-wrap:flex:1 below) — the others
+   are ordinary fixed-content cards, so they anchor to the top instead of
+   awkwardly stretching into mostly-empty tall boxes. */
+.hero-row-side{flex:1 1 0;min-width:0;align-self:flex-start;}
+/* Radio + Live Ranking share one hero-row-side column, stacked — each stays
+   its own natural height rather than stretching. */
+.hero-row-stack{display:flex;flex-direction:column;gap:var(--gap);}
+#panel-band-donut.hero-row-side{display:flex;flex-direction:column;align-self:stretch;height:100%;}
 .hero-row-side .donut-wrap{flex:1;height:auto;min-height:0;}
 
 /* Sits right next to the glow map's own strong visual (real satellite
@@ -703,31 +715,36 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
    aspect-ratio, not a fixed height: overview.js fits the map to exactly
    this panel's width with zero dead space (see fitGlowMapBounds()), and
    since Mercator tiles are square at any zoom, a too-short panel forces
-   an extremely narrow visible latitude band — narrow enough to clip
-   QSO markers across most of Europe/Russia/Canada. 5/2 keeps the visible
-   band wide enough to cover virtually all DX-relevant latitudes while
-   still being zero-dead-space at every window width, not just one.
+   an extremely narrow visible latitude band. fitGlowMapBounds() needs to
+   show -48°..+72° (VK/ZL up to Scandinavia/N.Russia) without reducing zoom
+   below a true width-exact fit — a reduced zoom shrinks the world below
+   the container's own width and opens dead margins on the sides (tried,
+   rejected, see fitGlowMapBounds()'s own comment). That only works if the
+   panel itself is tall enough, in proportion to its own width, to hold
+   that whole band — which turns out to need an aspect ratio of about
+   2.24:1, not 5/2 (2.5:1): a wider-than-2.24 box can *never* show the full
+   band at zero dead space at *any* absolute width, since both scale
+   together — this went through a few rounds of chasing the wrong
+   variable (window width, then a max-width cap) before landing on the
+   actual fix being the ratio itself. 11/5 (2.2) leaves a small safety
+   margin under the exact 2.24 requirement.
    max-height caps how far that scales on a wide/high-res monitor —
-   without it, height = width × 0.4 has no ceiling, so a large enough
+   without it, height = width × (5/11) has no ceiling, so a large enough
    window makes this one panel tall enough to push every other Overview
-   tile off-screen below the fold. Capped, the map simply shows a
-   narrower latitude slice on very wide windows instead of consuming the
-   whole tab — fitGlowMapBounds() still fits it to the panel's actual
-   width regardless of which dimension ends up constraining the box.
-   440px (not the aspect-ratio's own ~0.4×width, which was still ~475px
-   even at an ordinary window width) — 400px was tried first but clipped
-   real QSO markers over VK/ZL (this app's home region, bottom edge of
-   the visible band at typical window widths) against the panel's
-   overflow:hidden; 440px still comfortably applies at typical window
-   sizes, not just wide monitors, while leaving enough vertical headroom
-   south of the equator to keep VK/ZL inside the frame. ── */
+   tile off-screen below the fold. max-width caps the *width* for the same
+   reason from the other direction, and keeps it under ~968px — the point
+   past which max-height would clamp height below what 11/5 needs, since
+   the two constraints have to agree with each other, not fight. Past
+   max-width, the panel simply stops growing and any extra hero-row width
+   goes to the tiles beside it (see .hero-row-side) instead of stretching
+   this one wider than its ratio supports. */
 /* isolation:isolate contains Leaflet's own internal pane z-indexes (up to
    700, for markers/tooltips/popups) inside this panel's own stacking
    context — without it, those panes compare directly against unrelated
    positioned elements elsewhere on the page (e.g. .panels-menu's z-index:50)
    and can paint on top of them regardless of DOM order once anything here
    overlaps the map's screen position. */
-.glow-map-panel{flex:1 1 76%;padding:0;overflow:hidden;aspect-ratio:5/2;max-height:440px;isolation:isolate;}
+.glow-map-panel{flex:1 1 76%;padding:0;overflow:hidden;aspect-ratio:11/5;max-height:440px;max-width:960px;isolation:isolate;}
 #glow-map-container{width:100%;height:100%;}
 #panel-glow-map .leaflet-control-container{display:none;}
 #panel-glow-map .leaflet-container{background:var(--bg2)!important;border-radius:var(--radius);}
@@ -1006,8 +1023,10 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
                 overflow:hidden; margin:4px 0; }
 .ct-prog-bar  { height:100%; border-radius:3px; transition:width 1s linear; }
 
-/* ── Info panels — now 8 panels (added Fatigue + Live Ranking) ──────────── */
-.info-panels-row { grid-template-columns: repeat(8, 1fr); }
+/* ── Info panels — 6 remaining after moving Top DXCC/Radio/Live Ranking/
+   Fatigue up into the hero row alongside the band donut (see
+   index.html/.hero-row-side above) ──────────────────────────────────────── */
+.info-panels-row { grid-template-columns: repeat(6, 1fr); }
 
 /* Titlebar row 2 control sizing */
 .tb-select--narrow { width:58px !important; }
@@ -1099,6 +1118,14 @@ body:has(#tab-map.active) #content {
 .map-spot-dot::before{content:'';position:absolute;inset:-6px;border-radius:50%;
   background:var(--col);opacity:.45;filter:blur(3px);
   animation:map-spot-pulse-kf 1.8s ease-in-out infinite;}
+/* Overview's glow map wants the same pulse language as the World Map tab's
+   live spots, just smaller — the halo's max extent (inset:-6px, scaled up
+   to 1.4x at the pulse's peak) was overhanging the panel's own edge on
+   markers near the top/bottom, looking like clipping even when the dot
+   itself was correctly placed. Tighter inset keeps the same animation but
+   caps how far it can spread. */
+#panel-glow-map .map-spot-dot{width:6px;height:6px;margin:5px;box-shadow:0 0 3px 1px var(--col);}
+#panel-glow-map .map-spot-dot::before{inset:-3px;opacity:.4;filter:blur(1.5px);}
 @keyframes map-spot-pulse-kf{
   0%,100%{transform:scale(.6);opacity:.5;}
   50%{transform:scale(1.4);opacity:.05;}
