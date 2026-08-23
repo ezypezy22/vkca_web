@@ -1462,7 +1462,11 @@
     spark:'vkca_layout_spark', info:'vkca_layout_info', ea:'vkca_layout_ea',
     gauge:'vkca_layout_gauge', hidden:'vkca_hidden_tiles',
   };
-  let _layout={spark:[],info:[],ea:[],gauge:[],hidden:[]};
+  // compactMode/preCompactHidden ride along in the same already-persisted
+  // dict (see enterCompactMode()/exitCompactMode() below) rather than a
+  // separate settings key — no backend change needed, /api/settings/
+  // panel_layout already accepts an arbitrary dict.
+  let _layout={spark:[],info:[],ea:[],gauge:[],hidden:[],compactMode:false,preCompactHidden:null};
 
   function _readLegacyArray(key){
     try{ const v=JSON.parse(localStorage.getItem(key)||'null'); return Array.isArray(v)?v:[]; }
@@ -1491,7 +1495,7 @@
         if (arr.length){ layout[section]=arr; migrated=true; }
       });
     }
-    _layout={spark:[],info:[],ea:[],gauge:[],hidden:[],...layout};
+    _layout={spark:[],info:[],ea:[],gauge:[],hidden:[],compactMode:false,preCompactHidden:null,...layout};
     if (migrated) saveLayout();
   }
   const _layoutReady=loadLayout();
@@ -1626,6 +1630,61 @@
     }
     buildPanelsMenu();   // keep the open menu's checkboxes in sync
   }
+
+  // ══ COMPACT MODE ═════════════════════════════════════════════════════════
+  // A curated hidden-tile preset for actually operating a contest, where the
+  // full Overview (every gauge, sparkline, hero-row tile, info panel, and
+  // analytics card at once) reads as too much at a glance — keeps just the
+  // gauges, sparklines, Contest Time, and Radio; hides the rest via the same
+  // _layout.hidden mechanism ☰ Panels already drives (setTileHidden(), so
+  // Canvas Mode widgets get torn down/rebuilt right along with it too, same
+  // as any individual hide toggle). Whatever was *already* hidden before
+  // Compact Mode turned on is remembered (_layout.preCompactHidden) and
+  // restored — not just cleared — when it turns back off.
+  const COMPACT_HIDDEN_TILES=[
+    'panel-glow-map','panel-band-donut','panel-top-dxcc','panel-live-rank','panel-fatigue',
+    'panel-personal-bests','panel-qso-value','panel-band-eff','panel-last-worked','panel-op-times',
+    'ea-rate-trend','ea-mult-pct','ea-dupe-rate','ea-pts-qso','ea-best-band','ea-since-last',
+    'bars-row',
+  ];
+
+  function enterCompactMode(){
+    _layout.compactMode=true;
+    _layout.preCompactHidden=_layout.hidden.slice();
+    COMPACT_HIDDEN_TILES.forEach(key=>setTileHidden(key,true));
+    // Radio is the only .hero-row-side content left visible once
+    // map/donut/Top DXCC/Live Ranking/Fatigue are all hidden above — with
+    // .hero-row-side's normal flex:1 1 0, the one remaining flex child
+    // claims the whole row's width. See #tab-overview.compact-mode in
+    // style.css for the cap that keeps it a normal-sized tile instead.
+    document.getElementById('tab-overview').classList.add('compact-mode');
+  }
+  function exitCompactMode(){
+    _layout.compactMode=false;
+    const restore=_layout.preCompactHidden||[];
+    _layout.preCompactHidden=null;
+    COMPACT_HIDDEN_TILES.forEach(key=>setTileHidden(key,false));
+    restore.forEach(key=>setTileHidden(key,true));
+    document.getElementById('tab-overview').classList.remove('compact-mode');
+  }
+  function updateCompactToggleBtn(){
+    const btn=document.getElementById('btn-compact-toggle'); if(!btn) return;
+    btn.textContent=_layout.compactMode?'📋 Compact Mode (On)':'📋 Compact Mode';
+    btn.classList.toggle('mode-toggle-on',_layout.compactMode);
+  }
+  document.getElementById('btn-compact-toggle')?.addEventListener('click',()=>{
+    if(_layout.compactMode) exitCompactMode(); else enterCompactMode();
+    updateCompactToggleBtn();
+  });
+  // Restores whichever state was last saved — gated on _layoutReady since
+  // it reads _layout.hidden/compactMode/preCompactHidden, same reasoning as
+  // initReorder()'s/Canvas Mode's own restore-on-load gating.
+  _layoutReady.then(()=>{
+    if(_layout.compactMode){
+      updateCompactToggleBtn();
+      document.getElementById('tab-overview').classList.add('compact-mode');
+    }
+  });
 
   function addHideButton(el){
     if (POPOUT_KEY || el.querySelector('.hide-btn')) return;
@@ -1882,7 +1941,7 @@
   function updateCanvasToggleBtn(){
     const btn=document.getElementById('btn-canvas-toggle'); if(!btn) return;
     btn.textContent=_canvasMode?'🖼 Canvas Mode (On)':'🖼 Canvas Mode';
-    btn.classList.toggle('canvas-on',_canvasMode);
+    btn.classList.toggle('mode-toggle-on',_canvasMode);
   }
   document.getElementById('btn-canvas-toggle')?.addEventListener('click',()=>{
     if(_canvasMode) exitCanvasMode(); else enterCanvasMode();
@@ -1980,8 +2039,14 @@
 
   document.getElementById('btn-reset-layout')?.addEventListener('click',()=>{
     Object.values(LEGACY_LAYOUT_KEYS).forEach(key=>{ try{ localStorage.removeItem(key); }catch{} });
-    _layout={spark:[],info:[],ea:[],gauge:[],hidden:[]};
+    _layout={spark:[],info:[],ea:[],gauge:[],hidden:[],compactMode:false,preCompactHidden:null};
     saveLayout();
+    // Compact Mode's CSS-only .compact-mode class (see enterCompactMode())
+    // doesn't get cleared just by resetting _layout.compactMode above — the
+    // Canvas Mode branch below skips location.reload(), which is the only
+    // other place that would otherwise pick up the fresh (false) value.
+    document.getElementById('tab-overview').classList.remove('compact-mode');
+    updateCompactToggleBtn();
     // Canvas Mode's own saved positions (_canvasLayout) are untouched by
     // the above — without this, reloading while Canvas Mode is on just
     // restores the exact same canvas layout being "reset" from, since

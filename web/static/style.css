@@ -513,6 +513,18 @@ html.hud-vertical .hud-radio-sub{width:100%;order:3;}
 #tab-overview.canvas-mode .glow-map-panel{
   max-height:none;max-width:none;aspect-ratio:auto;flex:none;
 }
+
+/* ── Compact Mode (Overview) — hides everything but gauges/sparklines/
+   Contest Time/Radio via the normal ☰ Panels hide mechanism (see
+   enterCompactMode()) — this just fixes the one CSS side effect that
+   creates: Radio is the sole surviving .hero-row-side flex child once its
+   hero-row siblings (map/donut/Top DXCC/Live Ranking/Fatigue) are all
+   hidden, and .hero-row-side's normal flex:1 1 0 has it claim the entire
+   row's width as a result. Capped back to its own natural size instead of
+   stretching; the reclaimed row width is intentionally left blank rather
+   than trying to relocate Radio out of the hero row structurally. ── */
+#tab-overview.compact-mode .hero-row-side{flex:0 0 auto;max-width:320px;}
+
 html.popout-mode .hide-btn{display:none;}
 
 /* ── "☰ Panels" show/hide menu ───────────────────────────────────────────── */
@@ -1004,13 +1016,15 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .btn--icon{padding:6px 9px;font-size:1em;}
 .btn--sm{padding:4px 12px;font-size:0.92em;}
 .btn--muted-off{opacity:.55;}
-/* #btn-canvas-toggle keeps its .btn--ghost class even when on — an ID+class
-   selector here beats plain .btn--ghost's own same-specificity rule
-   regardless of source order, rather than relying on class-toggle order
-   (toggling .btn--primary on top of an existing .btn--ghost would silently
-   lose, since .btn--ghost is declared later above and wins ties). */
-#btn-canvas-toggle.canvas-on{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:bold;}
-#btn-canvas-toggle.canvas-on:hover{background:color-mix(in srgb,var(--accent),white 15%);}
+/* Shared "on" state for the Canvas Mode / Compact Mode toolbar toggles,
+   which otherwise keep their .btn--ghost class even when active — a
+   two-class compound selector here beats plain .btn--ghost's own
+   same-specificity rule regardless of source order, rather than relying on
+   class-toggle order (toggling .btn--primary on top of an existing
+   .btn--ghost would silently lose, since .btn--ghost is declared later
+   above and wins ties). */
+.btn.mode-toggle-on{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:bold;}
+.btn.mode-toggle-on:hover{background:color-mix(in srgb,var(--accent),white 15%);}
 
 /* ── Specific tab layouts ─────────────────────────────────────────────────── */
 .bands-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--gap);align-items:start;}
