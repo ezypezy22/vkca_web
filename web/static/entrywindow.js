@@ -1,19 +1,12 @@
 /**
- * entrywindow.js — N1MM-style "Entry Window" popout for standalone logging
- * mode. Opened via the "🪟 Entry Window" button on the Log Entry tab
- * (see logentry.js), POST /api/entry_window, its own pywebview window at
- * /entry_window (see index.html's bootstrap mode-detection and the
- * #entry-window-view markup/styling in style.css).
- *
- * Mode (Call/RST/Exchange fields, submit-to-/api/qsos/add, Recently Logged
- * list) mirrors logentry.js closely, just against this window's own
- * ew-* ids — kept as a separate file rather than shared with logentry.js
- * since the two forms never coexist in the same DOM subtree and have
- * different layouts (band buttons + Run/S&P + F-key row here).
+ * entrywindow.js — N1MM-style "Entry Window", embedded inline in the Log
+ * Entry tab (#tab-logentry) for standalone logging mode. Call/RST/Exchange
+ * fields submit to /api/qsos/add; the "Worked This Session" list below it
+ * (le-recent-tbody, in index.html) is fed by loadRecent() here too.
  */
 ;(function () {
   'use strict';
-  if (location.pathname !== '/entry_window') return;
+  if (location.pathname !== '/') return;   // main-window-only, like settings.js
 
   const form        = document.getElementById('ew-form');
   if (!form) return;
@@ -27,7 +20,7 @@
   const errEl        = document.getElementById('ew-error');
   const wipeBtn      = document.getElementById('ew-wipe');
   const logItBtn     = document.getElementById('ew-log-it');
-  const recentTbody  = document.getElementById('ew-recent-tbody');
+  const recentTbody  = document.getElementById('le-recent-tbody');
   const radioBandEl  = document.getElementById('ew-radio-band');
   const radioFreqEl  = document.getElementById('ew-radio-freq');
   const radioModeEl  = document.getElementById('ew-radio-mode');
@@ -79,7 +72,7 @@
       const qsos = await window.VKA.fetchQsos();
       if (qsoCountEl) qsoCountEl.textContent = qsos.length;
       if (!recentTbody) return;
-      const recent = [...qsos].sort((a, b) => (a.time < b.time ? 1 : a.time > b.time ? -1 : 0)).slice(0, 6);
+      const recent = [...qsos].sort((a, b) => (a.time < b.time ? 1 : a.time > b.time ? -1 : 0)).slice(0, 200);
       recentTbody.innerHTML = recent.map(q => `
         <tr>
           <td style="font-weight:bold">${window.VKA.escapeHtml(q.call || '—')}</td>
@@ -159,6 +152,13 @@
   window.addEventListener('vka:snapshot', e => { updateHeader(e.detail); loadRecent(); });
   window.addEventListener('vka:qsos_changed', loadRecent);
 
+  // Unlike the old dedicated popout window (where this was the only content
+  // and always safe to focus on load), this now lives inline on the main
+  // window's Log Entry tab — only steal focus when that tab is actually
+  // the one the user switched to.
+  window.addEventListener('vka:tabchange', e => {
+    if (e.detail.tab === 'logentry') callInput.focus();
+  });
+
   loadBands().then(() => { updateHeader(window.VKA.lastSnap()); loadRecent(); });
-  callInput.focus();
 })();

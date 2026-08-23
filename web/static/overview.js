@@ -246,6 +246,11 @@
       // Standalone logging mode only (see index.html's tab-btn comment) —
       // hidden for every ordinary opened-from-N1MM log, the common case.
       setTabVisible('logentry', !!meta.is_standalone_log);
+      // Logger mode (see modechooser.js) always needs Log Entry visible —
+      // re-assert the invariant on every reload rather than trusting the
+      // one-time call in applyLoggerModeVisibility(), in case this reload
+      // races ahead of it or meta.is_standalone_log briefly reports false.
+      if (window.VKA?.appMode==='logger') setTabVisible('logentry', true);
       // "What if?" simulates working a MISSING mult, so it's only meaningful
       // for contests with a fixed, enumerable mult list (has_missing_tab) —
       // for open-ended ones (e.g. WPX prefixes) there's nothing to list, so
@@ -267,6 +272,7 @@
   }
 
   function setTabVisible(id,v){const b=document.querySelector(`.tab-btn[data-tab="${id}"]`);if(b)b.style.display=v?'':'none';}
+  window.VKA.setTabVisible = setTabVisible;
 
   async function buildGaugeRow(defs) {
     const row=document.getElementById('gauge-row'); if(!row) return;
@@ -2087,6 +2093,12 @@
   // ══ OPERATOR HUD (own popped-out window, /operator_hud) ═════════════════════
   const OPERATOR_HUD_MODE=location.pathname==='/operator_hud';
 
+  // ══ LOGGER MODE (main window, a runtime choice — not path-based like the
+  // two HUDs above, since it's toggled client-side by modechooser.js rather
+  // than being a fixed separate popout URL) ════════════════════════════════
+  let LOGGER_MODE=false;
+  window.VKA.setLoggerMode = v => { LOGGER_MODE=v; if (v) updateLoggerBar(window.VKA.lastSnap()); };
+
   // ══ SPECTATOR (read-only LAN viewer, /spectator) ═════════════════════════════
   const SPECTATOR_MODE=location.pathname==='/spectator';
 
@@ -2214,6 +2226,24 @@
     _hudState=ss.state||null;
     const targetDt = ss.state==='pre' ? ss.start_dt : ss.state==='live' ? ss.end_dt : null;
     _hudTarget = targetDt ? new Date(targetDt+'Z') : null;   // naive UTC, like _lastQsoTime above
+    tickHudRemain();
+  }
+
+  // Logger mode's lean 3-stat readout (score/rate/time-remaining) — reuses
+  // updateHud()'s own _hudState/_hudTarget + tickHudRemain() for the
+  // countdown rather than a second copy of that logic, since both windows
+  // can't be showing at once (this is the main window; the HUD is a
+  // separate popout) so there's no risk of one clobbering the other's timer
+  // target.
+  function updateLoggerBar(snap){
+    const pb=snap?.personal_bests||{}, ss=snap?.session_status||{};
+    const scoreEl=document.getElementById('logger-score');
+    const rateEl =document.getElementById('logger-rate');
+    if (scoreEl) scoreEl.textContent=(snap?.score||0).toLocaleString('en-AU');
+    if (rateEl)  rateEl.textContent=(pb.current_hour_rate||0)+'/hr';
+    _hudState=ss.state||null;
+    const targetDt = ss.state==='pre' ? ss.start_dt : ss.state==='live' ? ss.end_dt : null;
+    _hudTarget = targetDt ? new Date(targetDt+'Z') : null;
     tickHudRemain();
   }
 
@@ -2451,13 +2481,23 @@
     });
   }
 
+  // Writes to whichever of #hud-remain (the separate /hud popout)/
+  // #logger-remain (Logger mode, main window) actually exist in this
+  // window's DOM — each window only ever has one of the two, so computing
+  // the text/color once and writing to both is simpler than two near-
+  // identical functions, and correctly no-ops for whichever one is absent.
   function tickHudRemain(){
-    const remEl=document.getElementById('hud-remain'); if(!remEl) return;
-    if (_hudState==='over'){ remEl.textContent='0:00'; remEl.style.color=T.muted; return; }
-    if (!_hudState || !_hudTarget){ remEl.textContent='—'; remEl.style.color=T.muted; return; }
-    const secs=(_hudTarget.getTime()-Date.now())/1000;
-    remEl.textContent=fmtCountdown(secs);
-    remEl.style.color = secs<600?T.red:secs<1800?T.accent3:T.accent;
+    let text='—', color=T.muted;
+    if (_hudState==='over'){ text='0:00'; color=T.muted; }
+    else if (_hudState && _hudTarget){
+      const secs=(_hudTarget.getTime()-Date.now())/1000;
+      text=fmtCountdown(secs);
+      color = secs<600?T.red:secs<1800?T.accent3:T.accent;
+    }
+    const remEl=document.getElementById('hud-remain');
+    if (remEl){ remEl.textContent=text; remEl.style.color=color; }
+    const loggerRemEl=document.getElementById('logger-remain');
+    if (loggerRemEl){ loggerRemEl.textContent=text; loggerRemEl.style.color=color; }
   }
   setInterval(tickHudRemain,1000);
 
@@ -3167,6 +3207,13 @@
     if (SPECTATOR_MODE) { updateSpectator(e.detail); return; }
     if (OPERATOR_HUD_MODE) { updateOperatorHud(e.detail); return; }
     if (HUD_MODE) { updateHud(e.detail); trackHudSparklines(e.detail); checkCelebrations(e.detail); checkEndTimeAlert(e.detail); checkDeadAir(e.detail); checkOperatorFatigue(e.detail); return; }
+    // No `return` here, unlike the branches above — those are genuinely
+    // separate popped-out windows with no dashboard DOM at all, but Logger
+    // mode is the main window with every other tab still present (just
+    // display:none per applyLoggerModeVisibility() in modechooser.js), so
+    // render()/loadPluginMeta() below should keep running every snapshot
+    // same as any other hidden-but-mounted tab already does today.
+    if (LOGGER_MODE) updateLoggerBar(e.detail);
     if (_replaying) return;
     if(_firstSnap){_firstSnap=false;loadPluginMeta().then(()=>render(e.detail));}
     else render(e.detail);

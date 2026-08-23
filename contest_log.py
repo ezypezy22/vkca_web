@@ -193,6 +193,25 @@ class ContestLog:
             return None
 
     @staticmethod
+    def is_standalone_marker(db_path: str) -> bool:
+        """True if this file carries the VKCA_Meta marker written by
+        create_new_log() — i.e. this app created it, regardless of which
+        UI flow (New Log vs. an ordinary reopen after a restart) is opening
+        it now. Degrades to False for any file lacking the table (every
+        real N1MM-written .s3db), same pattern as station_call() above."""
+        try:
+            conn = sqlite3.connect(db_path)
+            try:
+                row = conn.execute(
+                    "SELECT value FROM VKCA_Meta WHERE key='standalone'"
+                ).fetchone()
+                return bool(row and str(row[0]) == '1')
+            finally:
+                conn.close()
+        except Exception:
+            return False
+
+    @staticmethod
     def create_new_log(db_path, contest_name: str, my_call: str, cq_zone: int = 0) -> None:
         """
         Create a brand-new, empty contest log at `db_path` for standalone
@@ -212,7 +231,10 @@ class ContestLog:
         ContestInstance/Station only carry the columns this app's own
         load()/station_call() actually read, plus whatever else is NOT NULL
         — no attempt to fully replicate N1MM's real (much larger) schema
-        for those two, unlike DXLOG.
+        for those two, unlike DXLOG. One addition beyond real N1MM schema:
+        VKCA_Meta, a marker table (see is_standalone_marker()) so a file
+        created here can be recognized as this app's own on a later reopen
+        — purely additive, doesn't touch DXLOG/ContestInstance/Station.
         """
         conn = sqlite3.connect(db_path)
         try:
@@ -249,6 +271,9 @@ class ContestLog:
                     Call NVARCHAR(20) PRIMARY KEY,
                     CQZone SMALLINT NOT NULL
                 );
+
+                CREATE TABLE VKCA_Meta (key TEXT PRIMARY KEY, value TEXT);
+                INSERT INTO VKCA_Meta (key, value) VALUES ('standalone', '1');
             """)
             now = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
             conn.execute(

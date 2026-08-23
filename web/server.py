@@ -199,14 +199,12 @@ class AppState:
         self._base_url:     Optional[str]         = None  # set after webview starts; used by /api/popout
         self._hud_window                          = None  # the single Mini HUD window, if open
         self._operator_hud_window                 = None  # the single Operator HUD window, if open
-        self._entry_window                        = None  # the single N1MM-style Entry Window, if open
         # Serializes each HUD's check-existing/reuse-or-create sequence below
         # so two concurrent /api/hud (or /api/operator_hud) requests can't
         # both see no existing window and each create one, orphaning the
         # first (see issue #51).
         self._hud_lock                            = asyncio.Lock()
         self._operator_hud_lock                   = asyncio.Lock()
-        self._entry_window_lock                   = asyncio.Lock()
         self.yoy_extra_paths: list                = []    # extra .s3db files added on the YOY tab
         self.pace_extra_paths: list               = []    # [{"path":..., "kind":"s3db"|"adif"|"cabrillo"}]
         self.fatigue_extra_paths: list            = []    # extra .s3db files added on the Fatigue tab
@@ -310,7 +308,8 @@ class AppState:
                     "qso_count":    ct.get("QSOCount", 0),
                     "plugin":       p.display_name,
                 })
-            return {"ok": True, "path": path, "contests": result}
+            return {"ok": True, "path": path, "contests": result,
+                     "is_standalone": ContestLog.is_standalone_marker(path)}
         except Exception as exc:
             log.exception("scan_contests failed")
             return {"error": str(exc)}
@@ -341,12 +340,14 @@ class AppState:
                 self.contest_log   = cl
                 self.last_mtime    = mtime
                 self.last_snapshot = snapshot
-                # standalone=True only from /api/new_log's own call — every
-                # ordinary load (including a reload of an already-standalone
-                # log, which passes it through explicitly) is a file this
-                # app didn't create, so the Log Entry tab/its API must stay
-                # gated off unless this exact flag says otherwise.
-                self.is_standalone_log = standalone
+                # standalone=True from /api/new_log's own call, OR
+                # auto-detected from the file itself (VKCA_Meta marker, see
+                # ContestLog.create_new_log()) — this is what lets a
+                # previously-created standalone log survive an app restart:
+                # /api/load never passes standalone=True, but the marker
+                # travels with the file and is re-detected on every
+                # ordinary open, not just ones explicitly called "new log."
+                self.is_standalone_log = standalone or ContestLog.is_standalone_marker(path)
             return {"ok": True, "path": path}
         except Exception as exc:
             log.exception("load_db failed")
@@ -764,13 +765,6 @@ async def popout_page(key: str):
     return FileResponse(str(_STATIC / "index.html"))
 
 
-@app.get("/entry_window")
-async def entry_window_page():
-    """Same SPA-serving trick as /hud above, for the N1MM-style standalone
-    logging Entry Window."""
-    return FileResponse(str(_STATIC / "index.html"))
-
-
 # ── Status ────────────────────────────────────────────────────────────────────
 
 @app.get("/api/status")
@@ -1149,10 +1143,15 @@ async def api_qrz_status():
 
 
 @app.get("/api/scan_known_locations")
-async def api_scan_known_locations():
+async def api_scan_known_locations(check_standalone: bool = False):
     """Look for contest databases in N1MM's default folder plus any
     user-added folders, so the user doesn't have to browse to/type a path
-    for the common case."""
+    for the common case. check_standalone opts into an extra per-file
+    SQLite open (ContestLog.is_standalone_marker()) to flag which of these
+    are this app's own previously-created standalone logs — off by default
+    so the plain "Detected Databases" list (Analyzer's normal open flow)
+    sees zero added cost; Logger mode's "resume a previous log" list is the
+    only caller that passes it."""
     found = []
     for d in _known_log_dirs():
         if not d.is_dir():
@@ -1170,6 +1169,7 @@ async def api_scan_known_locations():
                     "name":  f.name,
                     "size":  st.st_size,
                     "mtime": st.st_mtime,
+                    **({"is_standalone": ContestLog.is_standalone_marker(str(f))} if check_standalone else {}),
                 })
     found.sort(key=lambda r: r["mtime"], reverse=True)
     return {"databases": found, "os": sys.platform}
@@ -1412,53 +1412,6 @@ async def _do_open_operator_hud():
         return {"ok": True}
     except Exception as exc:
         log.exception("operator_hud failed")
-        return JSONResponse({"error": str(exc)}, status_code=500)
-
-
-@app.post("/api/entry_window")
-async def api_entry_window():
-    """Open the N1MM-style standalone-logging Entry Window (/entry_window)
-    in its own pywebview window. Mirrors /api/hud's reuse/restore lifecycle,
-    but this window is a normal (non-frameless) one with a native titlebar
-    and close button — unlike the HUDs it's meant to be resized/moved like
-    any other window, so it needs none of _HudApi's custom drag/close
-    plumbing, and win.events.closed can just clear STATE._entry_window
-    directly rather than routing through a hide()-not-destroy() workaround."""
-    if STATE._webview_window is None or not STATE._base_url:
-        return JSONResponse({"error": "PyWebView window not ready"}, status_code=503)
-
-    async with STATE._entry_window_lock:
-        return await _do_open_entry_window()
-
-
-async def _do_open_entry_window():
-    existing = STATE._entry_window
-    if existing is not None:
-        def _restore():
-            try:
-                existing.show()
-            except Exception:
-                pass
-        await asyncio.get_event_loop().run_in_executor(None, _restore)
-        return {"ok": True, "reused": True}
-
-    def _open():
-        import webview as _wv
-        win = _wv.create_window(
-            title="VK Contest Analyzer — Entry Window",
-            url=f"{STATE._base_url}/entry_window",
-            width=900, height=300,
-            min_size=(700, 220),
-            background_color="#0d1117",   # matches this app's own dark bg (see style.css --bg)
-        )
-        STATE._entry_window = win
-        win.events.closed += lambda: setattr(STATE, "_entry_window", None)
-
-    try:
-        await asyncio.get_event_loop().run_in_executor(None, _open)
-        return {"ok": True}
-    except Exception as exc:
-        log.exception("entry_window failed")
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 

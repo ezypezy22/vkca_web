@@ -22,7 +22,6 @@
   else if (location.pathname === '/operator_hud') document.documentElement.classList.add('operator-hud-mode');
   else if (location.pathname.startsWith('/popout/')) document.documentElement.classList.add('popout-mode');
   else if (location.pathname === '/spectator') document.documentElement.classList.add('spectator-mode');
-  else if (location.pathname === '/entry_window') document.documentElement.classList.add('entry-window-mode');
 </script>
 </head>
 <body>
@@ -177,70 +176,6 @@
   <div id="operator-hud-cards"></div>
 </div>
 
-<!-- ── N1MM-style Entry Window (only shown when loaded at /entry_window in
-     its own popped-out window — see entrywindow.js). Deliberately styled
-     with hardcoded colours, not this app's own --bg/--accent theme
-     variables — same precedent as the HUD windows' own hardcoded dark
-     background regardless of the app's active theme. ─────────────────── -->
-<div id="entry-window-view">
-  <div id="ew-header">
-    <span id="ew-radio-band" class="ew-radio-band">—</span>
-    <span id="ew-radio-freq">—</span>
-    <span id="ew-radio-mode">—</span>
-    <span id="ew-qso-count-wrap">NrOfQSOs<b id="ew-qso-count">0</b></span>
-  </div>
-  <div id="ew-body">
-    <div id="ew-bands"></div>
-    <div id="ew-main">
-      <div id="ew-runsp">
-        <label><input type="radio" name="ew-runsp" id="ew-run" checked> Run</label>
-        <label><input type="radio" name="ew-runsp" id="ew-sp"> S&amp;P</label>
-      </div>
-      <form id="ew-form">
-        <table id="ew-field-table">
-          <thead><tr><th>Call</th><th>SntRS(T)</th><th>RcvdRS(T)</th><th>RcvdExch</th></tr></thead>
-          <tbody><tr>
-            <td><input id="ew-call" type="text" autocomplete="off" style="text-transform:uppercase" required></td>
-            <td><input id="ew-rst-sent" type="text" value="59"></td>
-            <td><input id="ew-rst-rcvd" type="text" value="59"></td>
-            <td><input id="ew-exchange" type="text" autocomplete="off"></td>
-          </tr></tbody>
-        </table>
-        <div id="ew-error" class="hidden"></div>
-      </form>
-      <div id="ew-fkeys">
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F1 CQ</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F2 Contest</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F3 TNX</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F4 Spare</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F5 His Call</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F6 Spare</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F7 QRZ?</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F8 Agn?</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F9 Zone?</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F10 Spare</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F11 Spare</button>
-      </div>
-      <div id="ew-actions">
-        <button type="button" class="ew-fkey" disabled title="No CW/voice keying in standalone mode">Esc: Stop</button>
-        <button type="button" id="ew-wipe">Wipe</button>
-        <button type="submit" form="ew-form" id="ew-log-it">Log It</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">Edit</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">Mark</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">Store</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">Spot It</button>
-        <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">QRZ</button>
-      </div>
-    </div>
-  </div>
-  <div id="ew-recent">
-    <table>
-      <thead><tr><th>Call</th><th>Band</th><th>Mode</th><th>Exch</th><th>Time (UTC)</th></tr></thead>
-      <tbody id="ew-recent-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
 <!-- ── Spectator bar (only shown when loaded at /spectator by a read-only
      LAN viewer — see overview.js SPECTATOR_MODE) ─────────────────────────── -->
 <div id="spectator-bar">
@@ -306,6 +241,18 @@
     <span class="tab-icon">📑</span><span class="tab-label">Postcontest Report</span>
   </button>
 </nav>
+
+<!-- ── Logger mode's minimal live-status readout (see modechooser.js) — a
+     lean, always-visible alternative to the full Overview dashboard, shown
+     only while in Logger mode. Uses the app's normal theme (not the Mini
+     HUD's own hardcoded dark colours, since this lives in the main window,
+     not a separate always-on-top popout). ── -->
+<div id="logger-status-bar" style="display:none">
+  <span class="logger-stat"><span class="logger-stat-label">SCORE</span><span class="logger-stat-val" id="logger-score">—</span></span>
+  <span class="logger-stat"><span class="logger-stat-label">RATE</span><span class="logger-stat-val" id="logger-rate">—</span></span>
+  <span class="logger-stat"><span class="logger-stat-label">REMAINING</span><span class="logger-stat-val" id="logger-remain">—</span></span>
+  <button id="btn-switch-to-analyzer" class="btn btn--ghost btn--sm" type="button" title="Switch back to the full Analyzer dashboard">🔍 Switch to Analyzer</button>
+</div>
 
 <!-- ── Content ────────────────────────────────────────────────────────────── -->
 <main id="content">
@@ -1133,15 +1080,64 @@
        comment above; STATE.is_standalone_log gates both this tab's
        visibility and the /api/qsos/add endpoint itself) ── -->
   <section id="tab-logentry" class="tab-panel">
-    <div class="panel-box" style="max-width:520px">
-      <div class="panel-header"><span style="color:var(--accent)">●</span> LOG A QSO</div>
-      <p style="color:var(--muted);margin-bottom:12px">QSOs are logged through the Entry Window — a separate, N1MM-style window you can park next to your radio.</p>
-      <button id="le-open-entry-window" type="button" class="btn btn--primary" style="width:100%" title="Open a separate N1MM-style entry window">🪟 Open Entry Window</button>
-      <div id="le-error" class="dialog-error hidden" style="margin-top:8px"></div>
+    <!-- ── N1MM-style Entry Window, embedded inline (see entrywindow.js).
+         Themed with this app's own --bg/--accent tokens so it matches
+         whichever theme (dark/light/high-contrast/colorblind) is active. -->
+    <div id="entry-window-view">
+      <div id="ew-header">
+        <span id="ew-radio-band" class="ew-radio-band">—</span>
+        <span id="ew-radio-freq">—</span>
+        <span id="ew-radio-mode">—</span>
+        <span id="ew-qso-count-wrap">NrOfQSOs<b id="ew-qso-count">0</b></span>
+      </div>
+      <div id="ew-body">
+        <div id="ew-bands"></div>
+        <div id="ew-main">
+          <div id="ew-runsp">
+            <label><input type="radio" name="ew-runsp" id="ew-run" checked> Run</label>
+            <label><input type="radio" name="ew-runsp" id="ew-sp"> S&amp;P</label>
+          </div>
+          <form id="ew-form">
+            <table id="ew-field-table">
+              <thead><tr><th>Call</th><th>SntRS(T)</th><th>RcvdRS(T)</th><th>RcvdExch</th></tr></thead>
+              <tbody><tr>
+                <td><input id="ew-call" type="text" autocomplete="off" style="text-transform:uppercase" required></td>
+                <td><input id="ew-rst-sent" type="text" value="59"></td>
+                <td><input id="ew-rst-rcvd" type="text" value="59"></td>
+                <td><input id="ew-exchange" type="text" autocomplete="off"></td>
+              </tr></tbody>
+            </table>
+            <div id="ew-error" class="hidden"></div>
+          </form>
+          <div id="ew-fkeys">
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F1 CQ</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F2 Contest</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F3 TNX</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F4 Spare</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F5 His Call</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F6 Spare</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F7 QRZ?</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F8 Agn?</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F9 Zone?</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F10 Spare</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F11 Spare</button>
+          </div>
+          <div id="ew-actions">
+            <button type="button" class="ew-fkey" disabled title="No CW/voice keying in standalone mode">Esc: Stop</button>
+            <button type="button" id="ew-wipe">Wipe</button>
+            <button type="submit" form="ew-form" id="ew-log-it">Log It</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">Edit</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">Mark</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">Store</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">Spot It</button>
+            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">QRZ</button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="panel-box" style="max-width:520px;margin-top:var(--gap)">
-      <div class="panel-header"><span style="color:var(--accent3)">●</span> RECENTLY LOGGED</div>
+    <div class="panel-box" style="max-width:640px;margin-top:var(--gap)">
+      <div class="panel-header"><span style="color:var(--accent3)">●</span> WORKED THIS SESSION</div>
       <div class="table-wrap">
         <table class="data-table">
           <thead><tr><th>Call</th><th>Band</th><th>Mode</th><th>Exch</th><th>Time (UTC)</th></tr></thead>
@@ -1282,6 +1278,26 @@
         </div>
         <div id="new-log-error" class="dialog-error hidden"></div>
         <button id="btn-new-log-create" class="btn btn--primary" style="margin-top:12px;width:100%">Create &amp; Start Logging</button>
+      </div>
+      <!-- Logger mode's own entry point into this same dialog (see
+           web/static/modechooser.js) — lists standalone logs this app has
+           previously created (detected via the VKCA_Meta marker, see
+           contest_log.py's is_standalone_marker()) so a contest interrupted
+           by an app restart can be resumed instead of only starting fresh. -->
+      <div id="step-resume" class="hidden">
+        <div class="picker-header">
+          <span class="dialog-label" style="margin:0">Resume or Start Logging</span>
+        </div>
+        <div class="dialog-hint">Pick up a standalone log from an earlier session, or start a new one.</div>
+        <label class="dialog-label">Previous standalone logs</label>
+        <div class="contest-list-wrap" style="max-height:160px">
+          <div id="resume-list" class="contest-list"></div>
+        </div>
+        <div id="no-resume-hint" class="dialog-hint hidden" style="margin:2px 0 10px">
+          No previous standalone logs found — create one below.
+        </div>
+        <div class="dialog-hint" style="text-align:center;margin:10px 0 2px">— or —</div>
+        <button id="btn-resume-new-log" class="btn btn--ghost" style="width:100%">+ Create New Log</button>
       </div>
     </div>
     <div class="dialog-footer">
@@ -1526,6 +1542,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gridstack@13.2.0/dist/gridstack-all.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/modechooser.js"></script>
 <script src="/static/overview.js"></script>
 <script src="/static/cluster.js"></script>
 <script src="/static/rate.js"></script>
@@ -1542,7 +1559,6 @@
 <script src="/static/settings.js"></script>
 <script src="/static/tips.js"></script>
 <script src="/static/cabrillo.js"></script>
-<script src="/static/logentry.js"></script>
 <script src="/static/entrywindow.js"></script>
 <script src="/static/worldmap.js"></script>
 </body>

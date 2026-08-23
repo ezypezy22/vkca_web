@@ -149,6 +149,14 @@ Users are responsible for verifying all information against N1MM before making d
     launchBtn.addEventListener('click', () => {
       el.style.opacity = '0';
       setTimeout(() => el.remove(), 400);
+      // Tells modechooser.js it's safe to show the mode chooser now — this
+      // is the only path that needs an event at all (a real user click, so
+      // no listener-registration race is possible); the "splash already
+      // accepted" fast path is instead handled by modechooser.js checking
+      // localStorage itself, since that path returns synchronously above
+      // before this script even finishes, well before modechooser.js's own
+      // <script> tag has even started loading.
+      emit('vka:splash-dismissed');
     });
     launchBtn.focus();
   }
@@ -980,23 +988,33 @@ Users are responsible for verifying all information against N1MM before making d
   }
   // Exposed for settings.js — removing a log-search folder there should
   // refresh this dialog's detected-databases list too, since it's the same
-  // underlying search that folder feeds into.
+  // underlying search that folder feeds into. Also exposed for
+  // modechooser.js, which drives this same dialog from a second entry
+  // point (the startup Analyzer/Logger chooser) rather than only the
+  // titlebar's own "📂 Open Log" button.
   window.VKA = window.VKA || {};
   window.VKA.scanKnownLocations = scanKnownLocations;
+  window.VKA.fmtBytes = fmtBytes;
+  window.VKA.fmtAgo = fmtAgo;
+  window.VKA.dirOf = dirOf;
 
   function showDialog() {
     overlay.classList.remove('hidden'); showStep('path');
     setTimeout(()=>pathInput?.focus(),50);
     scanKnownLocations();
   }
+  window.VKA.showDialog = showDialog;
   function hideDialog() { overlay.classList.add('hidden'); errDiv.classList.add('hidden'); _selectedContest=null; btnConfirm.disabled=true; }
   const stepNew = document.getElementById('step-new');
+  const stepResume = document.getElementById('step-resume');
   function showStep(step) {
     stepPath.classList.toggle('hidden',step!=='path');
     stepPicker.classList.toggle('hidden',step!=='picker');
     stepNew?.classList.toggle('hidden',step!=='new');
+    stepResume?.classList.toggle('hidden',step!=='resume');
     btnConfirm.style.display=step==='picker'?'':'none';
   }
+  window.VKA.showStep = showStep;
   function showError(msg) { errDiv.textContent=msg; errDiv.classList.remove('hidden'); }
 
   btnOpen?.addEventListener('click', showDialog);
@@ -1602,12 +1620,11 @@ Users are responsible for verifying all information against N1MM before making d
     return dismiss;
   }
 
-  // Main window only — a HUD popout (or the Entry Window, which has no
-  // titlebar/Report Issue button of its own to point at) is too small a
-  // surface for a multi-line tip, and one already-dismissed hint should
-  // cover the user, not one per window.
+  // Main window only — a HUD popout is too small a surface for a
+  // multi-line tip, and one already-dismissed hint should cover the user,
+  // not one per window.
   const IS_MAIN_WINDOW = location.pathname !== '/hud' && location.pathname !== '/operator_hud'
-    && location.pathname !== '/spectator' && location.pathname !== '/entry_window';
+    && location.pathname !== '/spectator';
 
   // ── Report Issue pointer ─────────────────────────────────────────────────
   // Deliberately NOT persisted via localStorage (no seenKey) — unlike the
