@@ -487,6 +487,32 @@ html.hud-vertical .hud-radio-sub{width:100%;order:3;}
   opacity:0;transition:opacity .15s,color .15s,border-color .15s;}
 .spark-card:hover .hide-btn,.info-panel:hover .hide-btn,.ea-card:hover .hide-btn{opacity:1;}
 .hide-btn:hover{color:var(--red);border-color:var(--red);}
+
+/* ── Canvas Mode (Overview) — freeform drag/resize via GridStack.js, opt-in
+   via #btn-canvas-toggle, off by default. #overview-classic-rows holds
+   today's fixed-row layout unchanged; #canvas-grid is GridStack's own
+   container, only shown while active (see overview.js's enterCanvasMode()/
+   exitCanvasMode()). ── */
+#tab-overview.canvas-mode #overview-classic-rows{display:none;}
+#tab-overview.canvas-mode #canvas-grid{display:block;}
+#canvas-grid{min-height:200px;}
+/* GridStack's own default is overflow:hidden — several tiles (Personal
+   Bests, Operator Times, Live Ranking) rely on their own content
+   overflowing/scrolling within their card, same as in the classic layout. */
+.grid-stack-item-content{overflow:auto;}
+/* The wrapped tile is a plain child of .grid-stack-item-content (see
+   canvasWrapTile()'s own comment on why it isn't given that class itself) —
+   a block element only fills its parent's width by default, not height, so
+   without this it would sit at its own natural content height inside a
+   taller GridStack-sized box instead of filling it. */
+.grid-stack-item-content > *{height:100%;box-sizing:border-box;}
+/* These caps exist purely to keep the map well-behaved in classic mode's
+   fixed flex row (see .glow-map-panel's own long comment) — meaningless,
+   and actively capping how far the tile can be resized, once it's sized by
+   GridStack's own w/h math instead. */
+#tab-overview.canvas-mode .glow-map-panel{
+  max-height:none;max-width:none;aspect-ratio:auto;flex:none;
+}
 html.popout-mode .hide-btn{display:none;}
 
 /* ── "☰ Panels" show/hide menu ───────────────────────────────────────────── */
@@ -682,16 +708,23 @@ html.popout-mode .spark-card.popout-host-tile .spark-title{font-size:1.1em;}
    parked alongside it (see index.html) — each gets an equal share of
    whatever width the map doesn't use, so raising .glow-map-panel's own
    max-width doesn't reopen a dead gap here, it just hands this group more
-   room. Only the donut is built to stretch and fill the row's full height
-   (its own internal flex-column + donut-wrap:flex:1 below) — the others
-   are ordinary fixed-content cards, so they anchor to the top instead of
-   awkwardly stretching into mostly-empty tall boxes. */
-.hero-row-side{flex:1 1 0;min-width:0;align-self:flex-start;}
-/* Radio + Live Ranking share one hero-row-side column, stacked — each stays
-   its own natural height rather than stretching. */
+   room. All stretch (the flex row's own default) to match the map's real
+   height — driven by its aspect-ratio, not a number guessable in advance
+   here — so every tile's bottom border lines up with it rather than
+   floating at its own natural content height. */
+.hero-row-side{flex:1 1 0;min-width:0;}
+/* Radio + Live Ranking share one hero-row-side column, stacked — the
+   wrapper stretches to the row's full height (align-items:stretch, .hero-row's
+   own default, needs no explicit height here — flex's cross-axis stretch is
+   a computed size, not a percentage that needs a real number to resolve
+   against) and its own flex-column splits that height evenly between the
+   two cards, so both this column's own bottom edge *and* each card inside
+   it line up with the row. */
 .hero-row-stack{display:flex;flex-direction:column;gap:var(--gap);}
-#panel-band-donut.hero-row-side{display:flex;flex-direction:column;align-self:stretch;height:100%;}
+.hero-row-stack > .info-panel{flex:1;min-height:0;overflow-y:auto;}
+#panel-band-donut.hero-row-side{display:flex;flex-direction:column;}
 .hero-row-side .donut-wrap{flex:1;height:auto;min-height:0;}
+#panel-top-dxcc.hero-row-side{overflow-y:auto;}
 
 /* Sits right next to the glow map's own strong visual (real satellite
    imagery), where a flat var(--bg2) panel reads as bare by comparison —
@@ -971,6 +1004,13 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .btn--icon{padding:6px 9px;font-size:1em;}
 .btn--sm{padding:4px 12px;font-size:0.92em;}
 .btn--muted-off{opacity:.55;}
+/* #btn-canvas-toggle keeps its .btn--ghost class even when on — an ID+class
+   selector here beats plain .btn--ghost's own same-specificity rule
+   regardless of source order, rather than relying on class-toggle order
+   (toggling .btn--primary on top of an existing .btn--ghost would silently
+   lose, since .btn--ghost is declared later above and wins ties). */
+#btn-canvas-toggle.canvas-on{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:bold;}
+#btn-canvas-toggle.canvas-on:hover{background:color-mix(in srgb,var(--accent),white 15%);}
 
 /* ── Specific tab layouts ─────────────────────────────────────────────────── */
 .bands-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--gap);align-items:start;}

@@ -306,6 +306,40 @@
     setupReorder(row,'gauge');
     applyPopoutFilter();
     applyHiddenTiles();
+    // Canvas Mode (see enterCanvasMode()) holds gauge cards as GridStack
+    // widgets outside #gauge-row itself — a plugin/contest switch just blew
+    // away the row.innerHTML those widgets used to wrap, so any surviving
+    // widgets from the *previous* set of gauges are now orphaned (their
+    // tileKeys may not even exist among the new defs). Tear those down and
+    // wrap the freshly-built cards instead of leaking stale positions
+    // across a contest switch.
+    //
+    // Gauges are also the one tile group built asynchronously, well after
+    // enterCanvasMode()'s own one-shot measureClassicLayout() pass (they
+    // depend on the first plugin_meta/snapshot arriving) — if Canvas Mode
+    // gets toggled on before that happens, gauge-row is empty at
+    // measurement time and every gauge card built afterward has no measured
+    // classic-mode position to fall back on, only the single generic
+    // CANVAS_DEFAULT_SIZE guess. Rather than accept that, compute a fresh
+    // even-division layout right here — #gauge-row's own classic-mode CSS
+    // already divides itself into `defs.length` equal columns
+    // (grid-template-columns set above), so mirroring that arithmetic
+    // against CANVAS_COLUMNS gives a reasonable row even though #gauge-row
+    // itself is hidden right now (inside #overview-classic-rows) and can't
+    // be measured directly. 26 matches .gauge-row's own fixed CSS
+    // height:264px (264/CANVAS_CELL_HEIGHT) — hardcoded since that height
+    // can't be read off the hidden element either.
+    if(_canvasMode){
+      Array.from(document.querySelectorAll('#canvas-grid .grid-stack-item-content > .gauge-card'))
+        .forEach(el=>{ const w=el.closest('.grid-stack-item'); if(w) _canvas.removeWidget(w,true,false); });
+      const gw=Math.max(1,Math.floor(CANVAS_COLUMNS/Math.max(1,defs.length)));
+      let gx=0;
+      Array.from(row.children).forEach(el=>{
+        if(_layout.hidden.includes(tileKey(el))) return;
+        canvasWrapTile(el,'gauge',{x:gx,y:0,w:gw,h:26});
+        gx+=gw;
+      });
+    }
     setTimeout(redrawAll,50);
   }
 
@@ -789,9 +823,12 @@
     }
     const maxQ=rows[0].qsos||1;
     // Sized to fill this tile at roughly the same height as the QSOs-by-band
-    // donut it now sits next to (see index.html's hero-row) — /api/top_countries
-    // already returns up to 15, the most this can ever show.
-    const rowsHtml=rows.slice(0,15).map(r=>`
+    // donut it now sits next to (see index.html's hero-row) — matches
+    // /api/top_countries' own cap (18). The tile itself now stretches to
+    // match the map's height with overflow-y:auto (see #panel-top-dxcc in
+    // style.css), so this cap just needs to be "enough to fill it," not an
+    // exact pixel-matched count.
+    const rowsHtml=rows.slice(0,18).map(r=>`
       <tr>
         <td>${escapeHtml(r.country)}</td>
         <td style="width:60%">
@@ -1058,6 +1095,31 @@
     fitGlowMapBounds();
   }
 
+  // .hero-row-side's plain CSS align-items:stretch (the flex row's own
+  // default) does correctly stretch a *direct* single-panel child like the
+  // donut or Top DXCC — but for the Radio/Live Ranking stack, that stretch
+  // has to propagate through an extra flex-column layer (.hero-row-stack)
+  // before its own flex:1 children can grow into it, and in practice that
+  // left the stack sitting at its own short natural content height instead
+  // of the row's real one. Measuring the map's actual rendered height in
+  // JS and applying it directly sidesteps relying on that chain working —
+  // same idea as fitGlowMapBounds() already measuring #glow-map-container
+  // rather than trusting a CSS aspect-ratio assumption alone.
+  function syncHeroRowHeights(){
+    // Canvas Mode (see enterCanvasMode()) detaches .hero-row-side elements
+    // from .hero-row entirely, into #canvas-grid as independent GridStack
+    // widgets — the ResizeObserver below that drives this function keeps
+    // firing regardless (it watches the map's own container, which still
+    // resizes as its grid-item gets dragged/resized), so without this guard
+    // it would set a stray inline height on tiles that no longer have
+    // anything to do with the classic flex row, fighting GridStack's own
+    // sizing of them.
+    if(_canvasMode) return;
+    const map=document.getElementById('panel-glow-map'); if(!map) return;
+    const h=map.getBoundingClientRect().height; if(!h) return;
+    document.querySelectorAll('.hero-row-side').forEach(el=>{ el.style.height=`${h}px`; });
+  }
+
   function initGlowMap(){
     if(_glowMap || typeof L==='undefined') return;
     const el=document.getElementById('glow-map-container'); if(!el) return;
@@ -1070,6 +1132,7 @@
     applyGlowMapTheme();
     _glowMarkerLayer=L.layerGroup().addTo(_glowMap);
     fitGlowMapBounds();
+    syncHeroRowHeights();
     // A plain window 'resize' listener only catches the browser window
     // itself changing size — it misses every other reason this panel's
     // actual pixel width can change after the initial fit: the zoom
@@ -1079,10 +1142,12 @@
     // stale against the container's real size, which reads as the map
     // being oddly zoomed or cut off along one edge. A ResizeObserver on
     // the container itself catches its size changing for any reason.
+    // Same observer also re-syncs the side tiles' heights, since whatever
+    // resized the map is exactly what would've knocked them out of sync too.
     if(typeof ResizeObserver!=='undefined'){
-      new ResizeObserver(()=>fitGlowMapBounds()).observe(el);
+      new ResizeObserver(()=>{ fitGlowMapBounds(); syncHeroRowHeights(); }).observe(el);
     } else {
-      window.addEventListener('resize',fitGlowMapBounds);
+      window.addEventListener('resize',()=>{ fitGlowMapBounds(); syncHeroRowHeights(); });
     }
   }
   function glowSpotIcon(col){
@@ -1549,6 +1614,16 @@
     else if (!hidden && idx!==-1) _layout.hidden.splice(idx,1);
     saveLayout();
     applyHiddenTiles();
+    // Canvas Mode (see enterCanvasMode()) keeps hidden tiles out of the grid
+    // entirely rather than just CSS-hiding them in place, so a hide/show
+    // toggle needs to actually move the tile in/out of #canvas-grid too.
+    if(_canvasMode){
+      const el=document.getElementById(key) || document.querySelector(`[data-tile-key="${key}"]`);
+      if(el){
+        if(hidden && el.closest('.grid-stack-item')) canvasUnwrapTile(el);
+        else if(!hidden && !el.closest('.grid-stack-item')) canvasWrapTile(el);
+      }
+    }
     buildPanelsMenu();   // keep the open menu's checkboxes in sync
   }
 
@@ -1568,6 +1643,251 @@
     });
     el.appendChild(btn);
   }
+
+  // ══ CANVAS MODE (freeform drag/resize via GridStack.js) ═════════════════════
+  // Opt-in, off by default — see #btn-canvas-toggle. Unlike the reorder/hide
+  // system above (which only ever moves tiles within their existing fixed
+  // row/grid), this lets every tile be placed and resized anywhere by tearing
+  // it out of #overview-classic-rows and re-homing it as a GridStack widget
+  // inside #canvas-grid; exiting puts every tile straight back where it came
+  // from and hands the classic rows back to the existing reorder/hide system
+  // untouched. Persisted separately from _layout/panel_layout (see
+  // loadCanvasLayout()/saveCanvasLayout() below) since the saved shape is
+  // structurally different — per-tileKey {x,y,w,h} plus one on/off flag, not
+  // per-section ordered arrays — so switching modes never has to touch or
+  // invalidate the other mode's own saved state.
+  let _canvas=null, _canvasMode=false, _canvasLayout={}, _classicPositions={};
+
+  // 12 columns / 40px-tall cells turned out far too coarse: several
+  // hero-row tiles (the donut, Top DXCC, Radio, Live Ranking, Fatigue) are
+  // only ~190px wide next to the map's 960px, which rounds down to a
+  // single column at 12-wide — and that near-zero width is what was
+  // cascading into GridStack relocating tiles far from their measured
+  // position trying to resolve phantom collisions between slivers that
+  // were never really overlapping. 96 columns / 10px cells (8x finer
+  // horizontally, 4x finer vertically) give even a narrow tile several
+  // real units of width — must match GridStack.init's own column/
+  // cellHeight below, and CANVAS_DEFAULT_SIZE (which follows, scaled ×8/×4
+  // from the original 12-col/40px design values) is expressed against the
+  // same units.
+  const CANVAS_COLUMNS=96, CANVAS_CELL_HEIGHT=10;
+
+  // Last-resort fallback only — a tile with neither a saved canvas position
+  // (_canvasLayout) nor a measured classic-mode one (_classicPositions,
+  // below) falls back to this and gets auto-packed. Not meant to be
+  // pixel-exact for the same reason it's rarely actually used.
+  const CANVAS_DEFAULT_SIZE={
+    gauge:{w:16,h:8}, spark:{w:32,h:12},
+    'panel-glow-map':{w:48,h:24}, 'panel-band-donut':{w:24,h:24}, 'panel-top-dxcc':{w:24,h:24},
+    'panel-radio':{w:24,h:12}, 'panel-live-rank':{w:24,h:12}, 'panel-fatigue':{w:24,h:12},
+    info:{w:16,h:12}, ea:{w:16,h:8}, 'bars-row':{w:96,h:16},
+  };
+
+  // The very first time Canvas Mode turns on for a tile, its starting
+  // position/size should match where it already sits in Classic mode — the
+  // whole point being a smooth "nothing moves until you move it" transition.
+  // Measures every tile's real getBoundingClientRect() *before* anything is
+  // torn out of the classic DOM (enterCanvasMode() calls this first, while
+  // #overview-classic-rows is still visible/laid out), converts each to
+  // grid units against #overview-classic-rows' own width. A first attempt
+  // at this produced widgets scattered across large gaps instead — placing
+  // widgets one at a time let GridStack's own collision handling relocate
+  // each new widget away from its requested (x,y) the instant it looked
+  // like it collided with an already-placed one, and small rounding
+  // differences between two independently-measured adjacent tiles were
+  // enough to trigger that even where nothing was really overlapping in
+  // the real classic layout. enterCanvasMode() now wraps the whole
+  // placement pass in _canvas.batchUpdate()/batchUpdate(false), which defers
+  // GridStack's layout resolution until every widget has been added, rather
+  // than resolving (and potentially relocating) after each individual one.
+  function measureClassicLayout(){
+    const ref=document.getElementById('overview-classic-rows')?.getBoundingClientRect();
+    if(!ref || !ref.width) return {};
+    const cellW=ref.width/CANVAS_COLUMNS, cellH=CANVAS_CELL_HEIGHT;
+    const out={};
+    const measure=el=>{
+      if(!el) return;
+      const key=tileKey(el); if(!key) return;
+      const r=el.getBoundingClientRect();
+      if(!r.width || !r.height) return; // hidden (.tile-hidden) tiles measure zero — skip, not a real position
+      out[key]={
+        x:Math.max(0,Math.round((r.left-ref.left)/cellW)),
+        y:Math.max(0,Math.round((r.top-ref.top)/cellH)),
+        w:Math.max(1,Math.round(r.width/cellW)),
+        h:Math.max(1,Math.round(r.height/cellH)),
+      };
+    };
+    Array.from(document.getElementById('gauge-row').children).forEach(measure);
+    Array.from(document.querySelector('.spark-row').children).forEach(measure);
+    ['panel-glow-map','panel-band-donut','panel-top-dxcc','panel-radio','panel-live-rank','panel-fatigue']
+      .forEach(id=>measure(document.getElementById(id)));
+    Array.from(document.querySelector('.info-panels-row').children).forEach(measure);
+    Array.from(document.querySelector('.extra-analytics-row').children).forEach(measure);
+    measure(document.getElementById('bars-row'));
+    return out;
+  }
+
+  async function loadCanvasLayout(){
+    try{
+      const res=await fetch('/api/settings/canvas_layout');
+      const data=await res.json();
+      _canvasLayout=data.layout?.items||{};
+      return !!data.layout?.enabled;
+    }catch(e){ console.warn('overview: loadCanvasLayout failed:',e); return false; }
+  }
+  function saveCanvasLayout(){
+    fetch('/api/settings/canvas_layout',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({layout:{enabled:_canvasMode,items:_canvasLayout}})}).catch(()=>{});
+  }
+
+  // Where a tile lives in the *classic* layout — the single source of truth
+  // both exitCanvasMode() and setTileHidden()'s canvas branch restore into,
+  // so the row-target lookup only ever needs to be right in one place. Takes
+  // the element itself (not just its key) — gauge/spark/ea cards have no
+  // real `id` (their tileKey comes from `dataset.tileKey`), so
+  // document.getElementById(key) would silently miss them.
+  function canvasHomeFor(el,key){
+    if(key==='panel-radio'||key==='panel-live-rank') return document.querySelector('.hero-row-stack');
+    if(['panel-glow-map','panel-band-donut','panel-top-dxcc','panel-fatigue'].includes(key))
+      return document.querySelector('.hero-row');
+    if(key==='bars-row') return document.getElementById('overview-classic-rows');
+    if(el.classList.contains('gauge-card')) return document.getElementById('gauge-row');
+    if(el.classList.contains('spark-card')) return document.querySelector('.spark-row');
+    if(el.classList.contains('ea-card')) return document.querySelector('.extra-analytics-row');
+    return document.querySelector('.info-panels-row'); // plain .info-panel default
+  }
+
+  function canvasWrapTile(el,sizeKey,forcedPos){
+    if(!el || el.closest('.grid-stack-item')) return;
+    const key=tileKey(el); if(!key) return;
+    const wrap=document.createElement('div');
+    wrap.className='grid-stack-item';
+    // A dedicated wrapper for GridStack's own content div, NOT the class
+    // added directly to `el` — el already carries .info-panel/.gauge-card's
+    // own position:relative (needed for their hide/popout buttons), which
+    // has equal CSS specificity to .grid-stack-item-content's
+    // position:absolute and — since style.css loads after gridstack.min.css
+    // — silently won the tie, leaving GridStack's positioning unable to
+    // actually place the tile and every wrapped tile rendering at its
+    // natural in-flow position instead (the overlapping-tiles bug this
+    // replaced). Keeping el's own classes untouched sidesteps the conflict
+    // entirely rather than trying to out-specificity it.
+    const content=document.createElement('div');
+    content.className='grid-stack-item-content';
+    content.appendChild(el);
+    wrap.appendChild(content);
+    document.getElementById('canvas-grid').appendChild(wrap);
+    // Priority: an explicit saved canvas position (the user already moved
+    // this tile — always wins, regardless of how good a guess forcedPos/
+    // measured is) > forcedPos (see buildGaugeRow()'s canvas branch — a
+    // freshly-computed layout for tiles with no classic-mode measurement to
+    // fall back on, e.g. gauges that didn't exist yet when Canvas Mode was
+    // entered) > its measured classic-mode position (measureClassicLayout())
+    // > the last-resort guessed default.
+    const pos=_canvasLayout[key]||forcedPos||_classicPositions[key];
+    const def=CANVAS_DEFAULT_SIZE[sizeKey]||CANVAS_DEFAULT_SIZE[key]||{w:3,h:3};
+    _canvas.makeWidget(wrap, pos
+      ? {id:key,x:pos.x,y:pos.y,w:pos.w,h:pos.h}
+      : {id:key,w:def.w,h:def.h,autoPosition:true});
+  }
+  function canvasUnwrapTile(el){
+    const wrap=el.closest('.grid-stack-item');
+    const home=canvasHomeFor(el,tileKey(el));
+    home?.appendChild(el); // pulls el back out; the now-empty wrap+content shell is discarded below
+    if(wrap) _canvas.removeWidget(wrap,true,false);
+  }
+
+  function enterCanvasMode(){
+    // Measured while #overview-classic-rows is still visible/laid out —
+    // must happen before anything below hides it or moves a single tile.
+    _classicPositions=measureClassicLayout();
+    _canvasMode=true;
+    document.getElementById('tab-overview').classList.add('canvas-mode');
+    const gridEl=document.getElementById('canvas-grid');
+    gridEl.style.display='block';
+    // float:true — NOT the misleading-sounding "false" — is what keeps a
+    // widget exactly at the x/y it's given. float:false (GridStack's
+    // default) auto-compacts every widget upward to eliminate empty
+    // vertical space the moment it's added, silently overriding the
+    // measured-from-Classic-mode (or saved) y position this whole feature
+    // depends on — collision handling during interactive drag/resize still
+    // works fine either way, this only concerns automatic gravity.
+    // margin is applied per-side on each tile, so two adjacent tiles' shared
+    // edge shows roughly double this value — 5 gives ~10px combined,
+    // matching Classic mode's own var(--gap):10px between tiles.
+    _canvas=GridStack.init({column:CANVAS_COLUMNS,cellHeight:CANVAS_CELL_HEIGHT,margin:5,float:true},gridEl);
+
+    // One bad tile throwing here (a malformed measured/saved position, a
+    // GridStack edge case never hit before) must not abort the rest of the
+    // wrap pass, nor skip the saveCanvasLayout() call at the end of this
+    // function — an earlier version had no such guard, silently losing
+    // *every* canvas position for the whole session whenever exactly this
+    // happened (diagnosed after canvas_layout never once appeared in the
+    // settings file despite the user visibly having dragged tiles around).
+    const wrapIfVisible=(el,sizeKey)=>{
+      if(!el || _layout.hidden.includes(tileKey(el))) return;
+      try{ canvasWrapTile(el,sizeKey); }
+      catch(e){ console.error('overview: canvasWrapTile failed for',tileKey(el),e); }
+    };
+    // batchUpdate() defers GridStack's own layout/collision resolution until
+    // batchUpdate(false) below, instead of resolving (and potentially
+    // relocating) after each individual makeWidget() call inside the loop —
+    // see measureClassicLayout()'s own comment for why placing widgets one
+    // at a time was scattering them.
+    _canvas.batchUpdate();
+    Array.from(document.getElementById('gauge-row').children).forEach(el=>wrapIfVisible(el,'gauge'));
+    Array.from(document.querySelector('.spark-row').children).forEach(el=>wrapIfVisible(el,'spark'));
+    ['panel-glow-map','panel-band-donut','panel-top-dxcc','panel-radio','panel-live-rank','panel-fatigue']
+      .forEach(id=>wrapIfVisible(document.getElementById(id)));
+    Array.from(document.querySelector('.info-panels-row').children).forEach(el=>wrapIfVisible(el,'info'));
+    Array.from(document.querySelector('.extra-analytics-row').children).forEach(el=>wrapIfVisible(el,'ea'));
+    wrapIfVisible(document.getElementById('bars-row'),'bars-row');
+    _canvas.batchUpdate(false);
+
+    _canvas.on('change',(ev,items)=>{
+      items.forEach(n=>{ if(n.id) _canvasLayout[n.id]={x:n.x,y:n.y,w:n.w,h:n.h}; });
+      saveCanvasLayout();
+    });
+    // Defensive backstop, not the primary mechanism: fitGlowMapBounds()'s own
+    // ResizeObserver on #glow-map-container, and Chart.js's own
+    // responsive:true ResizeObserver on .donut-wrap, should already catch a
+    // resize via each container's real box-size change (once the classic-
+    // mode CSS caps are neutralized in canvas mode — see .glow-map-panel in
+    // style.css). This just covers any one-tick lag against GridStack's own
+    // DOM commit on the trailing frame of a drag.
+    _canvas.on('resizestop',(ev,el)=>{
+      const id=el.gridstackNode?.id;
+      if(id==='panel-glow-map') fitGlowMapBounds();
+      else if(id==='panel-band-donut') bandDonutChart?.resize();
+    });
+    saveCanvasLayout();
+  }
+
+  function exitCanvasMode(){
+    _canvasMode=false;
+    document.getElementById('tab-overview').classList.remove('canvas-mode');
+    Array.from(document.querySelectorAll('#canvas-grid .grid-stack-item-content > *')).forEach(canvasUnwrapTile);
+    applyTileOrder(document.querySelector('.spark-row'),'spark');
+    applyTileOrder(document.querySelector('.info-panels-row'),'info');
+    applyTileOrder(document.querySelector('.extra-analytics-row'),'ea');
+    applyTileOrder(document.getElementById('gauge-row'),'gauge');
+    _canvas.destroy(false);
+    _canvas=null;
+    document.getElementById('canvas-grid').style.display='none';
+    saveCanvasLayout();
+    // fitGlowMapBounds() re-fires via #glow-map-container's own existing
+    // ResizeObserver once it's visible again — no manual call needed here.
+  }
+
+  function updateCanvasToggleBtn(){
+    const btn=document.getElementById('btn-canvas-toggle'); if(!btn) return;
+    btn.textContent=_canvasMode?'🖼 Canvas Mode (On)':'🖼 Canvas Mode';
+    btn.classList.toggle('canvas-on',_canvasMode);
+  }
+  document.getElementById('btn-canvas-toggle')?.addEventListener('click',()=>{
+    if(_canvasMode) exitCanvasMode(); else enterCanvasMode();
+    updateCanvasToggleBtn();
+  });
 
   function panelLabel(el){
     const raw=el.querySelector('.ip-title,.spark-title,.ea-label')?.textContent?.trim()||tileKey(el);
@@ -1650,11 +1970,48 @@
   // loadLayout()) so the very first reorder/hide pass uses real saved state
   // instead of momentarily showing (and then yanking back from) defaults.
   _layoutReady.then(initReorder);
+  // Also gated on _layoutReady, not just loadCanvasLayout()'s own fetch —
+  // enterCanvasMode()'s wrapIfVisible() checks _layout.hidden, which needs
+  // to already be populated with real saved state before the first wrap
+  // pass, same reasoning as initReorder() above.
+  Promise.all([_layoutReady, loadCanvasLayout()]).then(([,enabled])=>{
+    if(enabled){ enterCanvasMode(); updateCanvasToggleBtn(); }
+  });
 
   document.getElementById('btn-reset-layout')?.addEventListener('click',()=>{
     Object.values(LEGACY_LAYOUT_KEYS).forEach(key=>{ try{ localStorage.removeItem(key); }catch{} });
     _layout={spark:[],info:[],ea:[],gauge:[],hidden:[]};
     saveLayout();
+    // Canvas Mode's own saved positions (_canvasLayout) are untouched by
+    // the above — without this, reloading while Canvas Mode is on just
+    // restores the exact same canvas layout being "reset" from, since
+    // enabled:true + a full items map both survive the reload unchanged.
+    // Clearing items (leaving enabled as-is) means every tile falls back
+    // to a freshly measured Classic-mode position on the reloaded page —
+    // see canvasWrapTile()'s own priority order — matching what Reset
+    // layout is actually supposed to do while Canvas Mode is active.
+    //
+    // Deliberately does NOT fall through to location.reload() below in this
+    // case — measureClassicLayout() re-running via the auto-restore-on-load
+    // path (loadCanvasLayout().then(...)) raced ahead of some of Overview's
+    // own async content (e.g. extra-analytics-row) settling into its final
+    // layout on a *fresh* page load, producing a measurement taken against
+    // a not-yet-stable page (tiles landing with a wrong relative order/
+    // gaps between rows). Since Reset is only ever clicked mid-session,
+    // with the page already fully rendered, exiting and re-entering Canvas
+    // Mode in place re-measures the *already-settled* DOM directly —
+    // sidesteps the reload race entirely rather than chasing exactly what
+    // was still loading.
+    if(_canvasMode){
+      _canvasLayout={};
+      saveCanvasLayout();
+      exitCanvasMode();
+      applyHiddenTiles();
+      enterCanvasMode();
+      updateCanvasToggleBtn();
+      buildPanelsMenu();
+      return;
+    }
     location.reload();
   });
 

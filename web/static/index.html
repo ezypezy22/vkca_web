@@ -10,6 +10,7 @@
      near the bottom of <body>, after style.css, which silently let
      Leaflet's default white tooltip background win instead. -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@13.2.0/dist/gridstack.min.css">
 <link rel="stylesheet" href="/static/style.css">
 <script>
   // Applied synchronously, before paint, so a popped-out tile/HUD window
@@ -323,6 +324,7 @@
           <div id="panels-menu" class="panels-menu"></div>
         </div>
         <button id="btn-reset-layout" class="btn btn--ghost btn--sm" title="Restore the default tile order and unhide everything">↺ Reset layout</button>
+        <button id="btn-canvas-toggle" class="btn btn--ghost btn--sm" title="Freeform drag &amp; resize every Overview tile — off by default">🖼 Canvas Mode</button>
         <button id="btn-sound-toggle" class="btn btn--ghost btn--sm" title="Toggle sound alerts for milestones and best-rate records">🔊 Sound Alerts</button>
       </div>
     </div>
@@ -351,6 +353,7 @@
       <span id="whatif-result" style="font-family:var(--font-mono);font-size:0.85em;margin-left:4px"></span>
     </div>
 
+    <div id="overview-classic-rows">
     <div id="gauge-row" class="gauge-row"></div>
 
     <div class="spark-row">
@@ -502,6 +505,9 @@
       </div>
       <div class="region-canvas-wrap"><canvas id="chart-region-bars"></canvas></div>
     </div>
+    </div>
+
+    <div id="canvas-grid" class="grid-stack" style="display:none"></div>
   </section>
 
   <!-- ══ REPORT ══ -->
@@ -1517,6 +1523,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet.geodesic@2.7.1/dist/leaflet.geodesic.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gridstack@13.2.0/dist/gridstack-all.js"></script>
 <script src="/static/app.js"></script>
 <script src="/static/overview.js"></script>
 <script src="/static/cluster.js"></script>

@@ -1013,6 +1013,31 @@ async def api_panel_layout_post(body: dict):
     return {"ok": True}
 
 
+# ── Overview canvas layout (freeform drag/resize grid, "Canvas Mode") ────────
+# Separate key from panel_layout, not a variant of it — the two modes' saved
+# shapes are structurally different (panel_layout: per-section ordered
+# tileKey arrays; this: per-tileKey {x,y,w,h} plus one `enabled` flag).
+# Switching modes never has to touch or invalidate the other's saved state.
+
+@app.get("/api/settings/canvas_layout")
+async def api_canvas_layout_get():
+    return {"layout": _load_settings().get("canvas_layout") or {}}
+
+
+@app.post("/api/settings/canvas_layout")
+async def api_canvas_layout_post(body: dict):
+    layout = body.get("layout")
+    if not isinstance(layout, dict):
+        return JSONResponse({"error": "Invalid layout."}, status_code=400)
+
+    def _mutate(settings):
+        settings["canvas_layout"] = layout
+
+    await asyncio.get_event_loop().run_in_executor(
+        None, _settings_read_modify_write, _mutate)
+    return {"ok": True}
+
+
 # ── QRZ.com lookup settings ───────────────────────────────────────────────────
 # See web/qrz.py for the API client and the _qrz_* helpers/worker above STATE
 # for the enrichment pipeline itself. Credentials live in the same plaintext
@@ -3626,7 +3651,7 @@ async def api_top_countries():
         if not country:
             continue
         counts[country] = counts.get(country, 0) + 1
-    top = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:15]
+    top = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:18]
     return [{"country": c, "qsos": n} for c, n in top]
 
 
