@@ -1088,6 +1088,7 @@
         <span id="ew-radio-band" class="ew-radio-band">—</span>
         <span id="ew-radio-freq">—</span>
         <span id="ew-radio-mode">—</span>
+        <span id="ew-mode-buttons" class="hidden"></span>
         <span id="ew-qso-count-wrap">NrOfQSOs<b id="ew-qso-count">0</b></span>
       </div>
       <div id="ew-body">
@@ -1110,20 +1111,20 @@
             <div id="ew-error" class="hidden"></div>
           </form>
           <div id="ew-fkeys">
-            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F1 CQ</button>
-            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F2 Contest</button>
-            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F3 TNX</button>
-            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F4 Spare</button>
-            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F5 His Call</button>
-            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F6 Spare</button>
-            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F7 QRZ?</button>
-            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F8 Agn?</button>
-            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F9 Zone?</button>
-            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F10 Spare</button>
-            <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">F11 Spare</button>
+            <button type="button" class="ew-fkey" data-fkey="1" disabled title="Rig Control not connected — see Settings">F1 CQ</button>
+            <button type="button" class="ew-fkey" data-fkey="2" disabled title="Rig Control not connected — see Settings">F2 Contest</button>
+            <button type="button" class="ew-fkey" data-fkey="3" disabled title="Rig Control not connected — see Settings">F3 TNX</button>
+            <button type="button" class="ew-fkey" disabled title="Spare — not available">F4 Spare</button>
+            <button type="button" class="ew-fkey" data-fkey="5" disabled title="Rig Control not connected — see Settings">F5 His Call</button>
+            <button type="button" class="ew-fkey" disabled title="Spare — not available">F6 Spare</button>
+            <button type="button" class="ew-fkey" data-fkey="7" disabled title="Rig Control not connected — see Settings">F7 QRZ?</button>
+            <button type="button" class="ew-fkey" data-fkey="8" disabled title="Rig Control not connected — see Settings">F8 Agn?</button>
+            <button type="button" class="ew-fkey" data-fkey="9" disabled title="Rig Control not connected — see Settings">F9 Zone?</button>
+            <button type="button" class="ew-fkey" disabled title="Spare — not available">F10 Spare</button>
+            <button type="button" class="ew-fkey" disabled title="Spare — not available">F11 Spare</button>
           </div>
           <div id="ew-actions">
-            <button type="button" class="ew-fkey" disabled title="No CW/voice keying in standalone mode">Esc: Stop</button>
+            <button type="button" id="ew-stop" class="ew-fkey" disabled title="Rig Control not connected — see Settings">Esc: Stop</button>
             <button type="button" id="ew-wipe">Wipe</button>
             <button type="submit" form="ew-form" id="ew-log-it">Log It</button>
             <button type="button" class="ew-fkey" disabled title="Not available in standalone mode">Edit</button>
@@ -1136,11 +1137,14 @@
       </div>
     </div>
 
-    <div class="panel-box" style="max-width:640px;margin-top:var(--gap)">
-      <div class="panel-header"><span style="color:var(--accent3)">●</span> WORKED THIS SESSION</div>
+    <div class="panel-box">
+      <div class="panel-header">
+        <span style="color:var(--accent3)">●</span> WORKED THIS SESSION
+        <input id="le-search-input" class="filter-input" placeholder="Search callsign…" type="text">
+      </div>
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>Call</th><th>Band</th><th>Mode</th><th>Exch</th><th>Time (UTC)</th></tr></thead>
+          <thead><tr><th>Call</th><th>Band</th><th>Mode</th><th>Exch</th><th>Time (UTC)</th><th id="le-th-countdown">Next Block In</th><th></th></tr></thead>
           <tbody id="le-recent-tbody"></tbody>
         </table>
       </div>
@@ -1471,6 +1475,7 @@
         <button id="settings-tab-qrz" class="btn btn--ghost btn--sm active" type="button">🔍 QRZ Lookup</button>
         <button id="settings-tab-logdirs" class="btn btn--ghost btn--sm" type="button">📁 Log Folders</button>
         <button id="settings-tab-radio" class="btn btn--ghost btn--sm" type="button">📡 Radio Setup</button>
+        <button id="settings-tab-rigctl" class="btn btn--ghost btn--sm" type="button">🎙 Rig Control</button>
       </div>
 
       <div id="settings-step-qrz">
@@ -1522,6 +1527,45 @@
         <div id="radio-port-error" class="dialog-error hidden"></div>
         <div id="radio-port-status" class="dialog-hint" style="margin-top:8px"></div>
         <button id="btn-radio-port-save" class="btn btn--primary" style="margin-top:12px;width:100%">💾 Save &amp; Apply</button>
+      </div>
+
+      <div id="settings-step-rigctl" class="hidden">
+        <div class="dialog-hint">
+          For standalone Logger-mode logs only (this app playing N1MM's own role, with no N1MM+
+          running). Connects to <a href="https://hamlib.github.io/" target="_blank" rel="noopener">Hamlib's</a>
+          <code>rigctld</code> to read live frequency/mode/PTT and send CW macros — this app never
+          talks to the rig directly, and never sends anything outside standalone Logger mode.
+        </div>
+        <label class="dialog-label"><input id="rigctl-enabled" type="checkbox"> Enable Rig Control</label>
+        <label class="dialog-label">Host</label>
+        <input id="rigctl-host" class="dialog-input" type="text" placeholder="127.0.0.1">
+        <label class="dialog-label">Port</label>
+        <input id="rigctl-port" class="dialog-input" type="number" min="1" max="65535" placeholder="4532">
+        <div id="rigctl-error" class="dialog-error hidden"></div>
+        <div id="rigctl-status" class="dialog-hint" style="margin-top:8px"></div>
+
+        <div class="dialog-section-label" style="margin-top:14px">CW macros (F-keys)</div>
+        <div class="dialog-hint">
+          Sent via rigctld's <code>send_morse</code> — CW only, since this app has no audio path for
+          SSB/voice. <code>{CALL}</code> = your own callsign; <code>{HISCALL}</code> = whatever's
+          currently typed in the Call field (for "His Call").
+        </div>
+        <label class="dialog-label">F1 — CQ</label>
+        <input id="rigctl-macro-1" class="dialog-input" type="text" placeholder="CQ TEST {CALL}">
+        <label class="dialog-label">F2 — Contest</label>
+        <input id="rigctl-macro-2" class="dialog-input" type="text" placeholder="5NN">
+        <label class="dialog-label">F3 — TNX</label>
+        <input id="rigctl-macro-3" class="dialog-input" type="text" placeholder="TU">
+        <label class="dialog-label">F5 — His Call</label>
+        <input id="rigctl-macro-5" class="dialog-input" type="text" placeholder="{HISCALL}">
+        <label class="dialog-label">F7 — QRZ?</label>
+        <input id="rigctl-macro-7" class="dialog-input" type="text" placeholder="QRZ?">
+        <label class="dialog-label">F8 — Agn?</label>
+        <input id="rigctl-macro-8" class="dialog-input" type="text" placeholder="AGN?">
+        <label class="dialog-label">F9 — Zone?</label>
+        <input id="rigctl-macro-9" class="dialog-input" type="text" placeholder="ZONE?">
+
+        <button id="btn-rigctl-save" class="btn btn--primary" style="margin-top:12px;width:100%">💾 Save &amp; Apply</button>
       </div>
     </div>
     <div class="dialog-footer">

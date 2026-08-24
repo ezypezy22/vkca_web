@@ -66,6 +66,7 @@ from plugins.generic import GenericPlugin
 import cosb
 import qrz
 import radio_udp
+import rigctld
 
 log = logging.getLogger(__name__)
 
@@ -256,6 +257,15 @@ class AppState:
         # means "whole app is closing", not "just this one listener thread").
         self._radio_listener_thread                = None   # threading.Thread
         self._radio_listener_stop                  = None   # threading.Event
+        # rigctld (Hamlib) rig control — standalone Logger mode only, see
+        # rigctld.py and _sync_rigctld() below. rigctld_conn is the shared
+        # RigctldConnection used both by the poller thread (reads) and by
+        # the /api/rig/* write endpoints (set_mode/send_morse/stop_morse);
+        # None whenever rig control isn't currently active.
+        self.rigctld_conn                          = None
+        self._rigctld_thread                       = None   # threading.Thread
+        self._rigctld_stop                         = None   # threading.Event
+        self.rigctld_status: Optional[str]          = None
         # Enrich All batch progress — reset by _qrz_enrich_all() to the size
         # of that batch, then _qrz_batch_remaining counts down as the worker
         # finishes each item (see _qrz_worker_loop). The same worker/queue
@@ -703,6 +713,47 @@ def _start_radio_listener(port: int):
     t.start()
 
 
+def _sync_rigctld():
+    """(Re)evaluates whether the rigctld poller should be running — it's
+    only ever active for a standalone log (STATE.is_standalone_log) with
+    rig control enabled in settings, see rigctld.py's own module docstring
+    for why. Called from load_db() (the one place is_standalone_log can
+    change) and from the rigctld settings POST handler (toggling/
+    reconfiguring while a standalone log is already open). Runs blocking
+    I/O (thread join) — call via run_in_executor from async handlers, same
+    as _start_radio_listener().
+    """
+    settings = _load_settings()
+    cfg = settings.get("rigctld") or {}
+    should_run = STATE.is_standalone_log and bool(cfg.get("enabled"))
+
+    old_thread = STATE._rigctld_thread
+    if old_thread and old_thread.is_alive():
+        STATE._rigctld_stop.set()
+        old_thread.join(timeout=3.0)   # loop polls stop_check ~1x/sec
+    STATE._rigctld_thread = None
+
+    if not should_run:
+        with STATE._lock:
+            STATE.radio_info.pop("rigctld|1", None)   # stale entry would otherwise
+            STATE.rigctld_status = None                # linger and look still-live
+        return
+
+    host = cfg.get("host") or rigctld.DEFAULT_HOST
+    port = cfg.get("port") or rigctld.DEFAULT_PORT
+    stop_event = threading.Event()
+    STATE._rigctld_stop = stop_event
+    t = threading.Thread(
+        target=rigctld.run_rigctld_poller,
+        args=(STATE, _freq_to_band_str,
+              lambda: STATE._shutting_down or stop_event.is_set(),
+              _radio_info_maybe_broadcast, host, port),
+        daemon=True, name="rigctld-poller",
+    )
+    STATE._rigctld_thread = t
+    t.start()
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     STATE._main_loop = asyncio.get_running_loop()
@@ -978,6 +1029,142 @@ async def api_radio_port_post(body: dict):
     with STATE._lock:
         bind_error = STATE.radio_bind_error
     return {"ok": True, "port": port, "bind_error": bind_error}
+
+
+# ── Rig Control (Hamlib rigctld) — standalone Logger mode only ────────────────
+# See rigctld.py's own module docstring for the read side (radio_info
+# entries, fed by the poller thread _sync_rigctld() starts/stops). This
+# section is Settings persistence plus the write-side /api/rig/* endpoints
+# (mode change, F-key CW macros) — every one gated on STATE.is_standalone_log
+# so this app never sends a rig command outside its own standalone Logger
+# mode (see the plan's safety-boundary rationale).
+
+_RIGCTLD_MACRO_DEFAULTS = {
+    "1": "CQ TEST {CALL}",   # F1 CQ
+    "2": "5NN",              # F2 Contest
+    "3": "TU",               # F3 TNX
+    "5": "{HISCALL}",        # F5 His Call — sends whatever's currently typed
+                             # in the Call field (see api_rig_send_morse)
+    "7": "QRZ?",             # F7 QRZ?
+    "8": "AGN?",             # F8 Agn?
+    "9": "ZONE?",            # F9 Zone?
+}
+
+
+@app.get("/api/settings/rigctld")
+async def api_rigctld_get():
+    cfg = _load_settings().get("rigctld") or {}
+    macros = dict(_RIGCTLD_MACRO_DEFAULTS)
+    macros.update(cfg.get("macros") or {})
+    with STATE._lock:
+        status    = STATE.rigctld_status
+        connected = STATE.rigctld_conn is not None and status is None
+    return {
+        "enabled":   bool(cfg.get("enabled")),
+        "host":      cfg.get("host") or rigctld.DEFAULT_HOST,
+        "port":      cfg.get("port") or rigctld.DEFAULT_PORT,
+        "macros":    macros,
+        "status":    status,
+        "connected": connected,
+    }
+
+
+@app.post("/api/settings/rigctld")
+async def api_rigctld_post(body: dict):
+    enabled = bool(body.get("enabled"))
+    host    = (body.get("host") or rigctld.DEFAULT_HOST).strip()
+    try:
+        port = int(body.get("port") or rigctld.DEFAULT_PORT)
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "Port must be a number."}, status_code=400)
+    if not (1 <= port <= 65535):
+        return JSONResponse({"error": "Port must be between 1 and 65535."}, status_code=400)
+    macros_in = body.get("macros") or {}
+    macros = {k: str(v) for k, v in macros_in.items() if k in _RIGCTLD_MACRO_DEFAULTS}
+
+    def _mutate(settings):
+        settings["rigctld"] = {"enabled": enabled, "host": host, "port": port, "macros": macros}
+
+    await asyncio.get_event_loop().run_in_executor(
+        None, _settings_read_modify_write, _mutate)
+    await asyncio.get_event_loop().run_in_executor(None, _sync_rigctld)
+    # Mirrors /api/settings/radio_port's own settle-then-report pattern —
+    # the poller's first connect attempt happens synchronously at thread
+    # start, so a brief pause lets a bad host/port show up as a real error
+    # instead of always reporting "connecting..." on the first read-back.
+    await asyncio.sleep(0.3)
+    with STATE._lock:
+        status    = STATE.rigctld_status
+        connected = STATE.rigctld_conn is not None and status is None
+    return {"ok": True, "status": status, "connected": connected}
+
+
+def _rig_control_guard() -> Optional[JSONResponse]:
+    if not STATE.is_standalone_log:
+        return JSONResponse(
+            {"error": "Rig control is only available for a standalone log (Logger mode)."},
+            status_code=400)
+    if STATE.rigctld_conn is None:
+        return JSONResponse({"error": "rigctld is not connected."}, status_code=503)
+    return None
+
+
+@app.post("/api/rig/set_mode")
+async def api_rig_set_mode(body: dict):
+    guard = _rig_control_guard()
+    if guard:
+        return guard
+    mode = (body.get("mode") or "").strip().upper()
+    if not mode:
+        return JSONResponse({"error": "No mode supplied."}, status_code=400)
+    conn = STATE.rigctld_conn
+    ok, err = await asyncio.get_event_loop().run_in_executor(None, conn.set_mode, mode)
+    if not ok:
+        return JSONResponse({"error": err}, status_code=502)
+    return {"ok": True}
+
+
+@app.post("/api/rig/send_morse")
+async def api_rig_send_morse(body: dict):
+    """Body: {fkey: "1".."11", his_call: <optional, currently-typed Call
+    field>}. Macro text (Settings → Rig Control) supports {CALL} (own
+    callsign, from the log's Station table) and {HISCALL} (the his_call
+    passed in, for the F5 "His Call" macro)."""
+    guard = _rig_control_guard()
+    if guard:
+        return guard
+    fkey = str(body.get("fkey") or "")
+    cfg = _load_settings().get("rigctld") or {}
+    macros = dict(_RIGCTLD_MACRO_DEFAULTS)
+    macros.update(cfg.get("macros") or {})
+    text = (macros.get(fkey) or "").strip()
+    if not text:
+        return JSONResponse({"error": f"No macro configured for F{fkey}."}, status_code=400)
+    my_call  = getattr(STATE.contest_log, "my_call", None) or ""
+    his_call = (body.get("his_call") or "").strip().upper()
+    text = text.replace("{CALL}", my_call).replace("{HISCALL}", his_call).strip()
+    if not text:
+        return JSONResponse(
+            {"error": "Macro resolved to empty text (e.g. His Call with nothing typed in Call yet)."},
+            status_code=400)
+    conn = STATE.rigctld_conn
+    ok, err = await asyncio.get_event_loop().run_in_executor(None, conn.send_morse, text)
+    if not ok:
+        return JSONResponse({"error": err}, status_code=502)
+    return {"ok": True, "sent": text}
+
+
+@app.post("/api/rig/stop_morse")
+async def api_rig_stop_morse():
+    guard = _rig_control_guard()
+    if guard:
+        return guard
+    conn = STATE.rigctld_conn
+    # Best-effort — not every rig backend supports aborting mid-send, so a
+    # failure here is reported but the caller (entrywindow.js) shouldn't
+    # treat it as an alarming hard error.
+    ok, err = await asyncio.get_event_loop().run_in_executor(None, conn.stop_morse)
+    return {"ok": ok, "error": None if ok else err}
 
 
 # ── Overview panel layout (drag-reorder + hide/show) ──────────────────────────
@@ -1476,6 +1663,7 @@ async def api_load(body: dict):
         None, STATE.load_db, path, contest_nr, plugin
     )
     if "ok" in result:
+        await asyncio.get_event_loop().run_in_executor(None, _sync_rigctld)
         await _broadcast(STATE.snapshot())
     return result
 
@@ -1536,6 +1724,7 @@ async def api_new_log(body: dict):
     result = await asyncio.get_event_loop().run_in_executor(
         None, STATE.load_db, str(p), 1, plugin, True)
     if "ok" in result:
+        await asyncio.get_event_loop().run_in_executor(None, _sync_rigctld)
         await _broadcast(STATE.snapshot())
     return result
 
@@ -1579,6 +1768,52 @@ async def api_qsos_add(body: dict):
 
     result = await asyncio.get_event_loop().run_in_executor(
         None, _add_qso, call, band, mode,
+        body.get("rst_sent") or "", body.get("rst_rcvd") or "", body.get("exchange") or "",
+        bool(body.get("is_run")))
+    if "error" in result:
+        return JSONResponse(result, status_code=400)
+    await _broadcast(STATE.snapshot())
+    return result
+
+
+def _update_qso(qso_id: str, call: str, band: str, mode: str, rst_sent: str, rst_rcvd: str,
+                 exchange: str, is_run: bool = False) -> dict:
+    with STATE._lock:
+        cl = STATE.contest_log
+        if not cl or not STATE.is_standalone_log:
+            return {"error": "Editing is only available for a log created via + New Log."}
+        if not any(q.get("qso_id") == qso_id for q in cl.qsos):
+            return {"error": "QSO not found."}
+        try:
+            cl.update_qso(qso_id, call, band, mode, rst_sent, rst_rcvd, exchange, is_run)
+        except Exception as e:
+            log.exception("update_qso failed")
+            return {"error": str(e)}
+    # Reload so the existing dupe/scoring pipeline recomputes from scratch,
+    # exactly as _add_qso() already does — no second, parallel implementation.
+    result = STATE.load_db(STATE.db_path, STATE.contest_nr, STATE.plugin, True)
+    if "error" in result:
+        return result
+    return {"ok": True, "qso_id": qso_id}
+
+
+@app.post("/api/qsos/update")
+async def api_qsos_update(body: dict):
+    """Edit an existing QSO in the current standalone log. Body: {qso_id,
+    call, band, mode, rst_sent, rst_rcvd, exchange, is_run}. Same
+    is_standalone_log guardrail as /api/qsos/add — this never writes into
+    an opened N1MM file, only a log this app created."""
+    qso_id = (body.get("qso_id") or "").strip()
+    call   = (body.get("call") or "").strip()
+    band   = (body.get("band") or "").strip()
+    mode   = (body.get("mode") or "").strip()
+    if not qso_id:
+        return JSONResponse({"error": "No qso_id supplied."}, status_code=400)
+    if not call or not band or not mode:
+        return JSONResponse({"error": "Call, band, and mode are required."}, status_code=400)
+
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, _update_qso, qso_id, call, band, mode,
         body.get("rst_sent") or "", body.get("rst_rcvd") or "", body.get("exchange") or "",
         bool(body.get("is_run")))
     if "error" in result:
@@ -2761,6 +2996,9 @@ async def api_plugin_meta():
       dialog's pre-filled fields.
     - is_standalone_log: True only for a log created via POST /api/new_log
       (see STATE.is_standalone_log) — gates the Log Entry tab's visibility.
+    - rigctld_connected: True if the rigctld rig-control poller is currently
+      live (see rigctld.py) — gates the Log Entry form's mode buttons and
+      F-key CW macros.
     """
     if not STATE.contest_log:
         return {"loaded": False}
@@ -2805,6 +3043,7 @@ async def api_plugin_meta():
         "cabrillo_contest_id": getattr(p, "cabrillo_contest_id", None),
         "my_call":          getattr(STATE.contest_log, "my_call", None),
         "is_standalone_log": STATE.is_standalone_log,
+        "rigctld_connected": STATE.rigctld_conn is not None and STATE.rigctld_status is None,
     }
 
 
@@ -4069,6 +4308,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
     # Pre-load if a valid file was passed on the command line
     if db_path and os.path.isfile(db_path):
         STATE.load_db(db_path)
+        _sync_rigctld()
 
     config = uvicorn.Config(
         app, host="127.0.0.1", port=port,

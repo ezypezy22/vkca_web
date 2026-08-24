@@ -1463,6 +1463,47 @@ Users are responsible for verifying all information against N1MM before making d
   }
   window.VKA.showToast = showToast;
 
+  // ── Themed confirm dialog ─────────────────────────────────────────────────
+  // Replaces window.confirm() (a native OS dialog — unthemed, and in a
+  // frameless pywebview window can render off-center rather than over the
+  // app) with the same .dialog-overlay/.dialog markup Settings/Load Log
+  // already use, which is properly centered and themed by construction.
+  // Built fresh per call (unlike the toast singleton above) since a confirm
+  // is modal and resolves once, not a fire-and-forget notification.
+  window.VKA.showConfirm = function ({title = 'Confirm', message = '',
+                                       confirmLabel = 'Delete', cancelLabel = 'Cancel',
+                                       danger = true} = {}) {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'dialog-overlay';
+      overlay.innerHTML = `
+        <div class="dialog" style="width:420px">
+          <div class="dialog-title">${window.VKA.escapeHtml(title)}</div>
+          <div class="dialog-body">${window.VKA.escapeHtml(message)}</div>
+          <div class="dialog-footer">
+            <button class="btn btn--ghost" data-act="cancel">${window.VKA.escapeHtml(cancelLabel)}</button>
+            <button class="btn ${danger ? 'btn--danger' : 'btn--primary'}" data-act="confirm">${window.VKA.escapeHtml(confirmLabel)}</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      const confirmBtn = overlay.querySelector('[data-act="confirm"]');
+      function cleanup(result) {
+        document.removeEventListener('keydown', onKey);
+        overlay.remove();
+        resolve(result);
+      }
+      function onKey(e) {
+        if (e.key === 'Escape') cleanup(false);
+        else if (e.key === 'Enter') cleanup(true);
+      }
+      document.addEventListener('keydown', onKey);
+      overlay.addEventListener('click', e => { if (e.target === overlay) cleanup(false); });
+      overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => cleanup(false));
+      confirmBtn.addEventListener('click', () => cleanup(true));
+      confirmBtn.focus();
+    });
+  };
+
   // ── Shared "save a Blob as a downloaded file" helper ─────────────────────
   // toDataURL()+<a href> gets silently cancelled by the download manager in
   // some WebView2/Chromium builds — toBlob()/Blob()+createObjectURL is the

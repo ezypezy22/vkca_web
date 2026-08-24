@@ -30,22 +30,27 @@
   const stepQrz     = document.getElementById('settings-step-qrz');
   const stepLogDirs = document.getElementById('settings-step-logdirs');
   const stepRadio   = document.getElementById('settings-step-radio');
+  const stepRigctl  = document.getElementById('settings-step-rigctl');
   const tabQrz      = document.getElementById('settings-tab-qrz');
   const tabLogDirs  = document.getElementById('settings-tab-logdirs');
   const tabRadio    = document.getElementById('settings-tab-radio');
+  const tabRigctl   = document.getElementById('settings-tab-rigctl');
   const footerQrz   = document.getElementById('settings-footer-qrz');
 
   function showSettingsStep(step) {
     stepQrz?.classList.toggle('hidden', step !== 'qrz');
     stepLogDirs?.classList.toggle('hidden', step !== 'logdirs');
     stepRadio?.classList.toggle('hidden', step !== 'radio');
+    stepRigctl?.classList.toggle('hidden', step !== 'rigctl');
     tabQrz?.classList.toggle('active', step === 'qrz');
     tabLogDirs?.classList.toggle('active', step === 'logdirs');
     tabRadio?.classList.toggle('active', step === 'radio');
+    tabRigctl?.classList.toggle('active', step === 'rigctl');
     footerQrz?.classList.toggle('hidden', step !== 'qrz');
     if (step === 'qrz') { refreshStatus(); pollTick(); }
     else if (step === 'logdirs') { loadLogDirs(); }
     else if (step === 'radio') { loadRadioPort(); }
+    else if (step === 'rigctl') { loadRigctl(); }
   }
 
   function openSettings(step) {
@@ -59,6 +64,7 @@
   tabQrz?.addEventListener('click', () => showSettingsStep('qrz'));
   tabLogDirs?.addEventListener('click', () => showSettingsStep('logdirs'));
   tabRadio?.addEventListener('click', () => showSettingsStep('radio'));
+  tabRigctl?.addEventListener('click', () => showSettingsStep('rigctl'));
   btnOpen.addEventListener('click', () => openSettings('qrz'));
   document.getElementById('btn-settings-close')?.addEventListener('click', closeSettings);
 
@@ -369,6 +375,87 @@
       radioPortError.classList.remove('hidden');
     } finally {
       btnRadioSave.disabled = false;
+    }
+  });
+
+  // ── Rig Control (Hamlib rigctld — standalone Logger mode only) ─────────
+  const RIGCTL_MACRO_KEYS = ['1', '2', '3', '5', '7', '8', '9'];
+  const rigctlEnabled = document.getElementById('rigctl-enabled');
+  const rigctlHost    = document.getElementById('rigctl-host');
+  const rigctlPort    = document.getElementById('rigctl-port');
+  const rigctlError   = document.getElementById('rigctl-error');
+  const rigctlStatus  = document.getElementById('rigctl-status');
+  const btnRigctlSave = document.getElementById('btn-rigctl-save');
+
+  function setRigctlStatus(data) {
+    if (!rigctlStatus) return;
+    if (!data.enabled) {
+      rigctlStatus.textContent = 'Rig Control is disabled.';
+      rigctlStatus.style.color = 'var(--muted)';
+    } else if (data.status) {
+      rigctlStatus.textContent = `⚠ ${data.status}`;
+      rigctlStatus.style.color = 'var(--red)';
+    } else if (data.connected) {
+      rigctlStatus.textContent = `✓ Connected to rigctld at ${data.host}:${data.port}.`;
+      rigctlStatus.style.color = 'var(--green)';
+    } else {
+      rigctlStatus.textContent = 'Not connected — will connect once a standalone log is loaded.';
+      rigctlStatus.style.color = 'var(--muted)';
+    }
+  }
+
+  async function loadRigctl() {
+    if (!rigctlEnabled) return;
+    try {
+      const res  = await fetch('/api/settings/rigctld');
+      const data = await res.json();
+      rigctlEnabled.checked = !!data.enabled;
+      rigctlHost.value = data.host;
+      rigctlPort.value = data.port;
+      RIGCTL_MACRO_KEYS.forEach(k => {
+        const el = document.getElementById(`rigctl-macro-${k}`);
+        if (el) el.value = (data.macros || {})[k] || '';
+      });
+      setRigctlStatus(data);
+    } catch (e) { console.warn('loadRigctl failed:', e); }
+  }
+
+  btnRigctlSave?.addEventListener('click', async () => {
+    rigctlError.classList.add('hidden');
+    const port = parseInt(rigctlPort.value, 10);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      rigctlError.textContent = 'Enter a port number between 1 and 65535.';
+      rigctlError.classList.remove('hidden');
+      return;
+    }
+    const macros = {};
+    RIGCTL_MACRO_KEYS.forEach(k => {
+      const el = document.getElementById(`rigctl-macro-${k}`);
+      if (el) macros[k] = el.value;
+    });
+    btnRigctlSave.disabled = true;
+    try {
+      const res  = await fetch('/api/settings/rigctld', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          enabled: rigctlEnabled.checked,
+          host: rigctlHost.value.trim() || '127.0.0.1',
+          port, macros,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        rigctlError.textContent = data.error || 'Failed to save.';
+        rigctlError.classList.remove('hidden');
+        return;
+      }
+      setRigctlStatus({enabled: rigctlEnabled.checked, host: rigctlHost.value.trim(), port,
+        status: data.status, connected: data.connected});
+    } catch (e) {
+      rigctlError.textContent = `Save failed: ${e.message}`;
+      rigctlError.classList.remove('hidden');
+    } finally {
+      btnRigctlSave.disabled = false;
     }
   });
 })();

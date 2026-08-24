@@ -351,47 +351,62 @@ html.operator-hud-mode #operator-hud-close{display:block;}
    themed with this app's own --bg/--accent tokens (not hardcoded N1MM
    pale-blue) so it matches whichever theme (dark/light/high-contrast/
    colorblind) the user has active. */
-#entry-window-view{display:flex;flex-direction:column;max-width:640px;
-  background:var(--bg);color:var(--fg);font-family:var(--font-mono);font-size:13px;
+#entry-window-view{display:flex;flex-direction:column;width:100%;flex-shrink:0;
+  background:var(--bg);color:var(--fg);font-family:var(--font-mono);font-size:18px;
   border:1px solid var(--bg3);border-top:2px solid var(--accent);border-radius:var(--radius);
   overflow:hidden;}
-#ew-header{display:flex;align-items:baseline;gap:14px;padding:6px 12px;
+/* Log Entry tab: entry form full-width on top, worked-list stacked below it
+   and stretched to fill the rest of the window's height, instead of two
+   narrow, short cards stranded in the corner. */
+#tab-logentry.active{flex:1;min-height:0;}
+#tab-logentry .panel-box{flex:1;min-height:0;display:flex;flex-direction:column;}
+#tab-logentry .panel-box .table-wrap{flex:1;max-height:none;}
+#ew-header{display:flex;align-items:baseline;gap:18px;padding:10px 16px;
   background:var(--bg2);border-bottom:1px solid var(--bg3);flex-shrink:0;}
 #ew-radio-band{font-weight:bold;font-size:0.85em;background:var(--bg3);
   color:var(--accent);padding:1px 6px;border-radius:3px;}
 #ew-radio-freq{font-size:1.3em;font-weight:bold;font-variant-numeric:tabular-nums;color:var(--fg);}
 #ew-radio-mode{opacity:.75;}
+/* Mode buttons replace the plain read-only #ew-radio-mode text when rig
+   control (rigctld) is connected — see entrywindow.js's renderModeButtons(). */
+#ew-mode-buttons{display:inline-flex;gap:3px;}
+.ew-mode-btn{padding:1px 7px;font-size:0.78em;font-weight:bold;
+  border:1px solid var(--bg3);border-radius:3px;
+  background:var(--bg2);color:var(--fg);font-family:inherit;cursor:pointer;}
+.ew-mode-btn:hover{background:var(--bg3);}
+.ew-mode-btn.active{background:var(--accent);color:var(--bg);border-color:var(--accent);}
 #ew-qso-count-wrap{margin-left:auto;font-size:0.85em;color:var(--muted);}
 #ew-qso-count{font-size:1.2em;margin-left:6px;color:var(--accent);}
 #ew-body{flex:1;display:flex;min-height:0;}
-#ew-bands{display:flex;flex-direction:column;width:60px;flex-shrink:0;
+#ew-bands{display:flex;flex-direction:column;width:90px;flex-shrink:0;
   background:var(--bg2);border-right:1px solid var(--bg3);overflow-y:auto;}
-#ew-bands button{padding:9px 4px;border:none;border-bottom:1px solid var(--bg3);
-  background:transparent;color:var(--fg);font-weight:bold;font-size:0.85em;cursor:pointer;}
+#ew-bands button{padding:13px 4px;border:none;border-bottom:1px solid var(--bg3);
+  background:transparent;color:var(--fg);font-weight:bold;font-size:0.9em;cursor:pointer;}
 #ew-bands button:hover{background:var(--bg3);}
 #ew-bands button.active{background:var(--accent);color:var(--bg);}
-#ew-main{flex:1;display:flex;flex-direction:column;padding:10px 14px;
+#ew-main{flex:1;display:flex;flex-direction:column;padding:16px 20px;
   min-height:0;overflow-y:auto;}
-#ew-runsp{display:flex;gap:16px;margin-bottom:8px;font-weight:bold;}
-#ew-runsp label{display:flex;align-items:center;gap:4px;cursor:pointer;}
+#ew-runsp{display:flex;gap:20px;margin-bottom:12px;font-weight:bold;font-size:1.05em;}
+#ew-runsp label{display:flex;align-items:center;gap:6px;cursor:pointer;}
 #ew-field-table{width:100%;border-collapse:collapse;table-layout:fixed;}
 #ew-field-table th{text-align:left;font-size:0.72em;color:var(--muted);
-  padding:0 6px 2px;font-weight:normal;}
-#ew-field-table td{padding:0 4px 6px 0;}
-#ew-field-table input{width:100%;box-sizing:border-box;padding:6px 8px;
-  font-size:1.05em;border:1px solid var(--bg3);border-radius:2px;
+  padding:0 8px 4px;font-weight:normal;}
+#ew-field-table td{padding:0 6px 10px 0;}
+#ew-field-table input{width:100%;box-sizing:border-box;padding:10px 12px;
+  font-size:1.15em;border:1px solid var(--bg3);border-radius:3px;
   background:var(--bg2);color:var(--fg);font-family:inherit;}
 #ew-field-table input:focus{outline:none;border-color:var(--accent);}
 #ew-call{font-weight:bold;}
 #ew-error{color:var(--red);font-size:0.85em;margin:-2px 0 6px;}
-#ew-fkeys,#ew-actions{display:flex;flex-wrap:wrap;gap:4px;}
-#ew-fkeys{margin-top:6px;}
-#ew-actions{margin-top:6px;}
-.ew-fkey,#ew-wipe,#ew-log-it{flex:1 1 84px;padding:6px 4px;font-size:0.76em;
-  border:1px solid var(--bg3);border-radius:2px;
+#ew-fkeys,#ew-actions{display:flex;flex-wrap:wrap;gap:6px;}
+#ew-fkeys{margin-top:10px;}
+#ew-actions{margin-top:10px;}
+.ew-fkey,#ew-wipe,#ew-log-it{flex:1 1 100px;padding:11px 6px;font-size:0.82em;
+  border:1px solid var(--bg3);border-radius:3px;
   background:var(--bg2);color:var(--fg);
   font-family:inherit;cursor:pointer;}
 .ew-fkey:disabled{cursor:not-allowed;opacity:.5;}
+.ew-fkey:not(:disabled):hover{background:var(--bg3);border-color:var(--accent);}
 #ew-wipe:hover{background:var(--bg3);border-color:var(--red);color:var(--red);}
 #ew-log-it{font-weight:bold;background:var(--accent);color:var(--bg);border-color:var(--accent);}
 #ew-log-it:hover{filter:brightness(1.1);}
@@ -930,10 +945,29 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .log-dir-remove{background:none;border:none;color:var(--muted);cursor:pointer;
   font-size:1em;line-height:1;padding:2px 4px;flex-shrink:0;}
 .log-dir-remove:hover{color:var(--red);}
+/* Worked-This-Session row actions (Log Entry tab) — edit/delete a single
+   logged QSO in place, see entrywindow.js's startEdit()/row-delete handler. */
+.le-actions{white-space:nowrap;}
+.le-row-edit,.le-row-del{background:none;border:none;color:var(--muted);cursor:pointer;
+  font-size:1em;line-height:1;padding:2px 6px;}
+.le-row-edit:hover{color:var(--accent);}
+.le-row-del:hover{color:var(--red);}
+/* Right-click context menu on a Worked-This-Session row — see
+   entrywindow.js's openCtxMenu(). Reuses .panels-menu-row's own row style
+   (hover background, font) for the two items. */
+.le-ctx-menu{position:fixed;z-index:300;background:var(--bg2);border:1px solid var(--bg3);
+  border-radius:var(--radius);padding:6px;min-width:140px;
+  box-shadow:0 8px 24px -8px rgba(0,0,0,.5);}
+.le-ctx-menu .panels-menu-row{padding:7px 10px;}
 .dialog-input{width:100%;background:var(--bg3);border:1px solid #30363d;color:var(--fg);
   font-family:var(--font-mono);font-size:0.92em;padding:7px 10px;
   border-radius:var(--radius);outline:none;transition:border-color .15s;}
 .dialog-input:focus{border-color:var(--accent);}
+/* Rig Control settings tab — larger fields, since the macro-text inputs in
+   particular are read/edited more carefully than a quick port number. */
+#settings-step-rigctl .dialog-input{font-size:1.15em;padding:11px 14px;}
+#settings-step-rigctl .dialog-label{font-size:0.8em;margin-top:10px;}
+#settings-step-rigctl input[type="checkbox"]{width:18px;height:18px;vertical-align:middle;margin-right:6px;}
 .dialog-error{margin-top:7px;font-family:var(--font-mono);font-size:0.77em;color:var(--red);
   padding:5px 8px;background:rgba(255,71,87,.1);border-radius:var(--radius);
   border:1px solid rgba(255,71,87,.3);}
@@ -1004,6 +1038,8 @@ body:has(#tab-cluster.active) #content{overflow:hidden;}
 .btn--primary:disabled{opacity:.5;cursor:default;}
 .btn--ghost{background:none;color:var(--muted);border-color:var(--bg3);}
 .btn--ghost:hover{color:var(--fg);border-color:var(--muted);}
+.btn--danger{background:var(--red);color:#fff;border-color:var(--red);font-weight:bold;}
+.btn--danger:hover{background:color-mix(in srgb,var(--red),white 15%);}
 .btn--green{background:var(--green);color:var(--bg);border-color:var(--green);font-weight:bold;}
 .btn--green:hover{background:#3ee585;}
 .btn--icon{padding:6px 9px;font-size:1em;}

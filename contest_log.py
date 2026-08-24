@@ -152,14 +152,27 @@ class ContestLog:
             except Exception:
                 pass   # read-only DB or DXLOG doesn't exist yet — harmless
 
-            rows = c.execute("""
+            # A standalone log created by an earlier version of
+            # create_new_log() (before the Contest table was added below)
+            # won't have a Contest table at all — SQLite errors on a LEFT
+            # JOIN against a table that doesn't exist (not just empty), so
+            # the join is skipped entirely for such a file rather than
+            # letting the whole scan fail and silently report "no contests
+            # found" for a log that's actually fine.
+            has_contest_table = c.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='Contest'"
+            ).fetchone() is not None
+
+            contest_join = "LEFT JOIN Contest ct ON ct.Name = ci.ContestName" if has_contest_table else ""
+            display_name_expr = "ct.DisplayName" if has_contest_table else "NULL"
+            rows = c.execute(f"""
                 SELECT  ci.ContestNR,
                         ci.ContestName,
-                        TRIM(COALESCE(ct.DisplayName, ci.ContestName)) AS DisplayName,
+                        TRIM(COALESCE({display_name_expr}, ci.ContestName)) AS DisplayName,
                         ci.StartDate,
                         COUNT(d.ID) AS QSOCount
                 FROM    ContestInstance ci
-                LEFT JOIN Contest ct ON ct.Name = ci.ContestName
+                {contest_join}
                 LEFT JOIN DXLOG   d  ON d.ContestNR = ci.ContestNR
                 WHERE   ci.ContestNR >= 0
                 GROUP BY ci.ContestNR
@@ -272,6 +285,21 @@ class ContestLog:
                     CQZone SMALLINT NOT NULL
                 );
 
+                -- Real N1MM databases have this table; available_contests()'s
+                -- query does a LEFT JOIN against it for DisplayName. SQLite
+                -- errors on a LEFT JOIN against a table that doesn't exist at
+                -- all (not just empty) — omitting this entirely, as earlier
+                -- versions of this file did, made available_contests() throw
+                -- "no such table: Contest" for every standalone log, silently
+                -- caught and reported as "no contests found" regardless of
+                -- what was actually logged. Left empty on purpose — the
+                -- query's own COALESCE(ct.DisplayName, ci.ContestName)
+                -- already falls back correctly with zero rows here.
+                CREATE TABLE Contest (
+                    Name VARCHAR(10) PRIMARY KEY,
+                    DisplayName VARCHAR(50)
+                );
+
                 CREATE TABLE VKCA_Meta (key TEXT PRIMARY KEY, value TEXT);
                 INSERT INTO VKCA_Meta (key, value) VALUES ('standalone', '1');
             """)
@@ -364,6 +392,44 @@ class ContestLog:
         finally:
             conn.close()
         return new_id
+
+    def update_qso(self, qso_id: str, call: str, band: str, mode: str, rst_sent: str,
+                    rst_rcvd: str, exchange: str, is_run: bool = False) -> None:
+        """
+        Edit an existing standalone-logged QSO in place (Call/Band/Mode/
+        RST/Exchange/Run flag) — same connect/execute/commit/close pattern
+        as add_qso()/delete_qso(). TS is left untouched (this corrects what
+        was logged, not when). ContactType/Points are recomputed exactly as
+        add_qso() does — a dupe check against every OTHER already-loaded
+        QSO (excluding this row itself) — so fixing a mistyped call doesn't
+        leave a stale dupe flag from what was logged before, or vice versa.
+        Caller reloads afterward (mirrors add_qso()'s own "no second,
+        parallel dupe-checking implementation" reasoning).
+        """
+        call_u = call.strip().upper()
+        band_u = band.strip().upper()
+        mode_u = mode.strip().upper()
+        mode_scoped = getattr(self.plugin, "mode_scoped_dupes", False)
+        new_mode_key = self.plugin.dupe_mode_key({"mode": mode_u}) if mode_scoped else None
+        is_repeat = any(
+            not q["dupe"] and q.get("qso_id") != qso_id and q["call"] == call_u and q["band"] == band_u
+            and (not mode_scoped or self.plugin.dupe_mode_key(q) == new_mode_key)
+            for q in self.qsos
+        )
+        contact_type = "D" if is_repeat else ""
+        pts = 0 if is_repeat else 1
+        band_mhz = _band_to_mhz(band)
+        conn = sqlite3.connect(self.db_path)
+        try:
+            conn.execute(
+                """UPDATE DXLOG SET Call=?, Band=?, Mode=?, SNT=?, RCV=?, Exchange1=?,
+                   IsRunQSO=?, ContactType=?, Points=? WHERE ID=?""",
+                (call_u, band_mhz, mode_u, rst_sent.strip(), rst_rcvd.strip(),
+                 exchange.strip(), 1 if is_run else 0, contact_type, pts, qso_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     def __init__(self, db_path, contest_nr=None, plugin: ContestPlugin = None):
         self.db_path    = db_path

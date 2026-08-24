@@ -300,7 +300,8 @@
     const msg = _selected.size === 1
       ? `Permanently delete this QSO (${calls}) from the database?`
       : `Permanently delete ${_selected.size} QSOs (${calls}) from the database?`;
-    if (!window.confirm(msg)) return;
+    const ok = await window.VKA.showConfirm({title: 'Delete QSO' + (_selected.size===1?'':'s'), message: msg, confirmLabel: 'Delete'});
+    if (!ok) return;
     try {
       const res  = await fetch('/api/qsos/delete', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
