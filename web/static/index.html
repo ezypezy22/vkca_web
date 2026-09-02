@@ -1087,6 +1087,7 @@
       <div id="ew-header">
         <span id="ew-radio-band" class="ew-radio-band">—</span>
         <span id="ew-radio-freq">—</span>
+        <input id="ew-freq-input" class="hidden" type="text" inputmode="decimal" title="Set frequency (MHz) — Enter to QSY">
         <span id="ew-radio-mode">—</span>
         <span id="ew-mode-buttons" class="hidden"></span>
         <span id="ew-qso-count-wrap">NrOfQSOs<b id="ew-qso-count">0</b></span>
@@ -1564,6 +1565,26 @@
         <input id="rigctl-macro-8" class="dialog-input" type="text" placeholder="AGN?">
         <label class="dialog-label">F9 — Zone?</label>
         <input id="rigctl-macro-9" class="dialog-input" type="text" placeholder="ZONE?">
+
+        <div class="dialog-section-label" style="margin-top:14px">Band QSY defaults (kHz)</div>
+        <div class="dialog-hint">
+          Clicking a band button in the Log Entry form QSYs the rig — first to wherever you were
+          last on that band this session, or to this default if you haven't been there yet. Left
+          blank on purpose: enter your own preferred spot for each band (this app won't guess a
+          frequency for you — a wrong guess could transmit outside your licensed segment).
+        </div>
+        <label class="dialog-label">160m</label>
+        <input id="rigctl-band-160M" class="dialog-input" type="number" step="any" placeholder="e.g. 1843">
+        <label class="dialog-label">80m</label>
+        <input id="rigctl-band-80M" class="dialog-input" type="number" step="any" placeholder="e.g. 3535">
+        <label class="dialog-label">40m</label>
+        <input id="rigctl-band-40M" class="dialog-input" type="number" step="any" placeholder="e.g. 7035">
+        <label class="dialog-label">20m</label>
+        <input id="rigctl-band-20M" class="dialog-input" type="number" step="any" placeholder="e.g. 14035">
+        <label class="dialog-label">15m</label>
+        <input id="rigctl-band-15M" class="dialog-input" type="number" step="any" placeholder="e.g. 21035">
+        <label class="dialog-label">10m</label>
+        <input id="rigctl-band-10M" class="dialog-input" type="number" step="any" placeholder="e.g. 28035">
 
         <button id="btn-rigctl-save" class="btn btn--primary" style="margin-top:12px;width:100%">💾 Save &amp; Apply</button>
       </div>

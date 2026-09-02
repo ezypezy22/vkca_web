@@ -380,6 +380,7 @@
 
   // ── Rig Control (Hamlib rigctld — standalone Logger mode only) ─────────
   const RIGCTL_MACRO_KEYS = ['1', '2', '3', '5', '7', '8', '9'];
+  const RIGCTL_BAND_KEYS  = ['160M', '80M', '40M', '20M', '15M', '10M'];
   const rigctlEnabled = document.getElementById('rigctl-enabled');
   const rigctlHost    = document.getElementById('rigctl-host');
   const rigctlPort    = document.getElementById('rigctl-port');
@@ -416,6 +417,11 @@
         const el = document.getElementById(`rigctl-macro-${k}`);
         if (el) el.value = (data.macros || {})[k] || '';
       });
+      RIGCTL_BAND_KEYS.forEach(b => {
+        const el = document.getElementById(`rigctl-band-${b}`);
+        const hz = (data.band_defaults || {})[b];
+        if (el) el.value = hz ? (hz / 1000) : '';
+      });
       setRigctlStatus(data);
     } catch (e) { console.warn('loadRigctl failed:', e); }
   }
@@ -433,6 +439,11 @@
       const el = document.getElementById(`rigctl-macro-${k}`);
       if (el) macros[k] = el.value;
     });
+    const bandDefaults = {};
+    RIGCTL_BAND_KEYS.forEach(b => {
+      const el = document.getElementById(`rigctl-band-${b}`);
+      if (el && el.value.trim()) bandDefaults[b] = el.value.trim();
+    });
     btnRigctlSave.disabled = true;
     try {
       const res  = await fetch('/api/settings/rigctld', {
@@ -440,7 +451,7 @@
         body: JSON.stringify({
           enabled: rigctlEnabled.checked,
           host: rigctlHost.value.trim() || '127.0.0.1',
-          port, macros,
+          port, macros, band_defaults: bandDefaults,
         }),
       });
       const data = await res.json();

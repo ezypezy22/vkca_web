@@ -366,6 +366,12 @@ html.operator-hud-mode #operator-hud-close{display:block;}
 #ew-radio-band{font-weight:bold;font-size:0.85em;background:var(--bg3);
   color:var(--accent);padding:1px 6px;border-radius:3px;}
 #ew-radio-freq{font-size:1.3em;font-weight:bold;font-variant-numeric:tabular-nums;color:var(--fg);}
+/* Replaces #ew-radio-freq (editable) when rig control is connected — see
+   entrywindow.js's renderModeButtons()-adjacent frequency-field toggle. */
+#ew-freq-input{font-size:1.3em;font-weight:bold;font-variant-numeric:tabular-nums;
+  color:var(--fg);background:var(--bg2);border:1px solid var(--bg3);border-radius:3px;
+  width:6.5em;padding:1px 4px;font-family:inherit;}
+#ew-freq-input:focus{outline:none;border-color:var(--accent);}
 #ew-radio-mode{opacity:.75;}
 /* Mode buttons replace the plain read-only #ew-radio-mode text when rig
    control (rigctld) is connected — see entrywindow.js's renderModeButtons(). */

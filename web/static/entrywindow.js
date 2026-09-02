@@ -25,6 +25,7 @@
   const recentTbody  = document.getElementById('le-recent-tbody');
   const radioBandEl  = document.getElementById('ew-radio-band');
   const radioFreqEl  = document.getElementById('ew-radio-freq');
+  const freqInputEl  = document.getElementById('ew-freq-input');
   const radioModeEl  = document.getElementById('ew-radio-mode');
   const modeBtnsEl   = document.getElementById('ew-mode-buttons');
   const qsoCountEl   = document.getElementById('ew-qso-count');
@@ -66,18 +67,47 @@
     if (!btn) return;
     _activeBand = btn.dataset.band;
     renderBands();
+    qsyToBand(_activeBand);
   });
 
   // ── Rig Control (Hamlib rigctld) — standalone Logger mode only, see
-  // web/rigctld.py. F-key CW macros and the mode-select row only ever
-  // become active when the rig poller is actually connected AND the rig
-  // reads CW — this app has no audio path, so SSB/voice macros aren't
-  // supported. Configured in Settings → Rig Control (host/port, macro
-  // text per F-key). ──────────────────────────────────────────────────
+  // web/rigctld.py. Mode buttons, the editable frequency field, band-click
+  // QSY, and F-key CW macros only ever become active once the rig poller
+  // is actually connected — CW macros additionally require the rig to
+  // read CW, since this app has no audio path for SSB/voice. Configured in
+  // Settings → Rig Control (host/port, macro text per F-key, per-band QSY
+  // default frequencies). ──────────────────────────────────────────────
   const MODE_CHOICES = ['CW', 'USB', 'LSB', 'RTTY', 'FM'];
   let _rigctldConnected = false;
   let _liveMode = '';
   let _macroSlots = new Set();   // fkey slot numbers ("1".."9") with non-empty macro text configured
+  let _bandDefaults = {};        // band -> freq_hz, from Settings → Rig Control (unset unless configured)
+  const _lastFreqByBand = {};    // band -> freq_hz last actually seen on the rig, this session only
+
+  async function setFreqHz(freqHz) {
+    if (!freqHz || freqHz <= 0) return;
+    try {
+      const res  = await fetch('/api/rig/set_freq', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({freq_hz: Math.round(freqHz)}),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) showError(data.error || 'Failed to QSY.');
+    } catch (e) {
+      showError(`QSY failed: ${e.message}`);
+    }
+  }
+
+  // Clicking a band button QSYs the rig — to wherever the rig was last
+  // observed on that band this session, or a Settings-configured default
+  // if it hasn't been there yet. Silently does nothing if neither is
+  // known (no configured default and never visited) rather than guessing
+  // a frequency this app has no business assuming.
+  function qsyToBand(band) {
+    if (!_rigctldConnected) return;
+    const target = _lastFreqByBand[band] ?? _bandDefaults[band];
+    if (target) setFreqHz(target);
+  }
 
   function updateFkeyEnablement() {
     const isCW = _liveMode === 'CW';
@@ -105,6 +135,31 @@
       `<button type="button" data-mode="${m}" class="ew-mode-btn${m === _liveMode ? ' active' : ''}">${m}</button>`
     ).join('');
   }
+
+  // Replaces the plain read-only frequency text with an editable field
+  // when rig control is connected — same show/hide pattern as the mode
+  // buttons above.
+  function renderFreqField() {
+    if (!_rigctldConnected) {
+      freqInputEl.classList.add('hidden');
+      radioFreqEl.classList.remove('hidden');
+      return;
+    }
+    radioFreqEl.classList.add('hidden');
+    freqInputEl.classList.remove('hidden');
+  }
+
+  freqInputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const mhz = parseFloat(freqInputEl.value);
+      if (!isNaN(mhz) && mhz > 0) setFreqHz(mhz * 1e6);
+      freqInputEl.blur();
+    } else if (e.key === 'Escape') {
+      e.stopPropagation();   // don't also trigger the global Escape handler (Wipe + stop CW send)
+      freqInputEl.blur();    // just defocus — the next snapshot resyncs its value
+    }
+  });
 
   modeBtnsEl.addEventListener('click', async e => {
     const btn = e.target.closest('button[data-mode]');
@@ -162,11 +217,13 @@
       _reworkWindowHours = meta.loaded ? (meta.rework_window_hours || null) : null;
       _macroSlots = new Set(
         Object.entries(cfg.macros || {}).filter(([, v]) => (v || '').trim()).map(([k]) => k));
+      _bandDefaults = cfg.band_defaults || {};
     } catch (e) {
       console.warn('entrywindow: refreshRigStatus failed:', e);
       _rigctldConnected = false;
     }
     renderModeButtons();
+    renderFreqField();
     updateFkeyEnablement();
   }
   setInterval(refreshRigStatus, 5000);
@@ -476,21 +533,27 @@
   });
 
   function updateHeader(snap) {
-    const r = window.VKA.formatRadio(snap?.radio_info?.own);
+    const own = snap?.radio_info?.own;
+    const r = window.VKA.formatRadio(own);
     if (r) {
       radioBandEl.textContent = r.band;
       radioBandEl.style.background = r.bandColor ? r.bandColor + '55' : '';
       radioFreqEl.textContent = r.freqStr + ' MHz';
       radioModeEl.textContent = r.modeStr || '—';
       _liveMode = (r.modeStr || '').toUpperCase();
+      if (own?.freq_hz && r.band) _lastFreqByBand[r.band] = own.freq_hz;
+      // Don't clobber the field while the operator is mid-edit.
+      if (document.activeElement !== freqInputEl) freqInputEl.value = r.freqStr;
       if (!_radioBandSeen && _bands.includes(r.band)) {
         _activeBand = r.band; renderBands(); _radioBandSeen = true;
       }
     } else {
       radioBandEl.textContent = '—'; radioFreqEl.textContent = '—'; radioModeEl.textContent = '—';
       _liveMode = '';
+      if (document.activeElement !== freqInputEl) freqInputEl.value = '';
     }
     renderModeButtons();
+    renderFreqField();
     updateFkeyEnablement();
   }
 

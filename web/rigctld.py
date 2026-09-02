@@ -171,6 +171,13 @@ class RigctldConnection:
             return False, str(exc)
         return _rprt_ok(lines)
 
+    def set_freq(self, freq_hz: int) -> tuple[bool, Optional[str]]:
+        try:
+            lines = self._run(f"\\set_freq {int(freq_hz)}")
+        except Exception as exc:
+            return False, str(exc)
+        return _rprt_ok(lines)
+
 
 def run_rigctld_poller(
     state,

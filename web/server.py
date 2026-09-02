@@ -1050,22 +1050,34 @@ _RIGCTLD_MACRO_DEFAULTS = {
     "9": "ZONE?",            # F9 Zone?
 }
 
+# The bands every plugin's band_list() actually returns (see e.g.
+# plugins/allasian.py, plugins/cqww.py) — a fixed set of per-band QSY
+# default frequencies, left unset (no numeric default) until the operator
+# configures them in Settings. Deliberately NOT pre-filled with this app's
+# own guess at band-plan segment edges — an assumed default a few kHz
+# outside the operator's actual license privileges is a real-world
+# transmit-out-of-band risk, not just a UI nicety to get "close enough".
+_RIGCTLD_BAND_KEYS = ["160M", "80M", "40M", "20M", "15M", "10M"]
+
 
 @app.get("/api/settings/rigctld")
 async def api_rigctld_get():
     cfg = _load_settings().get("rigctld") or {}
     macros = dict(_RIGCTLD_MACRO_DEFAULTS)
     macros.update(cfg.get("macros") or {})
+    band_defaults_in = cfg.get("band_defaults") or {}
+    band_defaults = {b: band_defaults_in.get(b) for b in _RIGCTLD_BAND_KEYS if band_defaults_in.get(b)}
     with STATE._lock:
         status    = STATE.rigctld_status
         connected = STATE.rigctld_conn is not None and status is None
     return {
-        "enabled":   bool(cfg.get("enabled")),
-        "host":      cfg.get("host") or rigctld.DEFAULT_HOST,
-        "port":      cfg.get("port") or rigctld.DEFAULT_PORT,
-        "macros":    macros,
-        "status":    status,
-        "connected": connected,
+        "enabled":       bool(cfg.get("enabled")),
+        "host":          cfg.get("host") or rigctld.DEFAULT_HOST,
+        "port":          cfg.get("port") or rigctld.DEFAULT_PORT,
+        "macros":        macros,
+        "band_defaults": band_defaults,
+        "status":        status,
+        "connected":     connected,
     }
 
 
@@ -1082,8 +1094,23 @@ async def api_rigctld_post(body: dict):
     macros_in = body.get("macros") or {}
     macros = {k: str(v) for k, v in macros_in.items() if k in _RIGCTLD_MACRO_DEFAULTS}
 
+    band_defaults_in = body.get("band_defaults") or {}
+    band_defaults = {}
+    for b in _RIGCTLD_BAND_KEYS:
+        raw = band_defaults_in.get(b)
+        if raw in (None, ""):
+            continue
+        try:
+            hz = int(float(raw) * 1000)   # operator enters kHz (e.g. 3535 = 3.535 MHz)
+        except (TypeError, ValueError):
+            return JSONResponse({"error": f"{b} default frequency must be a number (kHz)."}, status_code=400)
+        if hz <= 0:
+            return JSONResponse({"error": f"{b} default frequency must be positive."}, status_code=400)
+        band_defaults[b] = hz
+
     def _mutate(settings):
-        settings["rigctld"] = {"enabled": enabled, "host": host, "port": port, "macros": macros}
+        settings["rigctld"] = {"enabled": enabled, "host": host, "port": port,
+                                "macros": macros, "band_defaults": band_defaults}
 
     await asyncio.get_event_loop().run_in_executor(
         None, _settings_read_modify_write, _mutate)
@@ -1119,6 +1146,28 @@ async def api_rig_set_mode(body: dict):
         return JSONResponse({"error": "No mode supplied."}, status_code=400)
     conn = STATE.rigctld_conn
     ok, err = await asyncio.get_event_loop().run_in_executor(None, conn.set_mode, mode)
+    if not ok:
+        return JSONResponse({"error": err}, status_code=502)
+    return {"ok": True}
+
+
+@app.post("/api/rig/set_freq")
+async def api_rig_set_freq(body: dict):
+    """Body: {freq_hz}. Used both for the band buttons' QSY-on-click (see
+    entrywindow.js — the frequency itself, remembered-per-band or a
+    Settings-configured default, is computed client-side, never guessed
+    here) and the direct frequency-entry field."""
+    guard = _rig_control_guard()
+    if guard:
+        return guard
+    try:
+        freq_hz = int(body.get("freq_hz"))
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "freq_hz must be a number."}, status_code=400)
+    if freq_hz <= 0:
+        return JSONResponse({"error": "freq_hz must be positive."}, status_code=400)
+    conn = STATE.rigctld_conn
+    ok, err = await asyncio.get_event_loop().run_in_executor(None, conn.set_freq, freq_hz)
     if not ok:
         return JSONResponse({"error": err}, status_code=502)
     return {"ok": True}
