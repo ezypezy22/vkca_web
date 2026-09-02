@@ -1123,12 +1123,16 @@ class ContestLog:
         return max(0, int(elapsed // self._session_cfg.duration_mins))
 
     def session_label(self, session_nr, contest_start):
+        # Anchored to the contest's actual start clock time, not elapsed
+        # minutes since session 0 — a contest whose start_hour isn't 0000
+        # UTC (e.g. RD's 0300 UTC) would otherwise show every block's
+        # label N hours early, out of sync with the log's real UTC times
+        # (issue #75).
         cfg = self._session_cfg
-        start_min = session_nr * cfg.duration_mins
-        end_min   = start_min + cfg.duration_mins
-        s_h, s_m  = divmod(start_min, 60)
-        e_h, e_m  = divmod(end_min,   60)
-        return f"{cfg.label_prefix}{session_nr+1}  {s_h:02d}:{s_m:02d}–{e_h:02d}:{e_m:02d}"
+        start_dt = contest_start + timedelta(minutes=session_nr * cfg.duration_mins)
+        end_dt   = start_dt + timedelta(minutes=cfg.duration_mins)
+        return (f"{cfg.label_prefix}{session_nr+1}  "
+                f"{start_dt.hour:02d}:{start_dt.minute:02d}–{end_dt.hour:02d}:{end_dt.minute:02d}")
 
     def rate_by_session(self):
         cfg = self._session_cfg
