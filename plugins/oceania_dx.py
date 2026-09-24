@@ -11,12 +11,28 @@ Contest periods (each 24 h, 06:00 UTC Sat → 06:00 UTC Sun):
 
 Bands: 160M, 80M, 40M, 20M, 15M, 10M
 
-Contact points (Oceania station perspective):
+Contact points (2026 rules, section 10):
   160M → 20 pts   80M → 10 pts   40M → 5 pts
   20M  →  1 pt    15M →  2 pts   10M → 3 pts
+  A station counts once per band for contact points.
 
-Multiplier: unique WPX prefix per band (open-ended, no fixed list).
+Multiplier: unique prefix per band (open-ended, no fixed list).
 Final score: sum(contact points) × sum(prefix-band multipliers).
+
+Which contacts score: an Oceania station scores every contact, inside AND
+outside Oceania (2026 rules sections 4a and 10). The only contacts that
+score nothing are those between two NON-Oceania stations (section 4b).
+Verified against N1MM's own scoring of a real OCEANIASSB log
+(vk2yi.s3db ContestNR 16, VK2YI): Oceania contacts such as ZL3YB scored
+their band points and a multiplier; the only zero-point rows were dupes.
+An earlier version zeroed every Oceania-to-Oceania contact and so
+under-scored that log by ~3.6x — do not reintroduce that filter.
+
+Known limitation: the non-Oceania-operator case (section 4b) is not
+implemented — this app has no reliable Oceania/non-Oceania classifier
+(that needs the full DXCC continent table) and its users are VK/ZL
+stations. A non-Oceania operator would see contacts with other
+non-Oceania stations scored here when N1MM/the contest would score them 0.
 """
 
 from __future__ import annotations
@@ -29,8 +45,6 @@ from plugins.base import (
     ContestPlugin, SessionConfig, MultResult, GaugeDef,
     ACCENT, ACCENT2, ACCENT3, GREEN, MUTED,
 )
-# Re-use the WPX prefix helper from the Trans-Tasman plugin
-from plugins.vk_transtasman import _wpx_prefix
 
 
 _OCDX_BAND_POINTS: dict = {
@@ -38,52 +52,40 @@ _OCDX_BAND_POINTS: dict = {
     "20M":   1, "15M":  2, "10M": 3,
 }
 
-_OCEANIA_PREFIXES: frozenset = frozenset({
-    # Australia
-    "VK", "VH", "VI", "VJ", "VL", "VK0", "VK9", "AX",
-    # New Zealand (incl. subantarctic/Antarctic calls)
-    "ZK", "ZL", "ZM",
-    # Papua New Guinea
-    "P2",
-    # Indonesia
-    "YB", "YC", "YD", "YE", "YF", "YG", "YH",
-    # Philippines
-    "DU", "DV", "DW", "DX",
-    # US Pacific territories (KH0–KH9 all Oceania for this contest)
-    "KH", "KH0", "KH2", "KH3", "KH4", "KH5", "KH6", "KH7", "KH8", "KH9",
-    # Japan Pacific outliers
-    "JD",
-    # Pacific island nations and territories
-    "A3",           # Tonga
-    "E5",           # Cook Islands
-    "FK",           # New Caledonia
-    "FO",           # French Polynesia
-    "FW",           # Wallis & Futuna
-    "H4",           # Solomon Islands
-    "T2",           # Tuvalu
-    "T30", "T31", "T32", "T33",  # Kiribati / Banaba
-    "V6",           # Micronesia
-    "V7",           # Marshall Islands
-    "YJ",           # Vanuatu
-    "3D2",          # Fiji
-    "5W",           # Samoa
-})
+# Leading "prefix" of a plain call: optional leading digit, letters, then the
+# WHOLE first run of digits (S52BT -> S52, OE25X -> OE25, 3D2AB -> 3D2).
+_PREFIX_RE = re.compile(r'^(\d?[A-Z]+\d+)')
 
 
-def _is_oceania_call(call: str) -> bool:
-    call = call.upper().strip()
-    pfx  = _wpx_prefix(call)
-    for length in (4, 3, 2):
-        if pfx[:length] in _OCEANIA_PREFIXES:
-            return True
-    return pfx in _OCEANIA_PREFIXES
+def _base_prefix(call: str) -> str:
+    """
+    Prefix of a plain (no "/") call per 2026 rules section 9: the
+    letter/numeral combination at the start of the call, keeping ALL the
+    numerals — the rules list HG19, OE25 and LY1000 as distinct valid
+    prefixes, "any difference in the numbering, lettering, or order shall
+    count as a separate prefix". (The shared _wpx_prefix helper keeps only
+    the first digit, which is right for Trans-Tasman but would merge
+    S52/S53/S58 into "S5" here.) A call with no numeral at all gets a zero
+    after its first two letters (XEFTJW -> XE0).
+    """
+    m = _PREFIX_RE.match(call)
+    if m:
+        return m.group(1)
+    return call[:2] + "0"
 
 
 def _ocdx_prefix(call: str) -> str:
     """
-    OCDX multiplier prefix per contest rules.
-    Portable designators without a digit get '0' appended (e.g. PA/N8BJQ → PA0).
-    /MM, /M, /P, /A, /E, /J, /LH, /QRP do NOT change the prefix.
+    OCDX multiplier prefix per the 2026 rules (section 9).
+    - Maritime mobile, mobile, /A, /E, /J, /P do not count as prefixes
+      (/QRP, /LH, /LGT, /B are stripped too — not in the rules text, but
+      they are not prefixes either).
+    - Otherwise the portable designator becomes the prefix
+      (N8BJQ/KH9 -> KH9, KH6XXX/W8 -> W8).
+    - A portable designator without a numeral gets a zero after its second
+      letter (PA/N8BJQ -> PA0).
+    - A bare-digit designator replaces the call's own digit
+      (RD7LB/3 -> RD3) — matches what N1MM logs for that call.
     """
     call = call.upper().strip()
     stripped = re.sub(r'/(MM?|QRP|AM?|[EJPB]|LH|LGT)$', '', call)
@@ -91,13 +93,15 @@ def _ocdx_prefix(call: str) -> str:
         parts = stripped.split('/')
         short = min(parts, key=len)
         long_ = max(parts, key=len)
+        if re.match(r'^\d$', short):
+            m = re.match(r'^(\d?[A-Z]+)\d+', long_)
+            return (m.group(1) + short) if m else _base_prefix(long_)
         if re.match(r'^[A-Z]{2,4}$', short):
-            call = short + "0"
-        elif re.match(r'^[A-Z]{1,4}\d', short):
-            call = short
-        else:
-            call = long_
-    return _wpx_prefix(call)
+            return short[:2] + "0"
+        if re.match(r'^\d?[A-Z]+\d', short):
+            return _base_prefix(short)
+        return _base_prefix(long_)
+    return _base_prefix(stripped)
 
 
 class OceaniaDXPlugin(ContestPlugin):
@@ -140,13 +144,22 @@ class OceaniaDXPlugin(ContestPlugin):
         return "WPX Prefix"
 
     def mult_of_qso(self, q: dict) -> Optional[str]:
+        call = (q.get("call") or "").upper().strip()
         stored = (q.get("mult1") or "").strip().upper()
-        if stored and re.match(r'^[A-Z0-9]{1,5}$', stored):
+        # Trust N1MM's own WPXPrefix value only when it is genuinely a
+        # prefix of this call. A log created by this app's standalone
+        # logger has no WPXPrefix, so the loader falls back to the exchange
+        # column — a serial number like "001" — which used to be accepted
+        # here as if it were a prefix, making every QSO a "new multiplier".
+        if stored and call.startswith(stored):
             return stored
-        call = q.get("call", "")
         if call:
             return _ocdx_prefix(call)
         return None
+
+    def band_list(self) -> list:
+        # 2026 rules section 5: 160M, 80M, 40M, 20M, 15M, 10M — no WARC bands.
+        return ["160M", "80M", "40M", "20M", "15M", "10M"]
 
     def has_missing_tab(self) -> bool:
         return False
@@ -166,13 +179,9 @@ class OceaniaDXPlugin(ContestPlugin):
             if q["dupe"]:
                 q["pts"] = 0
                 continue
-            # Oceania↔world only: both parties must not be the same side.
-            # Assumes Oceania operator perspective (standard for VK/ZL users):
-            # the worked call must be non-Oceania for the QSO to score.
-            call = q.get("call", "")
-            if _is_oceania_call(call):
-                q["pts"] = 0
-                continue
+            # Every non-dupe QSO scores its band points — including
+            # Oceania-to-Oceania (see the module docstring for the rules
+            # reference and the N1MM evidence).
             band = (q.get("band") or "").upper()
             q["pts"] = _OCDX_BAND_POINTS.get(band, 1)
 
@@ -245,8 +254,11 @@ class OceaniaDXPlugin(ContestPlugin):
             GaugeDef("TOTAL SCORE", "score",      "score_max", ACCENT3(), "{v:,}"),
             GaugeDef("WPX WORKED",  "worked",     soft_max,    ACCENT3(), "{v}"),
             GaugeDef("WPX MULTS",   "band_mults", soft_max,    GREEN(),   "{v}"),
-            GaugeDef("OC QSOs",     "vk_cnt",     valid,       ACCENT2(), "{v}"),
-            GaugeDef("DX QSOs",     "zl_cnt",     valid,       "#64b5f6", "{v}"),
+            # vk_cnt / zl_cnt are the snapshot's plain VK-prefix and ZL/ZM
+            # counts — not Oceania/DX totals, which the snapshot doesn't
+            # compute. These were previously labelled "OC QSOs"/"DX QSOs".
+            GaugeDef("VK QSOs",     "vk_cnt",     valid,       ACCENT2(), "{v}"),
+            GaugeDef("ZL QSOs",     "zl_cnt",     valid,       "#64b5f6", "{v}"),
         ]
 
     def sparkline_mults(self, q: dict, seen: set) -> int:
