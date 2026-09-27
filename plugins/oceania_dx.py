@@ -121,6 +121,19 @@ class OceaniaDXPlugin(ContestPlugin):
     def display_name(self) -> str:
         return "Oceania DX"
 
+    def picker_names(self) -> list:
+        # Phone and CW are separate 24 h events on different weekends
+        # (2026: 3-4 Oct and 10-11 Oct), so a new log has to say which.
+        return ["Oceania DX SSB", "Oceania DX CW"]
+
+    def contest_mode(self, contest_name: str) -> Optional[str]:
+        cn = (contest_name or "").upper()
+        if "CW" in cn:
+            return "CW"
+        if "SSB" in cn or "PHONE" in cn:
+            return "SSB"
+        return None
+
     @staticmethod
     def _first_full_weekend_october(year: int) -> date_:
         d = date_(year, 10, 1)
@@ -131,8 +144,14 @@ class OceaniaDXPlugin(ContestPlugin):
         return sat
 
     @staticmethod
-    def contest_saturday(year: int) -> date_:
-        return OceaniaDXPlugin._first_full_weekend_october(year)
+    def contest_saturday(year: int, contest_name: Optional[str] = None) -> date_:
+        """Phone is the first full October weekend, CW the second (2026
+        rules section 2: 3 Oct and 10 Oct). A log with no recognisable mode
+        in its contest name keeps the Phone date, as before."""
+        sat = OceaniaDXPlugin._first_full_weekend_october(year)
+        if "CW" in (contest_name or "").upper():
+            sat += timedelta(weeks=1)
+        return sat
 
     def session_config(self) -> SessionConfig:
         return SessionConfig(duration_mins=1440, num_sessions=1, start_hour=6)

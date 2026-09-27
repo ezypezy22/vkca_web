@@ -82,6 +82,20 @@
   let _liveMode = '';
   let _macroSlots = new Set();   // fkey slot numbers ("1".."9") with non-empty macro text configured
   let _bandDefaults = {};        // band -> freq_hz, from Settings → Rig Control (unset unless configured)
+  let _contestMode = null;       // "CW"/"SSB" when the log's contest name pins one (e.g. Oceania DX CW)
+  let _rstDefaultFor = null;     // effective mode the RST fields' default was last applied for
+
+  // RST defaults to 59 for phone and 599 for CW. Only ever swaps a value
+  // that is still exactly the other default (or blank), so anything the
+  // operator typed themselves is left alone.
+  function applyRstDefaults() {
+    const eff = (_liveMode || _contestMode || '').toUpperCase();
+    if (eff === _rstDefaultFor) return;
+    _rstDefaultFor = eff;
+    const want  = eff.startsWith('CW') ? '599' : '59';
+    const other = want === '599' ? '59' : '599';
+    [rstSent, rstRcvd].forEach(el => { if (el.value === other || el.value === '') el.value = want; });
+  }
   const _lastFreqByBand = {};    // band -> freq_hz last actually seen on the rig, this session only
 
   async function setFreqHz(freqHz) {
@@ -218,6 +232,7 @@
       _macroSlots = new Set(
         Object.entries(cfg.macros || {}).filter(([, v]) => (v || '').trim()).map(([k]) => k));
       _bandDefaults = cfg.band_defaults || {};
+      _contestMode = meta.loaded ? (meta.contest_mode || null) : null;
     } catch (e) {
       console.warn('entrywindow: refreshRigStatus failed:', e);
       _rigctldConnected = false;
@@ -225,6 +240,7 @@
     renderModeButtons();
     renderFreqField();
     updateFkeyEnablement();
+    applyRstDefaults();
   }
   setInterval(refreshRigStatus, 5000);
 
@@ -485,7 +501,7 @@
     } else {
       const snap = window.VKA.lastSnap();
       const r = window.VKA.formatRadio(snap?.radio_info?.own);
-      mode = r?.modeStr || 'SSB';
+      mode = r?.modeStr || _contestMode || 'SSB';
     }
     const body = {
       call, band: _activeBand, mode,
@@ -555,6 +571,7 @@
     renderModeButtons();
     renderFreqField();
     updateFkeyEnablement();
+    applyRstDefaults();
   }
 
   window.addEventListener('vka:snapshot', e => { updateHeader(e.detail); loadRecent(); });

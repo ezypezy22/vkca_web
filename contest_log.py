@@ -11,6 +11,7 @@ import re
 import json
 import math
 import logging
+import inspect
 import uuid
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
@@ -452,17 +453,22 @@ class ContestLog:
 
         # ── Read contest start date ───────────────────────────────────────────
         self._contest_start_dt = None
+        self.contest_name = ""
         try:
             if self.contest_nr is not None:
                 row = c.execute(
-                    "SELECT StartDate FROM ContestInstance WHERE ContestNR=?",
+                    "SELECT StartDate, ContestName FROM ContestInstance WHERE ContestNR=?",
                     (self.contest_nr,)
                 ).fetchone()
             else:
                 row = c.execute(
-                    "SELECT StartDate FROM ContestInstance "
+                    "SELECT StartDate, ContestName FROM ContestInstance "
                     "WHERE ContestNR >= 0 ORDER BY ContestNR DESC LIMIT 1"
                 ).fetchone()
+            # Kept so plugins whose dates depend on the event variant (Oceania
+            # DX: SSB vs CW weekend) can see which one this log is — see
+            # contest_start().
+            self.contest_name = str(row[1] or "").strip() if row else ""
             if row and row[0]:
                 sd = str(row[0]).strip()
                 for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d"):
@@ -1082,7 +1088,16 @@ class ContestLog:
                 year = min(q["time"] for q in self.qsos).year
             else:
                 year = datetime.now(timezone.utc).year
-            sat = self.plugin.contest_saturday(year)
+            # Plugins whose date depends on the event variant declare a
+            # contest_name parameter (Oceania DX); the rest keep the
+            # year-only signature unchanged.
+            try:
+                takes_name = "contest_name" in inspect.signature(
+                    self.plugin.contest_saturday).parameters
+            except (TypeError, ValueError):
+                takes_name = False
+            sat = (self.plugin.contest_saturday(year, contest_name=self.contest_name)
+                   if takes_name else self.plugin.contest_saturday(year))
             return datetime(sat.year, sat.month, sat.day, start_h, 0, 0)
 
         if self._contest_start_dt:

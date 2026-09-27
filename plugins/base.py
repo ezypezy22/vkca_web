@@ -236,6 +236,26 @@ class ContestPlugin(ABC):
         return ["160M", "80M", "60M", "40M", "30M", "20M", "17M", "15M",
                 "12M", "10M", "6M", "2M", "70CM"]
 
+    def picker_names(self) -> list:
+        """
+        Names offered in the "+ New Log" contest picker. Default is just
+        display_name. A contest that runs as separate CW and SSB events with
+        different dates (e.g. Oceania DX) overrides this to offer one entry
+        per event — each must still be claimed by identify(), since the
+        chosen name is stored as the log's ContestName and looked up again
+        through plugin_for() on every reopen.
+        """
+        return [self.display_name]
+
+    def contest_mode(self, contest_name: str) -> Optional[str]:
+        """
+        "CW" / "SSB" when the contest name pins the log to one mode (an
+        N1MM name like OCEANIACW, or a picker name like "Oceania DX CW"),
+        else None. Used as the Log Entry form's fallback mode when no rig is
+        reporting one, in place of a blanket "SSB".
+        """
+        return None
+
     def gauge_defs(self, data: dict, total_mults: int) -> list:
         ml = self.mult_label()
         return [

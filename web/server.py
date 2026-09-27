@@ -1734,7 +1734,10 @@ async def api_contest_types():
     does for an opened file — plugins/loader.py's own startup self-check
     already guarantees that round-trip for every registered plugin, so no
     separate name-to-plugin mapping is needed here."""
-    names = sorted(p.display_name for p in get_all_plugins() if not isinstance(p, GenericPlugin))
+    # picker_names() is just [display_name] for most plugins; a contest with
+    # separate CW/SSB events (Oceania DX) offers one entry per event.
+    names = sorted(n for p in get_all_plugins() if not isinstance(p, GenericPlugin)
+                   for n in p.picker_names())
     return {"contests": names}
 
 
@@ -3045,6 +3048,9 @@ async def api_plugin_meta():
       dialog's pre-filled fields.
     - is_standalone_log: True only for a log created via POST /api/new_log
       (see STATE.is_standalone_log) — gates the Log Entry tab's visibility.
+    - contest_mode: "CW"/"SSB" when this log's contest name pins one (e.g.
+      Oceania DX CW), else null — the Log Entry form's fallback mode and RST
+      default when no rig is reporting a mode.
     - rigctld_connected: True if the rigctld rig-control poller is currently
       live (see rigctld.py) — gates the Log Entry form's mode buttons and
       F-key CW macros.
@@ -3093,6 +3099,7 @@ async def api_plugin_meta():
         "my_call":          getattr(STATE.contest_log, "my_call", None),
         "is_standalone_log": STATE.is_standalone_log,
         "rigctld_connected": STATE.rigctld_conn is not None and STATE.rigctld_status is None,
+        "contest_mode":     p.contest_mode(getattr(STATE.contest_log, "contest_name", "")),
     }
 
 
