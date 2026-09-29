@@ -32,12 +32,17 @@
     document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active', p.id==='tab-'+activeId));
     const bar=document.getElementById('logger-status-bar');
     if (bar) bar.style.display = on ? 'flex' : 'none';
+    // Lives in the persistent titlebar (not the logger-status-bar, which
+    // sits in a second row easy to miss/crop out) so it's always visible
+    // in Logger mode regardless of which tab or tile layout is active.
+    const switchBtn=document.getElementById('btn-switch-to-analyzer');
+    if (switchBtn) switchBtn.style.display = on ? '' : 'none';
     window.VKA.setLoggerMode?.(on);
   }
 
-  // Switch-back-to-Analyzer button (see #logger-status-bar in index.html) —
-  // a log is already loaded, so this is just a mode/visibility toggle, not
-  // a new dialog or reload.
+  // Switch-back-to-Analyzer button (titlebar, see index.html) — a log is
+  // already loaded, so this is just a mode/visibility toggle, not a new
+  // dialog or reload.
   document.getElementById('btn-switch-to-analyzer')?.addEventListener('click', ()=>{
     window.VKA.appMode='analyzer';
     try { localStorage.setItem(LAST_MODE_KEY,'analyzer'); } catch {}

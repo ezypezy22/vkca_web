@@ -1148,12 +1148,16 @@ Users are responsible for verifying all information against N1MM before making d
   // in the packaged desktop build).
   let _defaultLogDir = null;
 
-  function suggestNewLogPath() {
-    if (!newLogPathInput) return;
+  function newLogFilename() {
     const call = (newLogCallInput?.value||'LOG').trim().toUpperCase().replace(/[^A-Z0-9]/g,'') || 'LOG';
     const contest = (newLogContestSel?.value||'contest').replace(/[^A-Za-z0-9]+/g,'_');
     const date = new Date().toISOString().slice(0,10);
-    const filename = `${call}_${contest}_${date}.s3db`;
+    return `${call}_${contest}_${date}.s3db`;
+  }
+
+  function suggestNewLogPath() {
+    if (!newLogPathInput) return;
+    const filename = newLogFilename();
     newLogPathInput.value = _defaultLogDir ? `${_defaultLogDir}\\${filename}` : filename;
   }
 
@@ -1189,7 +1193,10 @@ Users are responsible for verifying all information against N1MM before making d
   btnNewLogBrowse?.addEventListener('click', async () => {
     btnNewLogBrowse.disabled=true; btnNewLogBrowse.textContent='…';
     try {
-      const res = await fetch('/api/browse_save_file');
+      // Pre-fill the OS save dialog with the same <CALL>_<CONTEST>_<DATE>
+      // name already suggested in the text field, not a generic default —
+      // so Browse and typing/leaving the path alone produce the same name.
+      const res = await fetch('/api/browse_save_file?default_name=' + encodeURIComponent(newLogFilename()));
       const data = await res.json();
       if (data.error) { showNewLogError(data.error); return; }
       if (data.path)  { newLogPathInput.value=data.path; newLogErr.classList.add('hidden'); }

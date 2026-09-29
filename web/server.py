@@ -951,6 +951,20 @@ async def api_get_log_dirs():
     }
 
 
+def _add_log_dir_sync(resolved: str) -> list:
+    """Blocking half of api_add_log_dir()'s own add-a-folder mutation —
+    pulled out so /api/new_log can reuse it (see that endpoint's own
+    comment for why) without a second, divergent copy of the same
+    dedupe logic. Call via run_in_executor."""
+    def _mutate(settings):
+        dirs = settings.setdefault("log_dirs", [])
+        key = os.path.normcase(os.path.normpath(resolved))
+        if not any(os.path.normcase(os.path.normpath(d)) == key for d in dirs):
+            dirs.append(resolved)
+        return dirs
+    return _settings_read_modify_write(_mutate)
+
+
 @app.post("/api/settings/log_dirs")
 async def api_add_log_dir(body: dict):
     """Add a folder to search for contest databases (e.g. where NotN1MM or
@@ -962,16 +976,7 @@ async def api_add_log_dir(body: dict):
     if not p.is_dir():
         return JSONResponse({"error": f"Not a folder: {path}"}, status_code=400)
     resolved = str(p.resolve())
-
-    def _mutate(settings):
-        dirs = settings.setdefault("log_dirs", [])
-        key = os.path.normcase(os.path.normpath(resolved))
-        if not any(os.path.normcase(os.path.normpath(d)) == key for d in dirs):
-            dirs.append(resolved)
-        return dirs
-
-    dirs = await asyncio.get_event_loop().run_in_executor(
-        None, _settings_read_modify_write, _mutate)
+    dirs = await asyncio.get_event_loop().run_in_executor(None, _add_log_dir_sync, resolved)
     return {"ok": True, "dirs": dirs}
 
 
@@ -1776,6 +1781,17 @@ async def api_new_log(body: dict):
     result = await asyncio.get_event_loop().run_in_executor(
         None, STATE.load_db, str(p), 1, plugin, True)
     if "ok" in result:
+        # Wherever the operator chose to save it (the OS save dialog has no
+        # reason to land in N1MM's own folder), make sure it's somewhere
+        # /api/scan_known_locations will find on a later reopen — otherwise
+        # a log saved outside the default N1MM folder (e.g. the Desktop)
+        # never appears in Logger mode's "resume a previous log" list, with
+        # no indication anything went wrong.
+        parent_resolved = str(p.parent.resolve())
+        if os.path.normcase(os.path.normpath(parent_resolved)) != \
+           os.path.normcase(os.path.normpath(str(_default_log_dir()))):
+            await asyncio.get_event_loop().run_in_executor(
+                None, _add_log_dir_sync, parent_resolved)
         await asyncio.get_event_loop().run_in_executor(None, _sync_rigctld)
         await _broadcast(STATE.snapshot())
     return result
@@ -1875,10 +1891,15 @@ async def api_qsos_update(body: dict):
 
 
 @app.get("/api/browse_save_file")
-async def api_browse_save_file():
+async def api_browse_save_file(default_name: str = "new_contest.s3db"):
     """Trigger the OS native save-file dialog via pywebview — used to pick
     where a new standalone log gets created. Mirrors api_browse_folder/the
-    existing OPEN-dialog browse endpoint exactly, just with SAVE instead."""
+    existing OPEN-dialog browse endpoint exactly, just with SAVE instead.
+
+    default_name: the filename to pre-fill, passed by the "+ New Log"
+    dialog's own already-computed <CALL>_<CONTEST>_<DATE>.s3db suggestion
+    (see app.js's newLogFilename()) — falls back to a generic placeholder
+    only if the caller doesn't have one yet (e.g. contest/call not chosen)."""
     win = STATE._webview_window
     if win is None:
         return JSONResponse({"error": "PyWebView window not ready"}, status_code=503)
@@ -1886,7 +1907,7 @@ async def api_browse_save_file():
         import webview as _wv
         result = win.create_file_dialog(
             dialog_type=_wv.FileDialog.SAVE,
-            save_filename="new_contest.s3db",
+            save_filename=default_name,
             file_types=("Contest Log Files (*.s3db)", "All files (*.*)"),
         )
         if not result:
