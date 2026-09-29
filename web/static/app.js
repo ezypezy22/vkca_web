@@ -8,6 +8,20 @@
     window.dispatchEvent(new CustomEvent(name, { detail }));
   }
 
+  // ── App version ────────────────────────────────────────────────────────────
+  // Single source of truth is the VERSION file (see web/server.py's own
+  // VERSION read) — titlebar and the splash canvas below both derive from
+  // this one fetch instead of hardcoding a copy, which is what caused
+  // several stale-version-string bugs before (see CHANGELOG.md, e.g.
+  // 26.7.8/c2ad9ee).
+  const versionPromise = fetch('/api/version').then(r => r.json()).then(d => d.version).catch(() => null);
+  versionPromise.then(v => {
+    if (!v) return;
+    document.title = `VK Contest Analyzer v${v}`;
+    const el = document.getElementById('titlebar-version');
+    if (el) el.textContent = `v${v}`;
+  });
+
 // ── Splash screen ─────────────────────────────────────────────────────────────
 (function () {
   const MESSAGES = [
@@ -92,8 +106,11 @@ Users are responsible for verifying all information against N1MM before making d
   ctx.fillText('N1MM+ LOG INTELLIGENCE', W/2, 156);
   ctx.fillStyle='#8b949e'; ctx.font='13px Consolas,monospace';
   ctx.fillText('by VK2YI', W/2, 178);
-  ctx.fillStyle='#00d4aa'; ctx.font='bold 13px Consolas,monospace';
-  ctx.fillText('v26.9.2', W/2, 202);
+  versionPromise.then(v => {
+    if (!v) return;
+    ctx.fillStyle='#00d4aa'; ctx.font='bold 13px Consolas,monospace';
+    ctx.fillText('v'+v, W/2, 202);
+  });
 
   // ── Progress bar animation ─────────────────────────────────────────────────
   const bar = document.getElementById('splash-bar');

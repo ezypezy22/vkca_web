@@ -5,7 +5,12 @@
 // GitHub "New Issue" URL.
 (function () {
   const GITHUB_REPO = 'ezypezy22/vkca_web';
-  const VERSION      = '26.9.2';
+  // Fetched once at load, well before a report is ever actually submitted
+  // (the user still has to open the dialog, type, and click Submit) — see
+  // web/server.py's VERSION/GET /api/version. 'unknown' only shows up if
+  // that fetch is still in flight or failed when a report is composed.
+  let VERSION = 'unknown';
+  fetch('/api/version').then(r => r.json()).then(d => { if (d.version) VERSION = d.version; }).catch(() => {});
 
   const overlay   = document.getElementById('report-issue-dialog');
   const btnOpen   = document.getElementById('btn-report-issue');

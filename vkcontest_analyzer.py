@@ -426,7 +426,18 @@ FONT_S    = (UI_FONT,    9)
 FONT_MONO = (MONO_FONT, 10)
 FONT_MONO_S = (MONO_FONT, 9)
 
-VERSION = "26.9.2"   # year.month.patch — displayed in title bar and header label
+# year.month.patch — displayed in title bar and header label. Read from the
+# repo-root VERSION file (single source of truth shared with web/server.py,
+# installer.iss, etc.) instead of its own hardcoded copy, which is what
+# caused several stale-version-string bugs before (see CHANGELOG.md, e.g.
+# 26.7.8/c2ad9ee). This script only ever runs unfrozen (excluded from the
+# PyInstaller build — see vkca_web.spec), so no _MEIPASS handling is needed.
+try:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION"),
+              "r", encoding="utf-8") as _f:
+        VERSION = _f.read().strip()
+except OSError:
+    VERSION = "0.0.0"
 
 # GitHub repo used by Help → Report Issue / Request Feature
 GITHUB_REPO = "ezypezy22/vkca_web"

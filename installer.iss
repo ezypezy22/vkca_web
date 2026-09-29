@@ -14,7 +14,19 @@
 ; ISCC.exe will fail with a missing-source-file error if this isn't done.
 
 #define MyAppName "VK Contest Analyzer"
-#define MyAppVersion "26.8.2"
+; Read from the repo-root VERSION file (single source of truth shared with
+; web/server.py, vkcontest_analyzer.py, etc.) instead of its own hardcoded
+; copy, which is what caused several stale-version-string bugs before (see
+; CHANGELOG.md, e.g. 26.7.8/c2ad9ee). SourcePath is this .iss file's own
+; directory (repo root) — used explicitly so this resolves correctly
+; regardless of ISCC.exe's working directory at invocation.
+#define MyAppVersionFile FileOpen(SourcePath + "VERSION")
+#if MyAppVersionFile
+  #define MyAppVersion Trim(FileRead(MyAppVersionFile))
+  #expr FileClose(MyAppVersionFile)
+#else
+  #define MyAppVersion "0.0.0"
+#endif
 #define MyAppExeName "VKContestAnalyzer.exe"
 #define MyAppSourceDir "dist\VKContestAnalyzer"
 
@@ -28,7 +40,7 @@ DisableProgramGroupPage=yes
 ; Framework repair installer requires elevation to run.
 PrivilegesRequired=admin
 OutputDir=dist\installer
-OutputBaseFilename=VKContestAnalyzer_Setup
+OutputBaseFilename=VKContestAnalyzer_Setup_v{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible

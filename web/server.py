@@ -41,6 +41,17 @@ _STATIC = _ROOT / 'web' / 'static'
 # In frozen mode _ROOT is _MEIPASS; in dev mode it's the project root.
 sys.path.insert(0, str(_ROOT))
 
+# Single canonical version, read once at import — everything that displays
+# or reports a version (titlebar, Report Issue diagnostics, the installer)
+# derives from this same file instead of its own hardcoded copy, which is
+# what caused several stale-version-string bugs before (see CHANGELOG.md,
+# e.g. 26.7.8/c2ad9ee). Bundled as a PyInstaller data file (vkca_web.spec)
+# so it exists at _ROOT in a frozen build too.
+try:
+    VERSION = (_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+except OSError:
+    VERSION = "0.0.0"
+
 # A windowed (console=False) PyInstaller build has no console, so Windows
 # leaves sys.stdout/stderr as None. Anything that calls .write()/.isatty()
 # on them — e.g. uvicorn's default logging setup — crashes with
@@ -817,6 +828,14 @@ async def popout_page(key: str):
 
 
 # ── Status ────────────────────────────────────────────────────────────────────
+
+@app.get("/api/version")
+async def api_version():
+    """The app's own version (see the VERSION file at repo root) — fetched
+    by app.js (titlebar/splash) and report-issue.js (diagnostics block),
+    so neither hardcodes its own copy of the version string."""
+    return {"version": VERSION}
+
 
 @app.get("/api/status")
 async def api_status():
