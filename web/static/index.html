@@ -1104,10 +1104,16 @@
           </div>
           <form id="ew-form">
             <table id="ew-field-table">
-              <thead><tr><th>Call</th><th>SntRS(T)</th><th>RcvdRS(T)</th><th>RcvdExch</th></tr></thead>
+              <colgroup>
+                <col style="width:34%"><col style="width:14%"><col style="width:14%">
+                <col style="width:14%"><col style="width:24%">
+              </colgroup>
+              <thead><tr><th>Call</th><th>SntRS(T)</th><th>SntNR</th><th>RcvdRS(T)</th><th>RcvdExch</th></tr></thead>
               <tbody><tr>
                 <td><input id="ew-call" type="text" autocomplete="off" style="text-transform:uppercase" required></td>
                 <td><input id="ew-rst-sent" type="text" value="59"></td>
+                <td><input id="ew-sent-nr-field" type="text" value="001" readonly tabindex="-1"
+                           title="Next progressive serial number — sent with this QSO's exchange when logged, auto-incrementing"></td>
                 <td><input id="ew-rst-rcvd" type="text" value="59"></td>
                 <td><input id="ew-exchange" type="text" autocomplete="off"></td>
               </tr></tbody>
@@ -1148,7 +1154,7 @@
       </div>
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>Call</th><th>Band</th><th>Mode</th><th>Exch</th><th>Time (UTC)</th><th id="le-th-countdown">Next Block In</th><th></th></tr></thead>
+          <thead><tr><th>Call</th><th>Band</th><th>Mode</th><th>Sent#</th><th>Exch</th><th>Time (UTC)</th><th id="le-th-countdown">Next Block In</th><th></th></tr></thead>
           <tbody id="le-recent-tbody"></tbody>
         </table>
       </div>
@@ -1552,12 +1558,13 @@
         <div class="dialog-hint">
           Sent via rigctld's <code>send_morse</code> — CW only, since this app has no audio path for
           SSB/voice. <code>{CALL}</code> = your own callsign; <code>{HISCALL}</code> = whatever's
-          currently typed in the Call field (for "His Call").
+          currently typed in the Call field (for "His Call"); <code>{NR}</code> = the next progressive
+          serial number (001, 002, ... — auto-increments as you log, same number the QSO gets logged with).
         </div>
         <label class="dialog-label">F1 — CQ</label>
         <input id="rigctl-macro-1" class="dialog-input" type="text" placeholder="CQ TEST {CALL}">
         <label class="dialog-label">F2 — Contest</label>
-        <input id="rigctl-macro-2" class="dialog-input" type="text" placeholder="5NN">
+        <input id="rigctl-macro-2" class="dialog-input" type="text" placeholder="5NN {NR}">
         <label class="dialog-label">F3 — TNX</label>
         <input id="rigctl-macro-3" class="dialog-input" type="text" placeholder="TU">
         <label class="dialog-label">F5 — His Call</label>
