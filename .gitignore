@@ -27,3 +27,7 @@ vkca_qrz_cache.json
 *.s3db
 *.db
 *.sqlite
+
+# macOS build venv / generated icon (build_mac.sh)
+.buildvenv-mac/
+assets/icon.icns
