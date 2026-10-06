@@ -318,16 +318,25 @@ class ContestLog:
             conn.close()
 
     def add_qso(self, call: str, band: str, mode: str, rst_sent: str,
-                rst_rcvd: str, exchange: str, is_run: bool = False) -> str:
+                rst_rcvd: str, exchange: str, is_run: bool = False) -> tuple:
         """
         Insert one new QSO into this (standalone-only, see the caller's own
-        gate in web/server.py) log at the current time, and return its new
-        ID. Same connect/execute/commit/close pattern as delete_qso() — no
-        connection pooling anywhere else in this codebase to match either.
-        Deliberately does NOT touch self.qsos or recompute anything itself
-        beyond the dupe check below; callers reload (ContestLog(...) again /
-        STATE.load_db() again) so the existing scoring pipeline recomputes
-        from scratch exactly as it would for a QSO N1MM itself had logged.
+        gate in web/server.py) log at the current time, and return
+        (new_id, sent_nr). Same connect/execute/commit/close pattern as
+        delete_qso() — no connection pooling anywhere else in this codebase
+        to match either. Deliberately does NOT touch self.qsos or recompute
+        anything itself beyond the dupe check below; callers reload
+        (ContestLog(...) again / STATE.load_db() again) so the existing
+        scoring pipeline recomputes from scratch exactly as it would for a
+        QSO N1MM itself had logged.
+
+        sent_nr is the progressive contact serial number many contest
+        exchanges require (e.g. OCDX rule 8: "RS(T) report plus a
+        progressive contact serial number starting at 001, incrementing by
+        one for each contact") — a single sequence for the whole log
+        (len(self.qsos) + 1), including dupes, since a dupe is still a real
+        contact exchanged live and only known to be a dupe afterwards.
+        Written to DXLOG.SentNr, the same column a real N1MM log uses.
 
         is_run is N1MM's actual Run/S&P flag (IsRunQSO) — not Run1Run2,
         which is a different column (NOT NULL, always written as 0 here)
@@ -365,6 +374,7 @@ class ContestLog:
         # real score (see the docstring above) — just enough to keep the
         # base loader's pts==0-implies-dupe heuristic from misflagging it.
         pts = 0 if is_repeat else 1
+        sent_nr = len(self.qsos) + 1
         band_mhz = _band_to_mhz(band)
         conn = sqlite3.connect(self.db_path)
         try:
@@ -379,12 +389,12 @@ class ContestLog:
                     conn.execute(
                         """INSERT INTO DXLOG
                            (TS, Call, Band, Mode, SNT, RCV, Exchange1, ContestNR,
-                            Run1Run2, IsRunQSO, ContactType, Points, ID)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)""",
+                            Run1Run2, IsRunQSO, ContactType, Points, SentNr, ID)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)""",
                         (ts.strftime("%Y-%m-%d %H:%M:%S"), call_u, band_mhz,
                          mode_u, rst_sent.strip(), rst_rcvd.strip(),
                          exchange.strip(), self.contest_nr, 1 if is_run else 0,
-                         contact_type, pts, new_id),
+                         contact_type, pts, sent_nr, new_id),
                     )
                     break
                 except sqlite3.IntegrityError:
@@ -392,7 +402,7 @@ class ContestLog:
             conn.commit()
         finally:
             conn.close()
-        return new_id
+        return new_id, sent_nr
 
     def update_qso(self, qso_id: str, call: str, band: str, mode: str, rst_sent: str,
                     rst_rcvd: str, exchange: str, is_run: bool = False) -> None:
@@ -576,6 +586,10 @@ class ContestLog:
         # this is the RST-specific read.
         rst_sent_col = col(["SNT","snt","RSTSent","rstsent"])
         rst_rcvd_col = col(["RCV","rcv","RSTRcvd","rstrcvd"])
+        # Sent serial number (this app's own add_qso() writes it; a real
+        # N1MM log usually has it too) — surfaced read-only for the Log
+        # Entry tab's worked-list "Sent#" column.
+        sent_nr_col  = col(["SentNr","sentnr","SENTNR"])
 
         logging.info(
             "Using columns: call=%s band=%s freq=%s mode=%s time=%s "
@@ -587,7 +601,7 @@ class ContestLog:
         sel_cols = [call_col, band_col, freq_col, mode_col, time_col,
                     mult_col, zone_col, m1_col, m2_col,
                     dupe_col, pts_col, id_col, op_col, continent_col,
-                    rst_sent_col, rst_rcvd_col]
+                    rst_sent_col, rst_rcvd_col, sent_nr_col]
         sel_cols += sect_pref_cols
         sel_cols = [cn for cn in sel_cols if cn]
         seen = set(); sel_cols_dedup = []
@@ -862,6 +876,10 @@ class ContestLog:
             rst_sent = str(d.get(rst_sent_col) or "").strip() if rst_sent_col else ""
             rst_rcvd = str(d.get(rst_rcvd_col) or "").strip() if rst_rcvd_col else ""
             raw_freq = d.get(freq_col) if freq_col else None
+            try:
+                sent_nr = int(d.get(sent_nr_col)) if sent_nr_col and d.get(sent_nr_col) else None
+            except (TypeError, ValueError):
+                sent_nr = None
 
             if call and t:
                 _dupe_is_heuristic.append(dupe_is_heuristic)
@@ -893,6 +911,7 @@ class ContestLog:
                     "continent":   continent,
                     "rst_sent":    rst_sent,
                     "rst_rcvd":    rst_rcvd,
+                    "sent_nr":     sent_nr,
                     "freq":        raw_freq,
                     "_table":      target,
                     # Populated asynchronously by web/server.py's QRZ lookup

@@ -4,6 +4,7 @@
 # Run from the project root: pyinstaller vkca_web.spec --noconfirm
 #
 # Output: dist\VKContestAnalyzer\VKContestAnalyzer.exe  (one-folder)
+#         macOS: dist/VK Contest Analyzer.app (see build_mac.sh)
 
 import sys
 import os
@@ -12,6 +13,8 @@ from pathlib import Path
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
 ROOT = Path(SPECPATH)
+# UPX-compressed Mach-O binaries break code signing, so skip it on macOS.
+IS_MAC = sys.platform == 'darwin'
 
 # ── Hidden imports ────────────────────────────────────────────────────────────
 hidden = []
@@ -40,8 +43,9 @@ hidden += [
     'sqlite3',
     'csv',
     'io',
-    'winreg',
 ]
+if sys.platform == 'win32':
+    hidden += ['winreg']
 
 # Add pywebview Windows backend if available
 try:
@@ -179,7 +183,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=not IS_MAC,
     console=False,
     disable_windowed_traceback=False,
     icon=str(ROOT / 'assets' / 'icon.ico') if (ROOT / 'assets' / 'icon.ico').exists() else None,
@@ -200,7 +204,35 @@ coll = COLLECT(
     # ──────────────────────────────────────────────────────────────────────────
     
     strip=False,
-    upx=True,
+    upx=not IS_MAC,
     upx_exclude=[],
     name='VKContestAnalyzer',
 )
+
+# ── macOS .app bundle ─────────────────────────────────────────────────────────
+# build_mac.sh generates assets/icon.icns from icon.png (iconutil) before
+# running this, then wraps dist/VK Contest Analyzer.app into a .dmg.
+if IS_MAC:
+    _version = (ROOT / 'VERSION').read_text().strip()
+    _icns = ROOT / 'assets' / 'icon.icns'
+    app = BUNDLE(
+        coll,
+        name='VK Contest Analyzer.app',
+        icon=str(_icns) if _icns.exists() else None,
+        bundle_identifier='com.vk2yi.vkcontestanalyzer',
+        version=_version,
+        info_plist={
+            'CFBundleShortVersionString': _version,
+            'CFBundleVersion': _version,
+            'NSHighResolutionCapable': True,
+            'LSMinimumSystemVersion': '11.0',
+            'NSRequiresAquaSystemAppearance': False,
+            # macOS 15+ prompts before an app can talk to the LAN — needed
+            # for the N1MM+ RadioInfo UDP listener, Spectator Mode and a
+            # rigctld on another machine. Without this string the prompt
+            # can't be shown and those connections silently fail.
+            'NSLocalNetworkUsageDescription':
+                'VK Contest Analyzer listens for N1MM+ radio broadcasts and '
+                'connects to rigctld and Spectator Mode clients on your network.',
+        },
+    )

@@ -1,5 +1,47 @@
 # Changelog
 
+## 26.10.1
+
+### Enhancements
+
+0c52bb0 Add a macOS build: build_mac.sh produces a native "VK Contest Analyzer.app" and a drag-to-Applications .dmg, with the local-network permission macOS 15+ needs for the N1MM+ radio UDP listener, Spectator Mode and a remote rigctld
+ff0725c Read the app version from a single VERSION file everywhere (titlebar, splash, Report Issue diagnostics, installer filename) instead of five hardcoded copies that could drift out of sync, and expose it at GET /api/version
+
+## 26.9.2
+
+### Bugfixes
+
+e1ab9ab Fix the "+ New Log" save dialog always pre-filling "new_contest.s3db" instead of the <CALL>_<CONTEST>_<DATE> name already shown in the form
+e1ab9ab Fix a new log saved outside the default N1MM folder (e.g. the Desktop) never appearing in Logger mode's resume list — its folder is now added to the scanned folders automatically
+e1ab9ab Move the easy-to-miss "Switch to Analyzer" button into the titlebar next to Open Log/Settings
+
+## 26.9.1
+
+### Enhancements
+
+1ee96cc Add standalone QSO logging: "+ New Log" creates a fresh N1MM-compatible .s3db this app owns, and contacts typed into it flow through the normal scoring, dupe and QRZ pipeline
+aa6031c Add an N1MM-style Entry Window for standalone logging (band buttons, Run/S&P toggle, live radio readout, F-key row, recently logged list), writing N1MM's real run/points columns with its own same-call/same-band dupe check
+e937595 Add an Analyzer/Logger chooser at startup; Logger mode shows a lean operating surface (score/rate/remaining + Log Entry) with the Entry Window embedded inline and a fuller scrollable worked list
+ef8aa47 Add Hamlib rigctld rig control for Logger mode: live frequency/mode/PTT, mode-set buttons and CW macros on the F-keys, configured under Settings > Rig Control
+8c7bf9b Add CAT frequency control: clicking a band button QSYs the rig to where it was last on that band (or a per-band default you set in Settings), plus a directly editable frequency field — no band-plan frequency is ever guessed, to avoid transmitting out of band
+ef8aa47 Logger mode worked list gains a live rework/block countdown, callsign search, and edit/delete via a right-click menu; delete confirmations across the app use a themed dialog instead of the browser's own
+af794e7 Offer separate "Oceania DX SSB" and "Oceania DX CW" entries in the "+ New Log" picker with the correct October weekend for each; the Log Entry form defaults to the contest's own mode and RST (599 for CW, 59 for SSB) when no rig reports one
+8558b26 Add Canvas Mode on Overview: an opt-in freeform layout where every tile can be dragged and resized, saved separately from the classic layout
+8f165e3 Add Compact Mode on Overview: hides everything except gauges, sparklines, Contest Time and Radio while operating, restoring your previous layout when turned off
+56f405c Save the Overview panel layout (tile order and hidden tiles) in app settings instead of browser storage so it survives a cache clear, and allow gauge tiles to be hidden/shown from the ☰ Panels menu
+4f1bc70 Rework Overview's hero row: Top DXCC (now up to 15 countries), Radio, Live Ranking and Fatigue sit alongside the band donut, using the width the map no longer needs
+aa6031c WW Digi's pre-contest countdown now works even when the N1MM log instance was created before the contest's real start
+
+### Bugfixes
+
+fba463b Fix Oceania DX scoring against the 2026 rules: Oceania-to-Oceania contacts now score (a real log went from 62,790 to N1MM's exact 226,800), prefixes follow rule 9 (S52BT → S52, RD7LB/3 → RD3), WARC bands are excluded, and the VK/ZL QSO gauges are labelled correctly
+fba463b Fix standalone Oceania DX logs treating the exchange serial number as a prefix, making every QSO a new multiplier
+8523ac5 Fix session/block time labels being shifted early for any contest not starting at 0000 UTC — e.g. RD's 1500–2100 UTC night-bonus block showed as 12:00–18:00 (#75)
+ef8aa47 Fix every standalone log scanning as "no contests found" because no Contest table was written, and remember a standalone log as such after an app restart
+1ee96cc Fix the Worked tab jumping back to page 1 on every live refresh instead of only when the filter, sort or contest changes
+3b0094f Fix the ☰ Panels menu drawing behind the DXCC map
+4f1bc70 Fix the DXCC map cropping VK/ZL or leaving dead side margins at some window sizes, and the band donut's centre total sitting off-centre when its legend wraps
+
 ## 26.8.2
 
 ### Enhancements

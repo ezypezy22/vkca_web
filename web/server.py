@@ -1065,7 +1065,8 @@ async def api_radio_port_post(body: dict):
 
 _RIGCTLD_MACRO_DEFAULTS = {
     "1": "CQ TEST {CALL}",   # F1 CQ
-    "2": "5NN",              # F2 Contest
+    "2": "5NN {NR}",         # F2 Contest — {NR} is the next progressive
+                             # serial number (see api_rig_send_morse)
     "3": "TU",               # F3 TNX
     "5": "{HISCALL}",        # F5 His Call — sends whatever's currently typed
                              # in the Call field (see api_rig_send_morse)
@@ -1201,8 +1202,10 @@ async def api_rig_set_freq(body: dict):
 async def api_rig_send_morse(body: dict):
     """Body: {fkey: "1".."11", his_call: <optional, currently-typed Call
     field>}. Macro text (Settings → Rig Control) supports {CALL} (own
-    callsign, from the log's Station table) and {HISCALL} (the his_call
-    passed in, for the F5 "His Call" macro)."""
+    callsign, from the log's Station table), {HISCALL} (the his_call
+    passed in, for the F5 "His Call" macro), and {NR} (the next progressive
+    serial number this QSO will get if logged now — see ContestLog.add_qso,
+    same len(qsos)+1 count, zero-padded to 3 digits like OCDX's own "001")."""
     guard = _rig_control_guard()
     if guard:
         return guard
@@ -1215,7 +1218,9 @@ async def api_rig_send_morse(body: dict):
         return JSONResponse({"error": f"No macro configured for F{fkey}."}, status_code=400)
     my_call  = getattr(STATE.contest_log, "my_call", None) or ""
     his_call = (body.get("his_call") or "").strip().upper()
-    text = text.replace("{CALL}", my_call).replace("{HISCALL}", his_call).strip()
+    next_nr  = len(getattr(STATE.contest_log, "qsos", None) or []) + 1
+    text = (text.replace("{CALL}", my_call).replace("{HISCALL}", his_call)
+                .replace("{NR}", f"{next_nr:03d}").strip())
     if not text:
         return JSONResponse(
             {"error": "Macro resolved to empty text (e.g. His Call with nothing typed in Call yet)."},
@@ -1823,7 +1828,7 @@ def _add_qso(call: str, band: str, mode: str, rst_sent: str, rst_rcvd: str, exch
         if not cl or not STATE.is_standalone_log:
             return {"error": "Logging is only available for a log created via + New Log."}
         try:
-            new_id = cl.add_qso(call, band, mode, rst_sent, rst_rcvd, exchange, is_run)
+            new_id, sent_nr = cl.add_qso(call, band, mode, rst_sent, rst_rcvd, exchange, is_run)
         except Exception as e:
             log.exception("add_qso failed")
             return {"error": str(e)}
@@ -1835,7 +1840,7 @@ def _add_qso(call: str, band: str, mode: str, rst_sent: str, rst_rcvd: str, exch
     result = STATE.load_db(STATE.db_path, STATE.contest_nr, STATE.plugin, True)
     if "error" in result:
         return result
-    return {"ok": True, "qso_id": new_id}
+    return {"ok": True, "qso_id": new_id, "sent_nr": sent_nr}
 
 
 @app.post("/api/qsos/add")

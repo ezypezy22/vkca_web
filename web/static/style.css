@@ -403,6 +403,13 @@ html.operator-hud-mode #operator-hud-close{display:block;}
   background:var(--bg2);color:var(--fg);font-family:inherit;}
 #ew-field-table input:focus{outline:none;border-color:var(--accent);}
 #ew-call{font-weight:bold;}
+/* This is the exchange number the operator has to actually read out to the
+   other station — deliberately styled unlike every other field here (solid
+   accent fill, not just accent text on the same bg2/bg3 the rest use) so
+   it can't be mistaken for a passive readout, in dark mode or any other
+   theme. Same "this is the actionable one" treatment as #ew-log-it. */
+#ew-field-table input#ew-sent-nr-field{font-weight:bold;font-size:1.4em;text-align:center;
+  color:var(--bg);background:var(--accent);border-color:var(--accent);cursor:default;}
 #ew-error{color:var(--red);font-size:0.85em;margin:-2px 0 6px;}
 #ew-fkeys,#ew-actions{display:flex;flex-wrap:wrap;gap:6px;}
 #ew-fkeys{margin-top:10px;}

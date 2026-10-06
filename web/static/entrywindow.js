@@ -29,6 +29,7 @@
   const radioModeEl  = document.getElementById('ew-radio-mode');
   const modeBtnsEl   = document.getElementById('ew-mode-buttons');
   const qsoCountEl   = document.getElementById('ew-qso-count');
+  const sentNrEl     = document.getElementById('ew-sent-nr-field');
   const fkeysWrap    = document.getElementById('ew-fkeys');
   const stopBtn      = document.getElementById('ew-stop');
   const searchInput  = document.getElementById('le-search-input');
@@ -350,6 +351,7 @@
         <td style="font-weight:bold">${window.VKA.escapeHtml(q.call || '—')}</td>
         <td>${(q.band || '').toLowerCase()}</td>
         <td>${q.mode || '—'}</td>
+        <td>${q.sent_nr != null ? String(q.sent_nr).padStart(3, '0') : '—'}</td>
         <td>${window.VKA.escapeHtml(q.mult1 || '—')}</td>
         <td>${fmtTime(q.time)}</td>
         <td class="ew-countdown" data-at="${q._countdownAt || ''}">${q._countdownAt ? fmtRemaining(q._countdownAt - Date.now()) : '—'}</td>
@@ -357,7 +359,7 @@
           <button type="button" class="le-row-edit" data-qid="${q.qso_id || ''}" title="Edit this QSO">✎</button>
           <button type="button" class="le-row-del" data-qid="${q.qso_id || ''}" title="Delete this QSO">✕</button>
         </td>
-      </tr>`).join('') || `<tr><td colspan="7">${term ? 'No matching QSOs.' : 'No QSOs logged yet.'}</td></tr>`;
+      </tr>`).join('') || `<tr><td colspan="8">${term ? 'No matching QSOs.' : 'No QSOs logged yet.'}</td></tr>`;
   }
   searchInput?.addEventListener('input', renderRecentRows);
 
@@ -365,6 +367,9 @@
     try {
       const qsos = await window.VKA.fetchQsos();
       if (qsoCountEl) qsoCountEl.textContent = qsos.length;
+      // Next progressive serial number (see contest_log.py's add_qso()) —
+      // same len(qsos)+1 count, zero-padded like OCDX's own "001".
+      if (sentNrEl) sentNrEl.value = String(qsos.length + 1).padStart(3, '0');
       if (!recentTbody) return;
       readSessionConfig();
       annotateCountdowns(qsos);
