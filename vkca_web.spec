@@ -7,6 +7,7 @@
 
 import sys
 import os
+import re
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
@@ -125,6 +126,15 @@ a = Analysis(
         # numpy (excluded above) to function, so it can never actually import
         # at runtime here; it's ~30MB of dead weight.
         'scipy',
+        # Leaked in from the Linux build venv's --system-site-packages (needed
+        # for GTK/WebKit2) via pygments.plugin's try/except pkg_resources
+        # fallback (mako pulls in pygments too) — nothing in this app imports
+        # any of these. Worse, on Debian/Ubuntu the system pkg_resources ships
+        # a stripped _vendor tree (its jaraco deps are split into separate
+        # apt packages that aren't installed here), so bundling it crashes
+        # pyi_rth_pkgres.py at startup with "ImportError: The 'jaraco'
+        # package is required".
+        'pkg_resources', 'setuptools', 'pygments', 'mako', 'rich',
     ],
     noarchive=False,
 )
@@ -139,6 +149,24 @@ a.datas = [d for d in a.datas if not (d[0].startswith('share/icons' + os.sep)
                                       or d[0].startswith('share/themes' + os.sep)
                                       or d[0].startswith('share/icons/')
                                       or d[0].startswith('share/themes/'))]
+
+# The gi hook also bundles libgtk-3/libgdk-3/libcairo/libpango/libglib/libatk
+# etc. as shared libraries. WebKit2's actual rendering happens in separate
+# WebKitWebProcess/WebKitNetworkProcess helper binaries owned by the
+# system's libwebkit2gtk package — never bundled here, always loaded from
+# /usr/lib — and those helpers inherit our process's LD_LIBRARY_PATH. If our
+# bundled GTK/cairo/glib copies are found first, WebKit's compositor ends up
+# talking to a different GTK/cairo build than the one its own libwebkit2gtk.so
+# was compiled against, which reliably renders as a solid black window with
+# no error on either side. Since libwebkit2gtk itself is never bundled (only
+# available via the system's GI typelib), the whole GTK stack it depends on
+# has to come from the system too — so drop our copies and let the dynamic
+# linker fall through to /usr/lib for all of them.
+_system_gtk_stack = re.compile(
+    r'^lib(gtk|gdk|cairo|pango|glib|gobject|gio|atk|harfbuzz|epoxy|'
+    r'fontconfig|freetype|fribidi|graphene|webkit)'
+)
+a.binaries = [b for b in a.binaries if not _system_gtk_stack.match(os.path.basename(b[0]))]
 
 pyz = PYZ(a.pure, a.zipped_data)
 

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=VK Contest Analyzer
+GenericName=Contest Logging Companion
+Comment=Real-time competitive intelligence for N1MM+ contest logging
+Exec=VKContestAnalyzer
+Icon=vkcontestanalyzer
+Categories=HamRadio;Utility;
+Terminal=false
