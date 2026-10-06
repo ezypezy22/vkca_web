@@ -4459,6 +4459,18 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
     # missing WebView2 Runtime, etc.), log the real error and fall back to
     # the system browser instead of failing with no visible error at all.
     try:
+        if sys.platform.startswith("linux"):
+            # WebKitGTK's accelerated (GPU) compositing renders a solid black
+            # window with no error on virtual GPUs that don't fully support
+            # its DMA-BUF sharing path between the WebKit and GTK processes —
+            # observed on VMware's SVGA3D driver, and a known issue on
+            # VirtualBox and some older/software Mesa drivers too. Disabling
+            # WebKit's own compositor falls back to CPU rendering, which this
+            # app's dashboard (no video/WebGL) doesn't need GPU accel for
+            # anyway. Must be set before `import webview` pulls in the GTK/
+            # WebKit2 backend, since libwebkit2gtk reads it at init.
+            os.environ.setdefault("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
+
         import webview
 
         # pywebview's WebView2 backend silently cancels every download unless
