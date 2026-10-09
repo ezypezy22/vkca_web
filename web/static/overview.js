@@ -105,6 +105,10 @@
     if (n >= 1e3) return (n/1e3).toFixed(0)+'k';
     return n.toLocaleString();
   }
+  // Pure, stateless — shared with entrywindow.js's Log Entry summary tiles
+  // so a gauge's number formats identically wherever it's shown.
+  window.VKA.fmtGaugeVal = fmtVal;
+  window.VKA.fmtGaugeMax = fmtMax;
 
   function drawGauge(canvas, frac, colour, valStr, label, maxStr, fs) {
     const dpr = window.devicePixelRatio || 1;

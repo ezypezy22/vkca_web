@@ -372,9 +372,10 @@ html.operator-hud-mode #operator-hud-close{display:block;}
   color:var(--fg);background:var(--bg2);border:1px solid var(--bg3);border-radius:3px;
   width:6.5em;padding:1px 4px;font-family:inherit;}
 #ew-freq-input:focus{outline:none;border-color:var(--accent);}
-#ew-radio-mode{opacity:.75;}
-/* Mode buttons replace the plain read-only #ew-radio-mode text when rig
-   control (rigctld) is connected — see entrywindow.js's renderModeButtons(). */
+/* Always-visible, always-clickable mode selector — manually picking a mode
+   is the only way to log one when no rig is connected; when rigctld is
+   also connected, the same click additionally commands the rig (see
+   entrywindow.js's renderModeButtons()). */
 #ew-mode-buttons{display:inline-flex;gap:3px;}
 .ew-mode-btn{padding:1px 7px;font-size:0.78em;font-weight:bold;
   border:1px solid var(--bg3);border-radius:3px;
@@ -420,18 +421,24 @@ html.operator-hud-mode #operator-hud-close{display:block;}
 .ew-scp span{cursor:pointer;}
 .ew-scp span:hover{text-decoration:underline;}
 .ew-scp b{color:var(--accent,#64b5f6);}
-#ew-fkeys,#ew-actions{display:flex;flex-wrap:wrap;gap:6px;}
-#ew-fkeys{margin-top:10px;}
-#ew-actions{margin-top:10px;}
-.ew-fkey,#ew-wipe,#ew-log-it{flex:1 1 100px;padding:11px 6px;font-size:0.82em;
+#ew-actions{display:flex;gap:6px;margin-top:10px;}
+#ew-wipe,#ew-log-it{flex:1 1 160px;padding:11px 6px;font-size:0.82em;
   border:1px solid var(--bg3);border-radius:3px;
   background:var(--bg2);color:var(--fg);
   font-family:inherit;cursor:pointer;}
-.ew-fkey:disabled{cursor:not-allowed;opacity:.5;}
-.ew-fkey:not(:disabled):hover{background:var(--bg3);border-color:var(--accent);}
 #ew-wipe:hover{background:var(--bg3);border-color:var(--red);color:var(--red);}
 #ew-log-it{font-weight:bold;background:var(--accent);color:var(--bg);border-color:var(--accent);}
 #ew-log-it:hover{filter:brightness(1.1);}
+/* Log Entry tab summary — the same gauge_defs data (label/value/colour)
+   Overview's own gauges use, as plain stat tiles rather than the full
+   animated arc gauges (those are tightly coupled to Overview's own DOM
+   ids/state — see entrywindow.js's buildSummary()). */
+#le-summary-row{display:flex;flex-wrap:wrap;gap:10px;}
+.le-stat-tile{flex:1 1 110px;background:var(--bg3);border-radius:var(--radius);
+  padding:8px 10px;text-align:center;}
+.le-stat-tile-value{font-family:var(--font-mono);font-size:1.5em;font-weight:bold;}
+.le-stat-tile-label{font-family:var(--font-mono);font-size:0.72em;color:var(--muted);
+  letter-spacing:.06em;text-transform:uppercase;margin-top:2px;}
 
 /* ── Spectator Mode (rendered only for a read-only LAN viewer, /spectator)
    A single full-bleed scoreboard — no titlebar, no tabs, nothing clickable —

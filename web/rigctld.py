@@ -1,6 +1,6 @@
 """
 web/rigctld.py — Hamlib rigctld TCP client for standalone Logger-mode rig
-control (frequency/mode/PTT reading + mode/CW-macro writing).
+control (frequency/mode/PTT reading + mode/frequency writing).
 
 rigctld ("rig control daemon") is a small TCP server most CAT-capable ham
 software can already point at — this app is just another client of it,
@@ -44,9 +44,9 @@ _MAX_BACKOFF = 10.0
 
 
 def _rprt_ok(lines: list[str]) -> tuple[bool, Optional[str]]:
-    """Every rigctld SET-type command (set_mode, send_morse, stop_morse)
-    ends its response with a "RPRT <code>" line — 0 means success,
-    anything else (including negative Hamlib error codes) means failure."""
+    """Every rigctld SET-type command (set_mode, set_freq) ends its
+    response with a "RPRT <code>" line — 0 means success, anything else
+    (including negative Hamlib error codes) means failure."""
     if not lines:
         return False, "no response from rigctld"
     last = lines[-1]
@@ -64,7 +64,7 @@ def _rprt_ok(lines: list[str]) -> tuple[bool, Optional[str]]:
 
 class RigctldConnection:
     """One TCP connection to rigctld, shared by the background poller
-    (reads) and on-demand write commands (F-key macros, mode changes) via
+    (reads) and on-demand write commands (mode/frequency changes) via
     `_lock` — rigctld is strictly request/response per connection, so the
     two must never interleave a command/response pair. Reconnects lazily
     on the next command after any I/O error."""
@@ -151,22 +151,6 @@ class RigctldConnection:
     def set_mode(self, mode: str) -> tuple[bool, Optional[str]]:
         try:
             lines = self._run(f"\\set_mode {mode} 0")
-        except Exception as exc:
-            return False, str(exc)
-        return _rprt_ok(lines)
-
-    def send_morse(self, text: str) -> tuple[bool, Optional[str]]:
-        try:
-            lines = self._run(f"\\send_morse {text}")
-        except Exception as exc:
-            return False, str(exc)
-        return _rprt_ok(lines)
-
-    def stop_morse(self) -> tuple[bool, Optional[str]]:
-        # Best-effort — not every rig backend supports aborting mid-send;
-        # the server.py endpoint treats a failure here as non-fatal.
-        try:
-            lines = self._run("\\stop_morse")
         except Exception as exc:
             return False, str(exc)
         return _rprt_ok(lines)

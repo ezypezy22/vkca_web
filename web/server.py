@@ -271,8 +271,8 @@ class AppState:
         # rigctld (Hamlib) rig control — standalone Logger mode only, see
         # rigctld.py and _sync_rigctld() below. rigctld_conn is the shared
         # RigctldConnection used both by the poller thread (reads) and by
-        # the /api/rig/* write endpoints (set_mode/send_morse/stop_morse);
-        # None whenever rig control isn't currently active.
+        # the /api/rig/* write endpoints (set_mode/set_freq); None whenever
+        # rig control isn't currently active.
         self.rigctld_conn                          = None
         self._rigctld_thread                       = None   # threading.Thread
         self._rigctld_stop                         = None   # threading.Event
@@ -1059,21 +1059,9 @@ async def api_radio_port_post(body: dict):
 # See rigctld.py's own module docstring for the read side (radio_info
 # entries, fed by the poller thread _sync_rigctld() starts/stops). This
 # section is Settings persistence plus the write-side /api/rig/* endpoints
-# (mode change, F-key CW macros) — every one gated on STATE.is_standalone_log
+# (mode change, frequency QSY) — every one gated on STATE.is_standalone_log
 # so this app never sends a rig command outside its own standalone Logger
 # mode (see the plan's safety-boundary rationale).
-
-_RIGCTLD_MACRO_DEFAULTS = {
-    "1": "CQ TEST {CALL}",   # F1 CQ
-    "2": "5NN {NR}",         # F2 Contest — {NR} is the next progressive
-                             # serial number (see api_rig_send_morse)
-    "3": "TU",               # F3 TNX
-    "5": "{HISCALL}",        # F5 His Call — sends whatever's currently typed
-                             # in the Call field (see api_rig_send_morse)
-    "7": "QRZ?",             # F7 QRZ?
-    "8": "AGN?",             # F8 Agn?
-    "9": "ZONE?",            # F9 Zone?
-}
 
 # The bands every plugin's band_list() actually returns (see e.g.
 # plugins/allasian.py, plugins/cqww.py) — a fixed set of per-band QSY
@@ -1088,8 +1076,6 @@ _RIGCTLD_BAND_KEYS = ["160M", "80M", "40M", "20M", "15M", "10M"]
 @app.get("/api/settings/rigctld")
 async def api_rigctld_get():
     cfg = _load_settings().get("rigctld") or {}
-    macros = dict(_RIGCTLD_MACRO_DEFAULTS)
-    macros.update(cfg.get("macros") or {})
     band_defaults_in = cfg.get("band_defaults") or {}
     band_defaults = {b: band_defaults_in.get(b) for b in _RIGCTLD_BAND_KEYS if band_defaults_in.get(b)}
     with STATE._lock:
@@ -1099,7 +1085,6 @@ async def api_rigctld_get():
         "enabled":       bool(cfg.get("enabled")),
         "host":          cfg.get("host") or rigctld.DEFAULT_HOST,
         "port":          cfg.get("port") or rigctld.DEFAULT_PORT,
-        "macros":        macros,
         "band_defaults": band_defaults,
         "status":        status,
         "connected":     connected,
@@ -1116,8 +1101,6 @@ async def api_rigctld_post(body: dict):
         return JSONResponse({"error": "Port must be a number."}, status_code=400)
     if not (1 <= port <= 65535):
         return JSONResponse({"error": "Port must be between 1 and 65535."}, status_code=400)
-    macros_in = body.get("macros") or {}
-    macros = {k: str(v) for k, v in macros_in.items() if k in _RIGCTLD_MACRO_DEFAULTS}
 
     band_defaults_in = body.get("band_defaults") or {}
     band_defaults = {}
@@ -1135,7 +1118,7 @@ async def api_rigctld_post(body: dict):
 
     def _mutate(settings):
         settings["rigctld"] = {"enabled": enabled, "host": host, "port": port,
-                                "macros": macros, "band_defaults": band_defaults}
+                                "band_defaults": band_defaults}
 
     await asyncio.get_event_loop().run_in_executor(
         None, _settings_read_modify_write, _mutate)
@@ -1196,53 +1179,6 @@ async def api_rig_set_freq(body: dict):
     if not ok:
         return JSONResponse({"error": err}, status_code=502)
     return {"ok": True}
-
-
-@app.post("/api/rig/send_morse")
-async def api_rig_send_morse(body: dict):
-    """Body: {fkey: "1".."11", his_call: <optional, currently-typed Call
-    field>}. Macro text (Settings → Rig Control) supports {CALL} (own
-    callsign, from the log's Station table), {HISCALL} (the his_call
-    passed in, for the F5 "His Call" macro), and {NR} (the next progressive
-    serial number this QSO will get if logged now — see ContestLog.add_qso,
-    same len(qsos)+1 count, zero-padded to 3 digits like OCDX's own "001")."""
-    guard = _rig_control_guard()
-    if guard:
-        return guard
-    fkey = str(body.get("fkey") or "")
-    cfg = _load_settings().get("rigctld") or {}
-    macros = dict(_RIGCTLD_MACRO_DEFAULTS)
-    macros.update(cfg.get("macros") or {})
-    text = (macros.get(fkey) or "").strip()
-    if not text:
-        return JSONResponse({"error": f"No macro configured for F{fkey}."}, status_code=400)
-    my_call  = getattr(STATE.contest_log, "my_call", None) or ""
-    his_call = (body.get("his_call") or "").strip().upper()
-    next_nr  = len(getattr(STATE.contest_log, "qsos", None) or []) + 1
-    text = (text.replace("{CALL}", my_call).replace("{HISCALL}", his_call)
-                .replace("{NR}", f"{next_nr:03d}").strip())
-    if not text:
-        return JSONResponse(
-            {"error": "Macro resolved to empty text (e.g. His Call with nothing typed in Call yet)."},
-            status_code=400)
-    conn = STATE.rigctld_conn
-    ok, err = await asyncio.get_event_loop().run_in_executor(None, conn.send_morse, text)
-    if not ok:
-        return JSONResponse({"error": err}, status_code=502)
-    return {"ok": True, "sent": text}
-
-
-@app.post("/api/rig/stop_morse")
-async def api_rig_stop_morse():
-    guard = _rig_control_guard()
-    if guard:
-        return guard
-    conn = STATE.rigctld_conn
-    # Best-effort — not every rig backend supports aborting mid-send, so a
-    # failure here is reported but the caller (entrywindow.js) shouldn't
-    # treat it as an alarming hard error.
-    ok, err = await asyncio.get_event_loop().run_in_executor(None, conn.stop_morse)
-    return {"ok": ok, "error": None if ok else err}
 
 
 # ── Overview panel layout (drag-reorder + hide/show) ──────────────────────────
@@ -1779,44 +1715,6 @@ async def api_new_log(body: dict):
     my_call               = (body.get("my_call") or "").strip()
     if not path:
         return JSONResponse({"error": "No path supplied"}, status_code=400)
-@app.get("/api/lookup")
-def api_lookup(call: str = "", band: str = ""):
-    """Log Entry form helper: country/zone/continent for a callsign, whether
-    it would be a dupe / new country / new zone on `band`, what it would be
-    worth, and Super Check Partial suggestions. Read-only."""
-    from dxcc import get_dxcc, scp_partial
-    call_u = (call or "").strip().upper()
-    band_u = (band or "").strip().upper()
-    out = {"call": call_u, "found": False, "scp": scp_partial(call_u, 12)}
-    if not call_u:
-        return out
-    ent = get_dxcc().lookup(call_u)
-    if ent:
-        out.update(found=True, country=ent["country"], prefix=ent["prefix"],
-                   cq=ent["cq"], itu=ent["itu"], cont=ent["cont"])
-    with STATE._lock:
-        cl = STATE.contest_log
-        if not cl:
-            return out
-        out["dupe"] = any(not q["dupe"] and q["call"] == call_u and q["band"] == band_u
-                          for q in cl.qsos) if band_u else False
-        if ent and band_u:
-            try:
-                f = cl.plugin.standalone_qso_fields(
-                    call_u, band_u, "", "", cl.qsos, cl.my_call or "") or {}
-            except Exception:
-                log.exception("lookup: standalone_qso_fields failed")
-                f = {}
-            if "IsMultiplier2" in f:
-                out["new_country"] = bool(f["IsMultiplier2"])
-            if "IsMultiplier1" in f:
-                out["new_zone"] = bool(f["IsMultiplier1"])
-            if "Points" in f:
-                out["points"] = f["Points"]
-        out["zone_scored"] = bool(cl.plugin.uses_cq_zone_scoring())
-    return out
-
-
     if not contest_display_name:
         return JSONResponse({"error": "No contest type selected"}, status_code=400)
     if not my_call:
@@ -1879,6 +1777,44 @@ def _add_qso(call: str, band: str, mode: str, rst_sent: str, rst_rcvd: str, exch
     if "error" in result:
         return result
     return {"ok": True, "qso_id": new_id, "sent_nr": sent_nr}
+
+
+@app.get("/api/lookup")
+def api_lookup(call: str = "", band: str = ""):
+    """Log Entry form helper: country/zone/continent for a callsign, whether
+    it would be a dupe / new country / new zone on `band`, what it would be
+    worth, and Super Check Partial suggestions. Read-only."""
+    from dxcc import get_dxcc, scp_partial
+    call_u = (call or "").strip().upper()
+    band_u = (band or "").strip().upper()
+    out = {"call": call_u, "found": False, "scp": scp_partial(call_u, 12)}
+    if not call_u:
+        return out
+    ent = get_dxcc().lookup(call_u)
+    if ent:
+        out.update(found=True, country=ent["country"], prefix=ent["prefix"],
+                   cq=ent["cq"], itu=ent["itu"], cont=ent["cont"])
+    with STATE._lock:
+        cl = STATE.contest_log
+        if not cl:
+            return out
+        out["dupe"] = any(not q["dupe"] and q["call"] == call_u and q["band"] == band_u
+                          for q in cl.qsos) if band_u else False
+        if ent and band_u:
+            try:
+                f = cl.plugin.standalone_qso_fields(
+                    call_u, band_u, "", "", cl.qsos, cl.my_call or "") or {}
+            except Exception:
+                log.exception("lookup: standalone_qso_fields failed")
+                f = {}
+            if "IsMultiplier2" in f:
+                out["new_country"] = bool(f["IsMultiplier2"])
+            if "IsMultiplier1" in f:
+                out["new_zone"] = bool(f["IsMultiplier1"])
+            if "Points" in f:
+                out["points"] = f["Points"]
+        out["zone_scored"] = bool(cl.plugin.uses_cq_zone_scoring())
+    return out
 
 
 @app.post("/api/qsos/add")
@@ -3135,8 +3071,8 @@ async def api_plugin_meta():
       Oceania DX CW), else null — the Log Entry form's fallback mode and RST
       default when no rig is reporting a mode.
     - rigctld_connected: True if the rigctld rig-control poller is currently
-      live (see rigctld.py) — gates the Log Entry form's mode buttons and
-      F-key CW macros.
+      live (see rigctld.py) — the Log Entry form's mode buttons are always
+      editable, but only also command the actual rig when this is true.
     """
     if not STATE.contest_log:
         return {"loaded": False}

@@ -26,21 +26,22 @@
   const radioBandEl  = document.getElementById('ew-radio-band');
   const radioFreqEl  = document.getElementById('ew-radio-freq');
   const freqInputEl  = document.getElementById('ew-freq-input');
-  const radioModeEl  = document.getElementById('ew-radio-mode');
   const modeBtnsEl   = document.getElementById('ew-mode-buttons');
   const qsoCountEl   = document.getElementById('ew-qso-count');
   const sentNrEl     = document.getElementById('ew-sent-nr-field');
-  const fkeysWrap    = document.getElementById('ew-fkeys');
-  const stopBtn      = document.getElementById('ew-stop');
   const searchInput  = document.getElementById('le-search-input');
+  const summaryRowEl = document.getElementById('le-summary-row');
+  const callTh       = document.getElementById('le-th-call');
+  const timeTh       = document.getElementById('le-th-time');
 
   function showError(msg) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
   function clearError()   { errEl.textContent = ''; }
 
-  // Band comes from clickable buttons, not a <select> — there's no
-  // separate "Mode" control at all: like N1MM's own Entry Window, mode is
-  // read from the live rig readout (radio_udp, see #ew-radio-mode) rather
-  // than typed in, falling back to a plain default when no radio is seen.
+  // Band comes from clickable buttons, not a <select>. Mode has its own
+  // always-visible button row further down (#ew-mode-buttons/_activeMode) —
+  // auto-synced from the live rig when one's connected, but always
+  // manually clickable too, since an operator with no rig still has to
+  // say what mode a QSO was on.
   let _bands = [];
   let _activeBand = null;
   let _radioBandSeen = false;   // only auto-pick a band from the rig once — a later rig
@@ -60,7 +61,36 @@
       _bands = meta.bands || [];
       if (!_activeBand && _bands.length) _activeBand = _bands[0];
       renderBands();
+      buildSummary(meta.gauge_defs || []);
     } catch (e) { console.warn('entrywindow: loadBands failed:', e); }
+  }
+
+  // ── Summary — the same gauge_defs (label/value_key/colour/fmt) Overview's
+  // own gauges use, as plain stat tiles rather than the full animated arc
+  // gauges (those are tightly coupled to Overview's own DOM ids/state and
+  // can't safely be reused for a second, independent row on this tab). ──
+  let _summaryDefs = [];
+
+  function buildSummary(defs) {
+    _summaryDefs = defs;
+    if (!summaryRowEl) return;
+    summaryRowEl.innerHTML = defs.map((g, i) => `
+      <div class="le-stat-tile">
+        <div class="le-stat-tile-value" id="le-stat-val-${i}" style="color:${g.colour || 'var(--accent)'}">—</div>
+        <div class="le-stat-tile-label">${window.VKA.escapeHtml(g.label || '')}</div>
+      </div>`).join('');
+  }
+
+  function updateSummary(snap) {
+    if (!summaryRowEl || !snap) return;
+    _summaryDefs.forEach((g, i) => {
+      const el = document.getElementById(`le-stat-val-${i}`);
+      if (!el) return;
+      const val = snap[g.value_key] ?? 0;
+      el.textContent = window.VKA.fmtGaugeVal
+        ? window.VKA.fmtGaugeVal(val, g.fmt)
+        : Math.round(val).toLocaleString('en-AU');
+    });
   }
 
   bandsWrap.addEventListener('click', e => {
@@ -72,16 +102,18 @@
   });
 
   // ── Rig Control (Hamlib rigctld) — standalone Logger mode only, see
-  // web/rigctld.py. Mode buttons, the editable frequency field, band-click
-  // QSY, and F-key CW macros only ever become active once the rig poller
-  // is actually connected — CW macros additionally require the rig to
-  // read CW, since this app has no audio path for SSB/voice. Configured in
-  // Settings → Rig Control (host/port, macro text per F-key, per-band QSY
-  // default frequencies). ──────────────────────────────────────────────
+  // web/rigctld.py. The mode selector is always visible and clickable (an
+  // operator with no rig connected still has to say what mode a QSO was
+  // on) — when rigctld IS also connected, the same click additionally
+  // commands the rig, and a live mode reading from the rig keeps the
+  // selection in sync automatically. The editable frequency field and
+  // band-click QSY only become active once the rig poller is actually
+  // connected, since there's no rig to move otherwise. Configured in
+  // Settings → Rig Control (host/port, per-band QSY default frequencies). ─
   const MODE_CHOICES = ['CW', 'USB', 'LSB', 'RTTY', 'FM'];
   let _rigctldConnected = false;
   let _liveMode = '';
-  let _macroSlots = new Set();   // fkey slot numbers ("1".."9") with non-empty macro text configured
+  let _activeMode = null;        // the mode this QSO will actually be logged with
   let _bandDefaults = {};        // band -> freq_hz, from Settings → Rig Control (unset unless configured)
   let _contestMode = null;       // "CW"/"SSB" when the log's contest name pins one (e.g. Oceania DX CW)
   let _rstDefaultFor = null;     // effective mode the RST fields' default was last applied for
@@ -90,7 +122,7 @@
   // that is still exactly the other default (or blank), so anything the
   // operator typed themselves is left alone.
   function applyRstDefaults() {
-    const eff = (_liveMode || _contestMode || '').toUpperCase();
+    const eff = (_activeMode || _contestMode || '').toUpperCase();
     if (eff === _rstDefaultFor) return;
     _rstDefaultFor = eff;
     const want  = eff.startsWith('CW') ? '599' : '59';
@@ -124,30 +156,12 @@
     if (target) setFreqHz(target);
   }
 
-  function updateFkeyEnablement() {
-    const isCW = _liveMode === 'CW';
-    const active = _rigctldConnected && isCW;
-    const reason = !_rigctldConnected ? 'Rig Control not connected — see Settings'
-      : !isCW ? 'CW macros only — rig is not in CW mode'
-      : '';
-    fkeysWrap.querySelectorAll('button[data-fkey]').forEach(btn => {
-      const enabled = active && _macroSlots.has(btn.dataset.fkey);
-      btn.disabled = !enabled;
-      btn.title = enabled ? '' : (reason || 'No macro text configured for this key — see Settings');
-    });
-    if (stopBtn) { stopBtn.disabled = !active; stopBtn.title = active ? '' : (reason || ''); }
-  }
-
+  // Always rendered and clickable, regardless of rig-control status — see
+  // the block comment above for why. The highlighted button is whatever
+  // this QSO will actually be logged with.
   function renderModeButtons() {
-    if (!_rigctldConnected) {
-      modeBtnsEl.classList.add('hidden'); modeBtnsEl.innerHTML = '';
-      radioModeEl.classList.remove('hidden');
-      return;
-    }
-    radioModeEl.classList.add('hidden');
-    modeBtnsEl.classList.remove('hidden');
     modeBtnsEl.innerHTML = MODE_CHOICES.map(m =>
-      `<button type="button" data-mode="${m}" class="ew-mode-btn${m === _liveMode ? ' active' : ''}">${m}</button>`
+      `<button type="button" data-mode="${m}" class="ew-mode-btn${m === _activeMode ? ' active' : ''}">${m}</button>`
     ).join('');
   }
 
@@ -171,7 +185,7 @@
       if (!isNaN(mhz) && mhz > 0) setFreqHz(mhz * 1e6);
       freqInputEl.blur();
     } else if (e.key === 'Escape') {
-      e.stopPropagation();   // don't also trigger the global Escape handler (Wipe + stop CW send)
+      e.stopPropagation();   // don't also trigger the global Escape handler (Wipe)
       freqInputEl.blur();    // just defocus — the next snapshot resyncs its value
     }
   });
@@ -179,6 +193,10 @@
   modeBtnsEl.addEventListener('click', async e => {
     const btn = e.target.closest('button[data-mode]');
     if (!btn) return;
+    _activeMode = btn.dataset.mode;
+    renderModeButtons();
+    applyRstDefaults();
+    if (!_rigctldConnected) return;   // manual selection only — nothing to command
     btn.disabled = true;
     try {
       const res  = await fetch('/api/rig/set_mode', {
@@ -194,33 +212,6 @@
     }
   });
 
-  async function sendMacro(btn) {
-    if (!btn || btn.disabled) return;
-    clearError();
-    btn.disabled = true;
-    try {
-      const res  = await fetch('/api/rig/send_morse', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({fkey: btn.dataset.fkey, his_call: callInput.value.trim()}),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) showError(data.error || 'Failed to send macro.');
-    } catch (e) {
-      showError(`Send failed: ${e.message}`);
-    } finally {
-      updateFkeyEnablement();   // re-derives real state rather than assuming re-enabled
-    }
-  }
-  fkeysWrap.addEventListener('click', e => sendMacro(e.target.closest('button[data-fkey]')));
-
-  stopBtn?.addEventListener('click', () => {
-    if (stopBtn.disabled) return;
-    // Best-effort — not every rig backend supports aborting mid-send, so
-    // this deliberately doesn't surface a failure as an alarming error.
-    fetch('/api/rig/stop_morse', {method: 'POST'}).catch(e =>
-      console.warn('entrywindow: stop_morse failed:', e));
-  });
-
   async function refreshRigStatus() {
     try {
       const [metaRes, cfgRes] = await Promise.all([
@@ -230,17 +221,15 @@
       const cfg  = await cfgRes.json();
       _rigctldConnected = !!meta.rigctld_connected;
       _reworkWindowHours = meta.loaded ? (meta.rework_window_hours || null) : null;
-      _macroSlots = new Set(
-        Object.entries(cfg.macros || {}).filter(([, v]) => (v || '').trim()).map(([k]) => k));
       _bandDefaults = cfg.band_defaults || {};
       _contestMode = meta.loaded ? (meta.contest_mode || null) : null;
     } catch (e) {
       console.warn('entrywindow: refreshRigStatus failed:', e);
       _rigctldConnected = false;
     }
+    if (!_activeMode) _activeMode = _contestMode || 'SSB';
     renderModeButtons();
     renderFreqField();
-    updateFkeyEnablement();
     applyRstDefaults();
   }
   setInterval(refreshRigStatus, 5000);
@@ -329,12 +318,34 @@
   // clicks don't need a fresh server round-trip just to re-render.
   let _lastQsos = [];
 
+  // Manual column sort (Call/Time headers) — once the operator picks a
+  // column it overrides the smart default below entirely, until they
+  // reload the tab. null = smart default: soonest-to-expire first for
+  // rework-window contests, else most-recent-first.
+  let _sortCol = null;   // null | 'call' | 'time'
+  let _sortDir = 1;      // 1 = ascending, -1 = descending
+
+  function setSort(col) {
+    if (_sortCol === col) _sortDir *= -1;
+    else { _sortCol = col; _sortDir = col === 'call' ? 1 : -1; }
+    [callTh, timeTh].forEach(th => th?.classList.remove('sort-asc', 'sort-desc'));
+    const activeTh = col === 'call' ? callTh : timeTh;
+    activeTh?.classList.add(_sortDir === 1 ? 'sort-asc' : 'sort-desc');
+    renderRecentRows();
+  }
+  callTh?.addEventListener('click', () => setSort('call'));
+  timeTh?.addEventListener('click', () => setSort('time'));
+
   function renderRecentRows() {
     if (!recentTbody) return;
     const term = (searchInput?.value || '').trim().toUpperCase();
     let list = term ? _lastQsos.filter(q => (q.call || '').toUpperCase().includes(term)) : _lastQsos;
     list = [...list];
-    if (_reworkWindowHours) {
+    if (_sortCol === 'call') {
+      list.sort((a, b) => _sortDir * (a.call || '').localeCompare(b.call || ''));
+    } else if (_sortCol === 'time') {
+      list.sort((a, b) => _sortDir * (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+    } else if (_reworkWindowHours) {
       // Rework-window contests (e.g. VK RD's 4h same-band/mode rule): show
       // the soonest-to-expire contacts first — oldest QSO time = closest
       // countdown to "Workable" — so the operator can see at a glance who
@@ -381,18 +392,18 @@
 
   // ── Edit an existing entry — loads it back into the form (like N1MM's
   // own "Edit" F-key), submit becomes an update instead of a new QSO.
-  // Mode isn't editable here (this form has no mode selector — mode is
-  // always read from the live rig for a NEW entry), so an edit keeps the
-  // QSO's own original mode rather than overwriting it with whatever the
-  // rig currently reads. Run/S&P can't be recovered from a fetched QSO
-  // (not exposed in that shape) — left as whatever the toggle currently
-  // shows, matching this form's other "can't fully restore" limitations. ──
+  // Mode is genuinely editable now (the always-visible mode selector),
+  // so an edit loads the QSO's own mode into it — and restores whatever
+  // was selected before editing started on cancel/save, so a manually-set
+  // mode doesn't leak into the next NEW QSO logged afterward. Run/S&P
+  // can't be recovered from a fetched QSO (not exposed in that shape) —
+  // left as whatever the toggle currently shows, matching this form's
+  // other "can't fully restore" limitations. ─────────────────────────────
   let _editingQsoId = null;
-  let _editingMode  = null;
+  let _preEditMode  = null;   // _activeMode's value before edit started
 
   function startEdit(q) {
     _editingQsoId = q.qso_id || null;
-    _editingMode  = q.mode || null;
     if (!_editingQsoId) { showError('Cannot edit this QSO (no ID).'); return; }
     clearError();
     callInput.value = q.call || '';
@@ -401,13 +412,17 @@
     exchInput.value = q.mult1 || '';
     const band = (q.band || '').toUpperCase();
     if (_bands.includes(band)) { _activeBand = band; renderBands(); }
+    _preEditMode = _activeMode;
+    const editMode = (q.mode || '').toUpperCase();
+    if (MODE_CHOICES.includes(editMode)) { _activeMode = editMode; renderModeButtons(); }
     logItBtn.textContent = 'Update It';
     callInput.focus();
   }
 
   function cancelEdit() {
     _editingQsoId = null;
-    _editingMode  = null;
+    if (_preEditMode) { _activeMode = _preEditMode; renderModeButtons(); }
+    _preEditMode = null;
     logItBtn.textContent = 'Log It';
   }
 
@@ -478,21 +493,6 @@
     if (_ctxMenuEl && !_ctxMenuEl.contains(e.target)) closeCtxMenu();
   });
 
-  function clearForm() {
-    clearError();
-    callInput.value = ''; exchInput.value = '';
-    if (_editingQsoId) cancelEdit();
-    callInput.focus();
-  }
-  wipeBtn.addEventListener('click', clearForm);
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    clearError();
-    const call = callInput.value.trim().toUpperCase();
-    if (!call) { showError('Enter a callsign.'); return; }
-    if (!_activeBand && !_bands.length) {
-      // loadBands()'s initial /api/plugin_meta fetch may not have resolved
   // ── Live callsign hint: country / zone / needed-mult / dupe + Super Check
   // Partial, from /api/lookup. Pre-fills the received exchange with the
   // looked-up CQ zone for zone-scored contests (only while the operator
@@ -549,24 +549,31 @@
     if (sp) { callInput.value = sp.dataset.call; callInput.focus(); doLookup(); }
   });
 
-      // yet if the operator started typing immediately after the tab
+  function clearForm() {
     _exchAuto = false; renderHint({}, '');
+    clearError();
+    callInput.value = ''; exchInput.value = '';
+    if (_editingQsoId) cancelEdit();
+    callInput.focus();
+  }
+  wipeBtn.addEventListener('click', clearForm);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearError();
+    const call = callInput.value.trim().toUpperCase();
+    if (!call) { showError('Enter a callsign.'); return; }
+    if (!_activeBand && !_bands.length) {
+      // loadBands()'s initial /api/plugin_meta fetch may not have resolved
+      // yet if the operator started typing immediately after the tab
       // appeared — give it one more chance before actually failing.
       await loadBands();
     }
     if (!_activeBand && _bands.length) { _activeBand = _bands[0]; renderBands(); }
     if (!_activeBand) { showError('Pick a band.'); return; }
     const editing = !!_editingQsoId;
-    let mode;
-    if (editing) {
-      mode = _editingMode || 'SSB';
-    } else {
-      const snap = window.VKA.lastSnap();
-      const r = window.VKA.formatRadio(snap?.radio_info?.own);
-      mode = r?.modeStr || _contestMode || 'SSB';
-    }
     const body = {
-      call, band: _activeBand, mode,
+      call, band: _activeBand, mode: _activeMode || 'SSB',
       rst_sent: rstSent.value.trim(), rst_rcvd: rstRcvd.value.trim(),
       exchange: exchInput.value.trim(), is_run: !!runRadio.checked,
     };
@@ -593,21 +600,13 @@
     }
   });
 
-  // F12 "Wipe" always works; Escape wipes the form AND (best-effort) stops
-  // any in-progress CW send. F1-F11 mirror a click on their matching macro
-  // button — real contest operators drive these from the keyboard, not the
-  // mouse — but only while the Log Entry tab is actually the active one, so
-  // this doesn't hijack function keys elsewhere in the app. Enter already
-  // submits natively via the form.
+  // F12 "Wipe" always works. Escape wipes the form, or just closes the
+  // right-click context menu if one's open. Enter already submits
+  // natively via the form.
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && _ctxMenuEl) { closeCtxMenu(); return; }
     if (e.key === 'F12') { e.preventDefault(); clearForm(); }
-    else if (e.key === 'Escape') { clearForm(); if (stopBtn && !stopBtn.disabled) stopBtn.click(); }
-    else if (/^F(?:[1-9]|1[01])$/.test(e.key)) {
-      if (!document.getElementById('tab-logentry')?.classList.contains('active')) return;
-      const btn = fkeysWrap.querySelector(`button[data-fkey="${e.key.slice(1)}"]`);
-      if (btn && !btn.disabled) { e.preventDefault(); btn.click(); }
-    }
+    else if (e.key === 'Escape') { clearForm(); }
   });
 
   function updateHeader(snap) {
@@ -617,8 +616,11 @@
       radioBandEl.textContent = r.band;
       radioBandEl.style.background = r.bandColor ? r.bandColor + '55' : '';
       radioFreqEl.textContent = r.freqStr + ' MHz';
-      radioModeEl.textContent = r.modeStr || '—';
       _liveMode = (r.modeStr || '').toUpperCase();
+      // A live rig reading always wins over whatever was last manually
+      // picked — the whole point of reading it is to track what the
+      // operator is actually doing on the radio right now.
+      if (_liveMode && MODE_CHOICES.includes(_liveMode)) _activeMode = _liveMode;
       if (own?.freq_hz && r.band) _lastFreqByBand[r.band] = own.freq_hz;
       // Don't clobber the field while the operator is mid-edit.
       if (document.activeElement !== freqInputEl) freqInputEl.value = r.freqStr;
@@ -626,17 +628,20 @@
         _activeBand = r.band; renderBands(); _radioBandSeen = true;
       }
     } else {
-      radioBandEl.textContent = '—'; radioFreqEl.textContent = '—'; radioModeEl.textContent = '—';
+      radioBandEl.textContent = '—'; radioFreqEl.textContent = '—';
       _liveMode = '';
       if (document.activeElement !== freqInputEl) freqInputEl.value = '';
     }
+    // No rig connected at all and nothing manually picked yet — fall back
+    // to the contest's own mode (e.g. Oceania DX CW) rather than leaving
+    // the selector with nothing highlighted.
+    if (!_activeMode) _activeMode = _contestMode || 'SSB';
     renderModeButtons();
     renderFreqField();
-    updateFkeyEnablement();
     applyRstDefaults();
   }
 
-  window.addEventListener('vka:snapshot', e => { updateHeader(e.detail); loadRecent(); });
+  window.addEventListener('vka:snapshot', e => { updateHeader(e.detail); loadRecent(); updateSummary(e.detail); });
   window.addEventListener('vka:qsos_changed', loadRecent);
 
   // Unlike the old dedicated popout window (where this was the only content
@@ -647,5 +652,8 @@
     if (e.detail.tab === 'logentry') callInput.focus();
   });
 
-  loadBands().then(() => { updateHeader(window.VKA.lastSnap()); loadRecent(); refreshRigStatus(); });
+  loadBands().then(() => {
+    updateHeader(window.VKA.lastSnap()); loadRecent(); refreshRigStatus();
+    updateSummary(window.VKA.lastSnap());
+  });
 })();
