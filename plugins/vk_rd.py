@@ -144,6 +144,8 @@ class VKRDPlugin(ContestPlugin):
     mode (CW/RTTY doubles), and time (night bonus × 3).
     """
 
+    vk_prefix_default = True
+
     def identify(self, contest_name: str) -> bool:
         # Normalized (letters/digits only) rather than checking "VK_RD" as
         # a literal substring — N1MM's own contest-name strings aren't

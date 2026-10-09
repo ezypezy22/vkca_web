@@ -124,6 +124,8 @@ class VKTransTasmanPlugin(ContestPlugin):
     Score = total QSO points (VK/ZL-only) × total prefix-band multipliers.
     """
 
+    vk_prefix_default = True
+
     def identify(self, contest_name: str) -> bool:
         cn = contest_name.upper()
         return "VKTT" in cn or "TRANS-TASMAN" in cn or "TRANSTASMAN" in cn

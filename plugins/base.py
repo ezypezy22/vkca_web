@@ -197,6 +197,9 @@ class ContestPlugin(ABC):
     # for every contest, showing e.g. "Next Block In 2h 27m" identically
     # for every QSO regardless of when THAT specific contact happened,
     # which is meaningless for a rolling per-contact rule like RD's.
+    # Log Entry bar: whether the "VK" call-prefix checkbox starts ticked (VK
+    # domestic contests, where the operator types just "2YI" for VK2YI).
+    vk_prefix_default: bool = False
     rework_window_hours: Optional[float] = None
 
     # The CONTEST: identifier a Cabrillo submission for this contest

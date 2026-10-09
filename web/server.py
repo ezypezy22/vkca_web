@@ -1758,13 +1758,13 @@ async def api_new_log(body: dict):
 
 
 def _add_qso(call: str, band: str, mode: str, rst_sent: str, rst_rcvd: str, exchange: str,
-              is_run: bool = False) -> dict:
+              is_run: bool = False, comment: str = "") -> dict:
     with STATE._lock:
         cl = STATE.contest_log
         if not cl or not STATE.is_standalone_log:
             return {"error": "Logging is only available for a log created via + New Log."}
         try:
-            new_id, sent_nr = cl.add_qso(call, band, mode, rst_sent, rst_rcvd, exchange, is_run)
+            new_id, sent_nr = cl.add_qso(call, band, mode, rst_sent, rst_rcvd, exchange, is_run, comment)
         except Exception as e:
             log.exception("add_qso failed")
             return {"error": str(e)}
@@ -1835,7 +1835,7 @@ async def api_qsos_add(body: dict):
     result = await asyncio.get_event_loop().run_in_executor(
         None, _add_qso, call, band, mode,
         body.get("rst_sent") or "", body.get("rst_rcvd") or "", body.get("exchange") or "",
-        bool(body.get("is_run")))
+        bool(body.get("is_run")), (body.get("comment") or "").strip())
     if "error" in result:
         return JSONResponse(result, status_code=400)
     await _broadcast(STATE.snapshot())
@@ -1843,7 +1843,7 @@ async def api_qsos_add(body: dict):
 
 
 def _update_qso(qso_id: str, call: str, band: str, mode: str, rst_sent: str, rst_rcvd: str,
-                 exchange: str, is_run: bool = False) -> dict:
+                 exchange: str, is_run: bool = False, comment: str = "") -> dict:
     with STATE._lock:
         cl = STATE.contest_log
         if not cl or not STATE.is_standalone_log:
@@ -1851,7 +1851,7 @@ def _update_qso(qso_id: str, call: str, band: str, mode: str, rst_sent: str, rst
         if not any(q.get("qso_id") == qso_id for q in cl.qsos):
             return {"error": "QSO not found."}
         try:
-            cl.update_qso(qso_id, call, band, mode, rst_sent, rst_rcvd, exchange, is_run)
+            cl.update_qso(qso_id, call, band, mode, rst_sent, rst_rcvd, exchange, is_run, comment)
         except Exception as e:
             log.exception("update_qso failed")
             return {"error": str(e)}
@@ -1881,7 +1881,7 @@ async def api_qsos_update(body: dict):
     result = await asyncio.get_event_loop().run_in_executor(
         None, _update_qso, qso_id, call, band, mode,
         body.get("rst_sent") or "", body.get("rst_rcvd") or "", body.get("exchange") or "",
-        bool(body.get("is_run")))
+        bool(body.get("is_run")), (body.get("comment") or "").strip())
     if "error" in result:
         return JSONResponse(result, status_code=400)
     await _broadcast(STATE.snapshot())
@@ -3119,6 +3119,9 @@ async def api_plugin_meta():
         "is_standalone_log": STATE.is_standalone_log,
         "rigctld_connected": STATE.rigctld_conn is not None and STATE.rigctld_status is None,
         "contest_mode":     p.contest_mode(getattr(STATE.contest_log, "contest_name", "")),
+        # Log Entry bar: tick the "VK" call-prefix box by default (VK-domestic
+        # contests, where operators type just "2YI").
+        "vk_prefix_default": bool(getattr(p, "vk_prefix_default", False)),
     }
 
 

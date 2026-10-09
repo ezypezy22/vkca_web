@@ -350,7 +350,8 @@ class ContestLog:
         return pts, f
 
     def add_qso(self, call: str, band: str, mode: str, rst_sent: str,
-                rst_rcvd: str, exchange: str, is_run: bool = False) -> tuple:
+                rst_rcvd: str, exchange: str, is_run: bool = False,
+                comment: str = "") -> tuple:
         """
         Insert one new QSO into this (standalone-only, see the caller's own
         gate in web/server.py) log at the current time, and return
@@ -427,12 +428,13 @@ class ContestLog:
                     conn.execute(
                         f"""INSERT INTO DXLOG
                            (TS, Call, Band, Mode, SNT, RCV, Exchange1, ContestNR,
-                            Run1Run2, IsRunQSO, ContactType, Points, SentNr, ID{extra_cols})
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?{extra_qs})""",
+                            Run1Run2, IsRunQSO, ContactType, Points, SentNr, ID, Comment{extra_cols})
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?{extra_qs})""",
                         (ts.strftime("%Y-%m-%d %H:%M:%S"), call_u, band_mhz,
                          mode_u, rst_sent.strip(), rst_rcvd.strip(),
                          exchange.strip(), self.contest_nr, 1 if is_run else 0,
-                         contact_type, pts, sent_nr, new_id, *extra.values()),
+                         contact_type, pts, sent_nr, new_id, (comment or "").strip(),
+                         *extra.values()),
                     )
                     break
                 except sqlite3.IntegrityError:
@@ -443,7 +445,8 @@ class ContestLog:
         return new_id, sent_nr
 
     def update_qso(self, qso_id: str, call: str, band: str, mode: str, rst_sent: str,
-                    rst_rcvd: str, exchange: str, is_run: bool = False) -> None:
+                    rst_rcvd: str, exchange: str, is_run: bool = False,
+                    comment: str = "") -> None:
         """
         Edit an existing standalone-logged QSO in place (Call/Band/Mode/
         RST/Exchange/Run flag) — same connect/execute/commit/close pattern
@@ -482,10 +485,10 @@ class ContestLog:
         try:
             conn.execute(
                 f"""UPDATE DXLOG SET Call=?, Band=?, Mode=?, SNT=?, RCV=?, Exchange1=?,
-                   IsRunQSO=?, ContactType=?, Points=?{extra_set} WHERE ID=?""",
+                   IsRunQSO=?, ContactType=?, Points=?, Comment=?{extra_set} WHERE ID=?""",
                 (call_u, band_mhz, mode_u, rst_sent.strip(), rst_rcvd.strip(),
                  exchange.strip(), 1 if is_run else 0, contact_type, pts,
-                 *extra.values(), qso_id),
+                 (comment or "").strip(), *extra.values(), qso_id),
             )
             conn.commit()
         finally:
@@ -639,6 +642,7 @@ class ContestLog:
         # N1MM log usually has it too) — surfaced read-only for the Log
         # Entry tab's worked-list "Sent#" column.
         sent_nr_col  = col(["SentNr","sentnr","SENTNR"])
+        comment_col  = col(["Comment","comment"])
 
         logging.info(
             "Using columns: call=%s band=%s freq=%s mode=%s time=%s "
@@ -650,7 +654,7 @@ class ContestLog:
         sel_cols = [call_col, band_col, freq_col, mode_col, time_col,
                     mult_col, zone_col, m1_col, m2_col,
                     dupe_col, pts_col, id_col, op_col, continent_col,
-                    rst_sent_col, rst_rcvd_col, sent_nr_col]
+                    rst_sent_col, rst_rcvd_col, sent_nr_col, comment_col]
         sel_cols += sect_pref_cols
         sel_cols = [cn for cn in sel_cols if cn]
         seen = set(); sel_cols_dedup = []
@@ -961,6 +965,7 @@ class ContestLog:
                     "rst_sent":    rst_sent,
                     "rst_rcvd":    rst_rcvd,
                     "sent_nr":     sent_nr,
+                    "comment":     str(d.get(comment_col) or "").strip() if comment_col else "",
                     "freq":        raw_freq,
                     "_table":      target,
                     # Populated asynchronously by web/server.py's QRZ lookup
