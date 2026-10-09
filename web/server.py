@@ -71,7 +71,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
 # Direct import — no tkinter mocking needed
-from contest_log import ContestLog, cqz_from_call
+from contest_log import ContestLog, cqz_from_call, is_valid_callsign
 from plugins.loader import plugin_for, get_all_plugins
 from plugins.generic import GenericPlugin
 import cosb
@@ -1831,6 +1831,8 @@ async def api_qsos_add(body: dict):
     mode = (body.get("mode") or "").strip()
     if not call or not band or not mode:
         return JSONResponse({"error": "Call, band, and mode are required."}, status_code=400)
+    if not is_valid_callsign(call):
+        return JSONResponse({"error": f"'{call}' is not a valid callsign."}, status_code=400)
 
     result = await asyncio.get_event_loop().run_in_executor(
         None, _add_qso, call, band, mode,
@@ -1877,6 +1879,8 @@ async def api_qsos_update(body: dict):
         return JSONResponse({"error": "No qso_id supplied."}, status_code=400)
     if not call or not band or not mode:
         return JSONResponse({"error": "Call, band, and mode are required."}, status_code=400)
+    if not is_valid_callsign(call):
+        return JSONResponse({"error": f"'{call}' is not a valid callsign."}, status_code=400)
 
     result = await asyncio.get_event_loop().run_in_executor(
         None, _update_qso, qso_id, call, band, mode,
@@ -3119,6 +3123,9 @@ async def api_plugin_meta():
         "is_standalone_log": STATE.is_standalone_log,
         "rigctld_connected": STATE.rigctld_conn is not None and STATE.rigctld_status is None,
         "contest_mode":     p.contest_mode(getattr(STATE.contest_log, "contest_name", "")),
+        # False for contests with no operating blocks (CQ WW, WPX, ...): the UI
+        # hides the Block / "Next Block In" columns and "Best session".
+        "uses_block_structure": bool(getattr(p, "uses_block_structure", lambda: True)()),
     }
 
 

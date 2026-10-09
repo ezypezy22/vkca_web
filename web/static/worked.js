@@ -48,6 +48,7 @@
   const selectAllChk  = document.getElementById('worked-select-all');
   const exportCsvBtn  = document.getElementById('worked-export-csv-btn');
   const exportAdifBtn = document.getElementById('worked-export-adif-btn');
+  let _noBlocks = false;   // plugin has no operating blocks (e.g. CQ WW): hide Block / Next Block In
   const thBlock       = document.getElementById('worked-th-block');
   const thCountdown   = document.getElementById('worked-th-countdown');
   const countdownHint = document.getElementById('worked-countdown-hint');
@@ -79,8 +80,11 @@
       const res  = await fetch('/api/plugin_meta');
       const meta = await res.json();
       _reworkWindowHours = meta.loaded ? (meta.rework_window_hours || null) : null;
-    } catch { _reworkWindowHours = null; }
-    if (thBlock)     thBlock.style.display = _reworkWindowHours ? 'none' : '';
+      _noBlocks = !!meta.loaded && meta.uses_block_structure === false && !_reworkWindowHours;
+    } catch { _reworkWindowHours = null; _noBlocks = false; }
+    if (thBlock)     thBlock.style.display = (_reworkWindowHours || _noBlocks) ? 'none' : '';
+    if (thCountdown) thCountdown.style.display = _noBlocks ? 'none' : '';
+    if (countdownHint) countdownHint.style.display = _noBlocks ? 'none' : '';
     if (thCountdown) thCountdown.textContent = _reworkWindowHours ? 'Time Left to Work' : 'Next Block In';
     if (countdownHint) countdownHint.textContent = _reworkWindowHours
       ? `— Time Left to Work = when this station's own ${_reworkWindowHours}h rework window ends`
@@ -254,7 +258,7 @@
     // Matches thBlock's own display:none toggle in readPluginMeta() — kept
     // as a hidden <td> rather than omitted entirely, so every row still
     // has the same cell count/positions as the header regardless of mode.
-    const blockTdStyle = _reworkWindowHours ? 'display:none' : 'color:var(--accent3)';
+    const blockTdStyle = (_reworkWindowHours || _noBlocks) ? 'display:none' : 'color:var(--accent3)';
 
     tbody.innerHTML = '';
     const frag = document.createDocumentFragment();
@@ -277,7 +281,7 @@
         <td>${renderQrzCell(q.qrz_state, q.qrz_status)}</td>
         <td style="color:var(--muted);font-size:0.85em">${fmt(q.time)}</td>
         <td style="${blockTdStyle}">${q._countdownLabel || '—'}</td>
-        <td class="worked-countdown" data-block-end="${endIso}" style="font-size:0.85em">${q._countdownAt ? fmtRemaining(q._countdownAt - Date.now()) : '—'}</td>
+        <td class="worked-countdown" data-block-end="${endIso}" style="font-size:0.85em${_noBlocks ? ';display:none' : ''}">${q._countdownAt ? fmtRemaining(q._countdownAt - Date.now()) : '—'}</td>
         <td style="color:var(--red);font-size:0.85em">${isDupe}</td>`;
       frag.appendChild(tr);
     });

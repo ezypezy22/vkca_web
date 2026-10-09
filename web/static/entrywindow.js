@@ -41,6 +41,15 @@
 
   const effectiveCall = () => callInput.value.trim().toUpperCase();
 
+  // Same shape as contest_log.is_valid_callsign() (the server re-checks it).
+  const CALL_RE = /^(?:[A-Z0-9]{1,4}\/)?[A-Z0-9]{1,3}[0-9][A-Z0-9]{0,8}[A-Z](?:\/[A-Z0-9]{1,6})?$/;
+
+  // Only callsign characters can be typed or pasted into the Call field.
+  callInput.addEventListener('input', () => {
+    const clean = callInput.value.toUpperCase().replace(/[^A-Z0-9/]/g, '');
+    if (clean !== callInput.value) callInput.value = clean;
+  });
+
   // Live UTC clock (the VKCL Date/Time box).
   function tickClock() {
     const n = new Date();
@@ -235,6 +244,7 @@
       const cfg  = await cfgRes.json();
       _rigctldConnected = !!meta.rigctld_connected;
       _reworkWindowHours = meta.loaded ? (meta.rework_window_hours || null) : null;
+      _noBlocks = !!meta.loaded && meta.uses_block_structure === false && !_reworkWindowHours;
       _bandDefaults = cfg.band_defaults || {};
       _contestMode = meta.loaded ? (meta.contest_mode || null) : null;
     } catch (e) {
@@ -261,6 +271,7 @@
   // full Worked tab does. ──────────────────────────────────────────────────
   const thCountdownEl = document.getElementById('le-th-countdown');
   let _reworkWindowHours = null;
+  let _noBlocks = false;   // no operating blocks (e.g. CQ WW): hide the Next Block In column
   let _contestStart = null, _durationMins = null, _labelPrefix = 'B';
 
   function fmtRemaining(ms) {
@@ -379,7 +390,7 @@
         <td>${q.sent_nr != null ? String(q.sent_nr).padStart(3, '0') : '—'}</td>
         <td>${window.VKA.escapeHtml(q.exchange || q.mult1 || '—')}</td>
         <td>${fmtTime(q.time)}</td>
-        <td class="ew-countdown" data-at="${q._countdownAt || ''}">${q._countdownAt ? fmtRemaining(q._countdownAt - Date.now()) : '—'}</td>
+        <td class="ew-countdown" data-at="${q._countdownAt || ''}"${_noBlocks ? ' style="display:none"' : ''}>${q._countdownAt ? fmtRemaining(q._countdownAt - Date.now()) : '—'}</td>
         <td class="le-actions">
           <button type="button" class="le-row-edit" data-qid="${q.qso_id || ''}" title="Edit this QSO">✎</button>
           <button type="button" class="le-row-del" data-qid="${q.qso_id || ''}" title="Delete this QSO">✕</button>
@@ -398,7 +409,10 @@
       if (!recentTbody) return;
       readSessionConfig();
       annotateCountdowns(qsos);
-      if (thCountdownEl) thCountdownEl.textContent = _reworkWindowHours ? 'Time Left to Work' : 'Next Block In';
+      if (thCountdownEl) {
+        thCountdownEl.textContent = _reworkWindowHours ? 'Time Left to Work' : 'Next Block In';
+        thCountdownEl.style.display = _noBlocks ? 'none' : '';
+      }
       _lastQsos = qsos;
       renderRecentRows();
     } catch (e) { console.warn('entrywindow: loadRecent failed:', e); }
@@ -519,6 +533,8 @@
     if (!hintEl) return;
     if (!call) {
       hintEl.innerHTML = '<span class="ew-ph">Type a callsign to see its country, zones and what it is worth.</span>';
+    } else if (!CALL_RE.test(call)) {
+      hintEl.innerHTML = `<span class="ew-call">${window.VKA.escapeHtml(call)}</span><span class="ew-tag">not a valid callsign yet</span>`;
     } else if (!d.found) {
       hintEl.innerHTML = `<span class="ew-call">${window.VKA.escapeHtml(call)}</span><span class="ew-tag">unknown prefix</span>`;
     } else {
@@ -574,6 +590,7 @@
     clearError();
     const call = effectiveCall();
     if (!call) { showError('Enter a callsign.'); return; }
+    if (!CALL_RE.test(call)) { showError(`"${call}" is not a valid callsign.`); callInput.focus(); return; }
     if (!_activeBand && !_bands.length) {
       // loadBands()'s initial /api/plugin_meta fetch may not have resolved
       // yet if the operator started typing immediately after the tab

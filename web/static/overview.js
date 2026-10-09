@@ -1262,8 +1262,8 @@
       <span class="sess-stat">Rate: <b style="color:${T.accent}">${pb?.current_hour_rate||0}/hr</b></span>
       <span class="sess-sep">|</span>
       <span class="sess-stat">Best hr: <b style="color:${T.accent3}">${pb?.best_hour_rate||0}</b></span>
-      <span class="sess-sep">|</span>
-      <span class="sess-stat">Best session: <b style="color:${T.accent2}">${pb?.best_session_qsos||0} QSOs</b></span>`;
+      ${snap?._uses_block_structure===false ? '' : `<span class="sess-sep">|</span>
+      <span class="sess-stat">Best session: <b style="color:${T.accent2}">${pb?.best_session_qsos||0} QSOs</b></span>`}`;
   }
 
 

@@ -88,6 +88,19 @@ PREFIX_TO_CQZ = {
 }
 
 
+# A plausible amateur callsign: optional "prefix/", then prefix letters/digits,
+# a digit, a suffix ending in a letter, optional "/suffix" (P, MM, 7, QRP...).
+# Checked against 13,000+ calls from real logs — only typos and bare prefixes
+# (VK5, G1, M0KPD/) fail; special-event calls with long suffixes (5W1STAYSAFE,
+# 8A100IARU) pass. Format only: it can't know whether the station exists.
+_CALLSIGN_RE = re.compile(
+    r"^(?:[A-Z0-9]{1,4}/)?[A-Z0-9]{1,3}[0-9][A-Z0-9]{0,8}[A-Z](?:/[A-Z0-9]{1,6})?$")
+
+
+def is_valid_callsign(call) -> bool:
+    return bool(_CALLSIGN_RE.match((call or "").strip().upper()))
+
+
 def cqz_from_call(call):
     call = call.upper().strip()
     # Prefer the real cty.dat lookup (VK6/VK8 = zone 29, other VK = 30, etc.);
@@ -391,6 +404,8 @@ class ContestLog:
         heuristic, which a standalone-logged QSO's always-0 Points would
         otherwise trip for every QSO, dupe or not.
         """
+        if not is_valid_callsign(call):
+            raise ValueError(f"'{call.strip()}' is not a valid callsign.")
         new_id = uuid.uuid4().hex
         call_u = call.strip().upper()
         band_u = band.strip().upper()
@@ -458,6 +473,8 @@ class ContestLog:
         Caller reloads afterward (mirrors add_qso()'s own "no second,
         parallel dupe-checking implementation" reasoning).
         """
+        if not is_valid_callsign(call):
+            raise ValueError(f"'{call.strip()}' is not a valid callsign.")
         call_u = call.strip().upper()
         band_u = band.strip().upper()
         mode_u = mode.strip().upper()
@@ -1389,6 +1406,10 @@ class ContestLog:
             now = datetime.now(timezone.utc).replace(tzinfo=None)
         total_mins    = cfg.num_sessions * cfg.duration_mins
         elapsed_total = (now - cs).total_seconds() / 60
+        # A contest with no operating blocks (CQ WW, WPX, ...) is one single
+        # session: its label, elapsed/remaining and % describe the WHOLE
+        # contest, not the internal 12 h chunks the rate machinery uses.
+        blocks = getattr(self.plugin, "uses_block_structure", lambda: True)()
 
         if elapsed_total < 0:
             mins_to_start = abs(elapsed_total)
@@ -1411,7 +1432,8 @@ class ContestLog:
             return {
                 "state":           "over",
                 "session_nr":      cfg.num_sessions,
-                "session_label":   f"{cfg.label_prefix}{cfg.num_sessions} (ended)",
+                "session_label":   (f"{cfg.label_prefix}{cfg.num_sessions} (ended)"
+                                    if blocks else "Contest ended"),
                 "elapsed_mins":    total_mins,
                 "remaining_mins":  0,
                 "pct_elapsed":     100,
@@ -1423,18 +1445,29 @@ class ContestLog:
                 "label_prefix":    cfg.label_prefix,
             }
 
-        sn           = int(elapsed_total // cfg.duration_mins)
-        sess_elapsed = elapsed_total - sn * cfg.duration_mins
-        sess_remain  = max(0, cfg.duration_mins - sess_elapsed)
+        if blocks:
+            sn           = int(elapsed_total // cfg.duration_mins)
+            sess_elapsed = elapsed_total - sn * cfg.duration_mins
+            sess_remain  = max(0, cfg.duration_mins - sess_elapsed)
+            sess_label   = self.session_label(sn, cs)
+            sess_len     = cfg.duration_mins
+            next_nr      = sn + 2 if sn + 1 < cfg.num_sessions else None
+        else:
+            sn           = 0
+            sess_elapsed = elapsed_total
+            sess_remain  = max(0, total_mins - elapsed_total)
+            sess_label   = "Contest"
+            sess_len     = total_mins
+            next_nr      = None
         return {
             "state":           "live",
             "session_nr":      sn + 1,
-            "session_label":   self.session_label(sn, cs),
+            "session_label":   sess_label,
             "elapsed_mins":    sess_elapsed,
             "remaining_mins":  sess_remain,
-            "pct_elapsed":     sess_elapsed / cfg.duration_mins * 100,
+            "pct_elapsed":     sess_elapsed / sess_len * 100 if sess_len else 0,
             "contest_over":    False,
-            "next_session_nr": sn + 2 if sn + 1 < cfg.num_sessions else None,
+            "next_session_nr": next_nr,
             "start_dt":        cs,
             # ── Whole-contest progress (used by plugins without a block
             #    structure, e.g. CQWW's single 48h session) ────────────────
@@ -1442,7 +1475,7 @@ class ContestLog:
             "total_remaining_mins": max(0, total_mins - elapsed_total),
             "total_pct_elapsed":    elapsed_total / total_mins * 100 if total_mins else 0,
             "end_dt":               cs + timedelta(minutes=total_mins),
-            "duration_mins":        cfg.duration_mins,
+            "duration_mins":        sess_len,
             "label_prefix":         cfg.label_prefix,
         }
 
@@ -1842,6 +1875,7 @@ class ContestLog:
             "region_heat":     plugin.region_heat(qsos),
             "personal_bests":  personal_bests,
             "session_status":  self.session_status(now),
+            "_uses_block_structure": bool(getattr(self.plugin, "uses_block_structure", lambda: True)()),
             "last_worked":     sorted(valid, key=lambda q: q["time"],
                                       reverse=True)[:5],
             "sparklines":      sparklines,
