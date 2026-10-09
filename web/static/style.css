@@ -1530,3 +1530,5 @@ body:has(#tab-map.active) #content {
   #tab-report { display: flex !important; }
   #tab-report .panel-box { break-inside: avoid; }
 }
+/* Fixed-size main window: no maximize button, no edge-drag resize strips. */
+#btn-win-maximize,.resize-handle{display:none !important;}

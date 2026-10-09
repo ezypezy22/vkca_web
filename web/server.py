@@ -4478,6 +4478,11 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
         from webview.window import FixPoint
 
         _MIN_W, _MIN_H = 900, 600   # keep in sync with min_size below
+        # The main window is a fixed size: it can't be resized or maximized
+        # (a full-screen window just leaves a lot of empty space). Change
+        # these two numbers to change the size. Clamped to the primary
+        # screen below so it never opens bigger than a small display.
+        _LOCKED_W, _LOCKED_H = 1400, 860
 
         # ── Restore window geometry from the previous session ────────────────
         # Saved by _on_closing() below into the same small JSON store used for
@@ -4516,12 +4521,17 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
             log.info("Discarding saved window geometry %sx%s — matches a monitor's full bounds", _saved_w, _saved_h)
             _saved_geom = {k: v for k, v in _saved_geom.items() if k not in ("width", "height")}
 
-        _init_w = int(_saved_geom["width"]) if _valid_dim(_saved_geom.get("width"), _MIN_W, 10000) else 1400
-        _init_h = int(_saved_geom["height"]) if _valid_dim(_saved_geom.get("height"), _MIN_H, 10000) else 860
+        _init_w, _init_h = _LOCKED_W, _LOCKED_H
+        try:
+            _scr = webview.screens[0]
+            _init_w = min(_init_w, int(_scr.width) - 40)
+            _init_h = min(_init_h, int(_scr.height) - 80)
+        except Exception:
+            pass
         _init_x = _saved_geom.get("x")
         _init_y = _saved_geom.get("y")
         _has_init_pos = _valid_dim(_init_x, -100, 10000) and _valid_dim(_init_y, -100, 10000)
-        _initial_maximized = bool(_saved_geom.get("maximized"))
+        _initial_maximized = False   # fixed-size window: never starts (or stays) maximized
 
         _maximized     = False   # starts windowed regardless of _initial_maximized — see _on_loaded below
         _pre_max_geom  = None    # (x, y, width, height) to restore back to
@@ -4533,15 +4543,11 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
             process exits."""
             try:
                 def _mutate(settings):
-                    if _maximized and _pre_max_geom:
-                        x, y, w, h = _pre_max_geom
-                        settings["window_geometry"] = {"x": x, "y": y, "width": w, "height": h, "maximized": True}
-                    else:
-                        settings["window_geometry"] = {
-                            "x": window.x, "y": window.y,
-                            "width": window.width, "height": window.height,
-                            "maximized": False,
-                        }
+                    # Size is fixed (see _LOCKED_W/_LOCKED_H) — only the
+                    # position is worth remembering.
+                    settings["window_geometry"] = {
+                        "x": window.x, "y": window.y, "maximized": False,
+                    }
                 _settings_read_modify_write(_mutate)
             except Exception:
                 log.exception("Failed to save window geometry")
@@ -4698,51 +4704,9 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 return _maximized
 
             def toggle_maximize(self):
-                nonlocal _maximized, _pre_max_geom
-                if not _maximized:
-                    _pre_max_geom = (window.x, window.y, window.width, window.height)
-                    screen = _current_screen()
-                    work = getattr(screen, 'frame', None)
-                    if work is not None and hasattr(work, 'Width'):
-                        x, y, w, h = work.X, work.Y, work.Width, work.Height
-                    else:
-                        x, y, w, h = screen.x, screen.y, screen.width, screen.height
-                    if sys.platform.startswith("linux"):
-                        # Confirmed via vkca_errors.log on Cinnamon/Muffin:
-                        # gtk_window_is_maximized() stayed False the entire
-                        # time (before AND after calling native.unmaximize()),
-                        # so this was never a GTK/EWMH-tracked maximize state
-                        # to begin with — that ruled out the WM-auto-maximize
-                        # theory an earlier version of this code chased.
-                        # What actually happened: the window got permanently
-                        # wedged at the full-monitor size — every subsequent
-                        # "maximize" logged the *previous* maximize's size as
-                        # its pre_geom, meaning the resize-back never took
-                        # visual effect even once. That matches Muffin's
-                        # edge-tiling/snap-assist, which silently latches a
-                        # window once its edges exactly coincide with a
-                        # monitor's bounds on all four sides — a state
-                        # outside GTK's own maximize tracking entirely, so
-                        # nothing on the GTK side can detect or clear it.
-                        # Undershooting the target by a pixel keeps the
-                        # window from ever exactly touching the monitor
-                        # edges, avoiding that WM heuristic in the first
-                        # place — imperceptible on screen, but the window
-                        # stays a normal, freely resizable one.
-                        w -= 1
-                        h -= 1
-                    log.info("toggle_maximize: maximizing — pre_geom=%s target=%s", _pre_max_geom, (x, y, w, h))
-                    _reset_gravity()
-                    _move_resize_window(x, y, w, h)
-                    log.info("toggle_maximize: after move_resize — actual=%s", (window.x, window.y, window.width, window.height))
-                elif _pre_max_geom:
-                    x, y, w, h = _pre_max_geom
-                    log.info("toggle_maximize: restoring — target=%s", (x, y, w, h))
-                    _reset_gravity()
-                    _move_resize_window(x, y, w, h)
-                    log.info("toggle_maximize: after move_resize — actual=%s", (window.x, window.y, window.width, window.height))
-                _maximized = not _maximized
-                return _maximized
+                # Fixed-size window: maximize is disabled (the button is hidden
+                # too). Kept as a no-op so a stale frontend call is harmless.
+                return False
 
             def close(self):
                 # Deliberately does NOT call window.destroy(): on this
@@ -4783,13 +4747,9 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
                 # etc). FixPoint anchors the *opposite* side so e.g. dragging
                 # the left edge grows the window leftward instead of
                 # pywebview's default top-left-anchored growth.
-                nonlocal _maximized
-                _maximized = False
-                width  = max(_MIN_W, int(width))
-                height = max(_MIN_H, int(height))
-                horiz = FixPoint.EAST if 'w' in edge else FixPoint.WEST
-                vert  = FixPoint.SOUTH if 'n' in edge else FixPoint.NORTH
-                window.resize(width, height, horiz | vert)
+                # Fixed-size window: edge-drag resizing is disabled (the handles
+                # are hidden too). Kept as a no-op so a stale call is harmless.
+                return
 
             def get_position(self):
                 # Same one-shot-snapshot pattern as get_size(): the frontend
@@ -4839,6 +4799,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
             width=_init_w,
             height=_init_h,
             min_size=(900, 600),
+            resizable=False,
             background_color="#0d1117",
             frameless=True,
             easy_drag=False,
