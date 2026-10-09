@@ -80,6 +80,10 @@ datas += [(str(ROOT / 'plugins'), 'plugins')]
 # contest_log.py must be beside the exe
 datas += [(str(ROOT / 'contest_log.py'), '.')]
 
+# Callsign -> country/zone lookup + its data files (cty.dat, Super Check Partial).
+datas += [(str(ROOT / 'dxcc.py'), '.')]
+datas += [(str(ROOT / 'data'), 'data')]
+
 # Single canonical version file (see web/server.py's own VERSION read) —
 # must land at _MEIPASS root, same as contest_log.py above.
 datas += [(str(ROOT / 'VERSION'), '.')]

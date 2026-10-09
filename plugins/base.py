@@ -221,6 +221,18 @@ class ContestPlugin(ABC):
     def preferred_exchange_columns(self):
         return None
 
+    def standalone_qso_fields(self, call: str, band: str, mode: str, exchange: str,
+                              prior_qsos: list, my_call: str) -> dict:
+        """
+        Extra DXLOG column values (e.g. CountryPrefix, ZN, Continent, Points,
+        IsMultiplier1/2) for a QSO logged by this app's standalone logger, so
+        a country/zone-scored contest can score it the way N1MM would have.
+        prior_qsos are the already-loaded, earlier QSOs of this log. Not
+        called for a dupe (its points/mult flags stay 0). Default: none —
+        add_qso() then writes its neutral placeholder Points.
+        """
+        return {}
+
     # ── UI hints ──────────────────────────────────────────────────────────────
 
     def band_list(self) -> list:

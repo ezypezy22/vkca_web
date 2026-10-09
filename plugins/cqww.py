@@ -30,8 +30,12 @@ We show 4 × 12-hour blocks for a convenient overview.
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
+from datetime import date as date_, timedelta
 from typing import Optional
+
+from dxcc import get_dxcc
 
 from plugins.base import (
     ContestPlugin,
@@ -130,6 +134,77 @@ class CQWWPlugin(ContestPlugin):
     def display_name(self) -> str:
         return "CQ WW DX"
 
+    def picker_names(self) -> list:
+        # SSB (last full October weekend) and CW (last full November weekend)
+        # are separate 48 h events, so a new log has to say which.
+        return ["CQ WW DX SSB", "CQ WW DX CW"]
+
+    def contest_mode(self, contest_name: str) -> Optional[str]:
+        cn = (contest_name or "").upper()
+        if "CW" in cn:
+            return "CW"
+        if "SSB" in cn or "PHONE" in cn:
+            return "SSB"
+        return None
+
+    @staticmethod
+    def contest_saturday(year: int, contest_name: Optional[str] = None) -> date_:
+        """Rules: SSB = last full weekend of October, CW = last full weekend
+        of November (starts 00:00 UTC Saturday). A name with no recognisable
+        mode keeps the SSB date."""
+        month = 11 if "CW" in (contest_name or "").upper() else 10
+        d = date_(year, month, 1)
+        sat = d + timedelta(days=(5 - d.weekday()) % 7)
+        last_full = sat
+        while sat.month == month and (sat + timedelta(days=1)).month == month:
+            last_full = sat
+            sat += timedelta(weeks=1)
+        return last_full
+
+    # ── Standalone logging ────────────────────────────────────────────────────
+
+    _ZONE_RE = re.compile(r"(?<!\d)(\d{1,2})(?!\d)")
+
+    def standalone_qso_fields(self, call, band, mode, exchange, prior_qsos, my_call):
+        """Country/zone/continent + CQWW points and per-band mult flags, so a
+        QSO logged in this app scores like N1MM's own (IsMultiplier1 = new
+        zone on this band, IsMultiplier2 = new country on this band)."""
+        dx = get_dxcc()
+        ent = dx.lookup(call)
+        if not ent:
+            return {}
+        # The exchanged zone is authoritative (cty.dat can only give a
+        # country-wide default — e.g. every W is 5, but W6/W7 give 3);
+        # fall back to the lookup zone when none was typed.
+        zone = ent["cq"]
+        for m in self._ZONE_RE.finditer(exchange or ""):
+            if 1 <= int(m.group(1)) <= 40:
+                zone = int(m.group(1))
+                break
+        fields = {"CountryPrefix": ent["prefix"].upper(), "ZN": zone,
+                  "Continent": ent["cont"]}
+
+        me = dx.lookup(my_call)
+        if me:
+            if ent["prefix"] == me["prefix"]:
+                pts = 0
+            elif ent["cont"] != me["cont"]:
+                pts = 3
+            elif ent["cont"] == "NA":
+                pts = 2
+            else:
+                pts = 1
+            fields["Points"] = pts
+
+        band_u = (band or "").upper()
+        same_band = [q for q in prior_qsos
+                     if not q.get("dupe") and (q.get("band") or "").upper() == band_u]
+        cty = fields["CountryPrefix"]
+        fields["IsMultiplier2"] = 0 if any((q.get("mult1") or "").upper() == cty
+                                           for q in same_band) else 1
+        fields["IsMultiplier1"] = 0 if any(q.get("cqz") == zone for q in same_band) else 1
+        return fields
+
     # ── Session / block structure ─────────────────────────────────────────────
 
     def session_config(self) -> SessionConfig:
@@ -216,7 +291,7 @@ class CQWWPlugin(ContestPlugin):
             if q.get("dupe") and q.get("pts") == 0 and q.get("dupe_is_heuristic"):
                 # Check: is the worked station's continent the same as the op?
                 worked_zone      = q.get("cqz")
-                worked_continent = _continent_of_zone(worked_zone)
+                worked_continent = (q.get("continent") or "").upper() or _continent_of_zone(worked_zone)
                 if worked_continent and worked_continent == op_continent:
                     # Same continent + 0 pts → same-country rule.  Restore as valid.
                     q["dupe"] = 0
@@ -236,7 +311,7 @@ class CQWWPlugin(ContestPlugin):
             # using zone alone, so when N1MM has already stored 0 we trust it
             # rather than bumping to 1 (which inflates the score).
             worked_zone      = q.get("cqz")
-            worked_continent = _continent_of_zone(worked_zone)
+            worked_continent = (q.get("continent") or "").upper() or _continent_of_zone(worked_zone)
 
             if worked_continent == op_continent:
                 # N1MM stored 0 for a same-continent QSO — keep it as-is.
@@ -422,7 +497,14 @@ class CQWWPlugin(ContestPlugin):
         #
         # The loader's col() helper tries each candidate in order and returns the
         # first one that exists as a column in the target table.
-        return ["Mult1", "mult1", "WPXPrefix", "wpxprefix", "PFX", "pfx",
+        #
+        # CountryPrefix goes first: verified against a real N1MM CQWWSSB log
+        # (VK2YI 2025) it holds the DXCC prefix ("K", "FW", "HK" — 99 distinct
+        # across 956 QSOs), whereas WPXPrefix holds the WPX prefix ("KW7",
+        # "FW5" — 494 distinct), which inflated every country list/count that
+        # is derived from mult1 rather than from N1MM's mult flags.
+        return ["CountryPrefix", "countryprefix", "Mult1", "mult1",
+                "WPXPrefix", "wpxprefix", "PFX", "pfx",
                 "Exchange1", "exchange1"]
 
     # ── UI hints ──────────────────────────────────────────────────────────────

@@ -411,6 +411,15 @@ html.operator-hud-mode #operator-hud-close{display:block;}
 #ew-field-table input#ew-sent-nr-field{font-weight:bold;font-size:1.4em;text-align:center;
   color:var(--bg);background:var(--accent);border-color:var(--accent);cursor:default;}
 #ew-error{color:var(--red);font-size:0.85em;margin:-2px 0 6px;}
+.ew-hint{min-height:1.4em;margin:6px 0 2px;font-size:0.9em;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;}
+.ew-hint .ew-ent{font-weight:600;}
+.ew-hint .ew-tag{padding:1px 7px;border-radius:9px;font-size:0.85em;font-weight:600;background:var(--surface2,#2a2f3a);}
+.ew-hint .ew-tag.new{background:var(--green,#2e7d32);color:#fff;}
+.ew-hint .ew-tag.dupe{background:var(--red,#c62828);color:#fff;}
+.ew-scp{min-height:1.2em;font-size:0.8em;opacity:0.8;display:flex;flex-wrap:wrap;gap:2px 10px;margin-bottom:4px;}
+.ew-scp span{cursor:pointer;}
+.ew-scp span:hover{text-decoration:underline;}
+.ew-scp b{color:var(--accent,#64b5f6);}
 #ew-fkeys,#ew-actions{display:flex;flex-wrap:wrap;gap:6px;}
 #ew-fkeys{margin-top:10px;}
 #ew-actions{margin-top:10px;}

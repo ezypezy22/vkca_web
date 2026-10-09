@@ -1779,6 +1779,44 @@ async def api_new_log(body: dict):
     my_call               = (body.get("my_call") or "").strip()
     if not path:
         return JSONResponse({"error": "No path supplied"}, status_code=400)
+@app.get("/api/lookup")
+def api_lookup(call: str = "", band: str = ""):
+    """Log Entry form helper: country/zone/continent for a callsign, whether
+    it would be a dupe / new country / new zone on `band`, what it would be
+    worth, and Super Check Partial suggestions. Read-only."""
+    from dxcc import get_dxcc, scp_partial
+    call_u = (call or "").strip().upper()
+    band_u = (band or "").strip().upper()
+    out = {"call": call_u, "found": False, "scp": scp_partial(call_u, 12)}
+    if not call_u:
+        return out
+    ent = get_dxcc().lookup(call_u)
+    if ent:
+        out.update(found=True, country=ent["country"], prefix=ent["prefix"],
+                   cq=ent["cq"], itu=ent["itu"], cont=ent["cont"])
+    with STATE._lock:
+        cl = STATE.contest_log
+        if not cl:
+            return out
+        out["dupe"] = any(not q["dupe"] and q["call"] == call_u and q["band"] == band_u
+                          for q in cl.qsos) if band_u else False
+        if ent and band_u:
+            try:
+                f = cl.plugin.standalone_qso_fields(
+                    call_u, band_u, "", "", cl.qsos, cl.my_call or "") or {}
+            except Exception:
+                log.exception("lookup: standalone_qso_fields failed")
+                f = {}
+            if "IsMultiplier2" in f:
+                out["new_country"] = bool(f["IsMultiplier2"])
+            if "IsMultiplier1" in f:
+                out["new_zone"] = bool(f["IsMultiplier1"])
+            if "Points" in f:
+                out["points"] = f["Points"]
+        out["zone_scored"] = bool(cl.plugin.uses_cq_zone_scoring())
+    return out
+
+
     if not contest_display_name:
         return JSONResponse({"error": "No contest type selected"}, status_code=400)
     if not my_call:

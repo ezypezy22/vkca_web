@@ -79,7 +79,7 @@ VK_AREA_TO_STATE = {
     1: "ACT", 2: "NSW", 3: "VIC", 4: "QLD",
     5: "SA",  6: "WA",  7: "TAS", 8: "NT",
 }
-VK_AREA_TO_CQZ = {1:29, 2:29, 3:29, 4:30, 5:29, 6:29, 7:29, 8:29}
+VK_AREA_TO_CQZ = {1:30, 2:30, 3:30, 4:30, 5:30, 6:29, 7:30, 8:29}
 PREFIX_TO_CQZ = {
     "VK":29, "ZL":32, "JA":25, "W":5,  "K":5,  "N":5,  "AA":5,
     "VE":3,  "G":14,  "DL":14, "F":14, "I":15, "SP":15,
@@ -90,6 +90,15 @@ PREFIX_TO_CQZ = {
 
 def cqz_from_call(call):
     call = call.upper().strip()
+    # Prefer the real cty.dat lookup (VK6/VK8 = zone 29, other VK = 30, etc.);
+    # the small tables below are only a fallback if it can't be loaded.
+    try:
+        from dxcc import get_dxcc
+        ent = get_dxcc().lookup(call)
+        if ent:
+            return ent["cq"]
+    except Exception:
+        pass
     if call.startswith("VK"):
         m = re.search(r"VK(\d)", call)
         if m:
@@ -317,6 +326,29 @@ class ContestLog:
         finally:
             conn.close()
 
+    _STANDALONE_EXTRA_COLS = frozenset({
+        "CountryPrefix", "ZN", "Continent", "IsMultiplier1", "IsMultiplier2",
+        "WPXPrefix", "Sect", "Prec", "CK",
+    })
+
+    def _standalone_extra(self, call_u, band_u, mode_u, exchange, is_repeat, prior):
+        """Plugin-supplied DXLOG columns (country/zone/continent/points/mult
+        flags) for a standalone-logged QSO — see ContestPlugin.
+        standalone_qso_fields(). A dupe keeps 0 points and no mult flags."""
+        try:
+            f = self.plugin.standalone_qso_fields(
+                call_u, band_u, mode_u, exchange or "", prior, self.my_call or "") or {}
+        except Exception:
+            logging.exception("standalone_qso_fields failed for %s", call_u)
+            f = {}
+        pts = f.pop("Points", None)
+        if is_repeat:
+            pts = 0
+            f.pop("IsMultiplier1", None)
+            f.pop("IsMultiplier2", None)
+        f = {k: v for k, v in f.items() if k in self._STANDALONE_EXTRA_COLS}
+        return pts, f
+
     def add_qso(self, call: str, band: str, mode: str, rst_sent: str,
                 rst_rcvd: str, exchange: str, is_run: bool = False) -> tuple:
         """
@@ -374,6 +406,12 @@ class ContestLog:
         # real score (see the docstring above) — just enough to keep the
         # base loader's pts==0-implies-dupe heuristic from misflagging it.
         pts = 0 if is_repeat else 1
+        plugin_pts, extra = self._standalone_extra(
+            call_u, band_u, mode_u, exchange, is_repeat, self.qsos)
+        if plugin_pts is not None:
+            pts = plugin_pts
+        extra_cols = "".join(f", {k}" for k in extra)
+        extra_qs = ", ?" * len(extra)
         sent_nr = len(self.qsos) + 1
         band_mhz = _band_to_mhz(band)
         conn = sqlite3.connect(self.db_path)
@@ -387,14 +425,14 @@ class ContestLog:
             for _ in range(5):
                 try:
                     conn.execute(
-                        """INSERT INTO DXLOG
+                        f"""INSERT INTO DXLOG
                            (TS, Call, Band, Mode, SNT, RCV, Exchange1, ContestNR,
-                            Run1Run2, IsRunQSO, ContactType, Points, SentNr, ID)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)""",
+                            Run1Run2, IsRunQSO, ContactType, Points, SentNr, ID{extra_cols})
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?{extra_qs})""",
                         (ts.strftime("%Y-%m-%d %H:%M:%S"), call_u, band_mhz,
                          mode_u, rst_sent.strip(), rst_rcvd.strip(),
                          exchange.strip(), self.contest_nr, 1 if is_run else 0,
-                         contact_type, pts, sent_nr, new_id),
+                         contact_type, pts, sent_nr, new_id, *extra.values()),
                     )
                     break
                 except sqlite3.IntegrityError:
@@ -429,14 +467,25 @@ class ContestLog:
         )
         contact_type = "D" if is_repeat else ""
         pts = 0 if is_repeat else 1
+        # Mult flags are "new on this band" relative to what came BEFORE this
+        # QSO — later QSOs' flags are not re-derived by an edit.
+        this_t = next((q["time"] for q in self.qsos if q.get("qso_id") == qso_id), None)
+        prior = [q for q in self.qsos if q.get("qso_id") != qso_id
+                 and (this_t is None or q["time"] < this_t)]
+        plugin_pts, extra = self._standalone_extra(
+            call_u, band_u, mode_u, exchange, is_repeat, prior)
+        if plugin_pts is not None:
+            pts = plugin_pts
+        extra_set = "".join(f", {k}=?" for k in extra)
         band_mhz = _band_to_mhz(band)
         conn = sqlite3.connect(self.db_path)
         try:
             conn.execute(
-                """UPDATE DXLOG SET Call=?, Band=?, Mode=?, SNT=?, RCV=?, Exchange1=?,
-                   IsRunQSO=?, ContactType=?, Points=? WHERE ID=?""",
+                f"""UPDATE DXLOG SET Call=?, Band=?, Mode=?, SNT=?, RCV=?, Exchange1=?,
+                   IsRunQSO=?, ContactType=?, Points=?{extra_set} WHERE ID=?""",
                 (call_u, band_mhz, mode_u, rst_sent.strip(), rst_rcvd.strip(),
-                 exchange.strip(), 1 if is_run else 0, contact_type, pts, qso_id),
+                 exchange.strip(), 1 if is_run else 0, contact_type, pts,
+                 *extra.values(), qso_id),
             )
             conn.commit()
         finally:

@@ -493,7 +493,64 @@
     if (!call) { showError('Enter a callsign.'); return; }
     if (!_activeBand && !_bands.length) {
       // loadBands()'s initial /api/plugin_meta fetch may not have resolved
+  // ── Live callsign hint: country / zone / needed-mult / dupe + Super Check
+  // Partial, from /api/lookup. Pre-fills the received exchange with the
+  // looked-up CQ zone for zone-scored contests (only while the operator
+  // hasn't typed their own value — cty.dat can't know W6 is zone 3, so the
+  // operator's typed zone always wins). ──────────────────────────────────────
+  const hintEl = document.getElementById('ew-hint');
+  const scpEl  = document.getElementById('ew-scp');
+  let _lookupTimer = null, _lookupSeq = 0, _exchAuto = false;
+
+  function renderHint(d, call) {
+    if (!hintEl) return;
+    if (!call || !d.found) {
+      hintEl.innerHTML = call ? '<span class="ew-tag">unknown prefix</span>' : '';
+    } else {
+      const esc = window.VKA.escapeHtml;
+      let h = `<span class="ew-ent">${esc(d.country)}</span><span>${esc(d.cont)} · CQ ${d.cq} · ITU ${d.itu}</span>`;
+      if (d.dupe) h += '<span class="ew-tag dupe">DUPE</span>';
+      else {
+        if (d.new_country) h += '<span class="ew-tag new">NEW COUNTRY</span>';
+        if (d.new_zone)    h += '<span class="ew-tag new">NEW ZONE</span>';
+        if (d.points != null) h += `<span class="ew-tag">${d.points} pt${d.points === 1 ? '' : 's'}</span>`;
+      }
+      hintEl.innerHTML = h;
+    }
+    if (scpEl) {
+      const c = (call || '').toUpperCase();
+      scpEl.innerHTML = (d.scp || []).filter(x => x !== c).map(x => {
+        const i = x.indexOf(c);
+        const label = i >= 0 && c ? `${window.VKA.escapeHtml(x.slice(0, i))}<b>${window.VKA.escapeHtml(c)}</b>${window.VKA.escapeHtml(x.slice(i + c.length))}` : window.VKA.escapeHtml(x);
+        return `<span data-call="${window.VKA.escapeHtml(x)}">${label}</span>`;
+      }).join('');
+    }
+    if (d.found && d.zone_scored && !_editingQsoId && (_exchAuto || !exchInput.value.trim())) {
+      exchInput.value = String(d.cq);
+      _exchAuto = true;
+    }
+  }
+
+  async function doLookup() {
+    const call = callInput.value.trim().toUpperCase();
+    const seq = ++_lookupSeq;
+    if (call.length < 2) { renderHint({}, ''); if (_exchAuto) { exchInput.value = ''; _exchAuto = false; } return; }
+    try {
+      const res = await fetch(`/api/lookup?call=${encodeURIComponent(call)}&band=${encodeURIComponent(_activeBand || '')}`);
+      const d = await res.json();
+      if (seq === _lookupSeq) renderHint(d, call);
+    } catch (e) { /* hint is best-effort */ }
+  }
+  callInput.addEventListener('input', () => { clearTimeout(_lookupTimer); _lookupTimer = setTimeout(doLookup, 120); });
+  exchInput.addEventListener('input', () => { _exchAuto = false; });
+  bandsWrap.addEventListener('click', () => setTimeout(doLookup, 0));
+  scpEl?.addEventListener('click', e => {
+    const sp = e.target.closest('span[data-call]');
+    if (sp) { callInput.value = sp.dataset.call; callInput.focus(); doLookup(); }
+  });
+
       // yet if the operator started typing immediately after the tab
+    _exchAuto = false; renderHint({}, '');
       // appeared — give it one more chance before actually failing.
       await loadBands();
     }
@@ -522,7 +579,7 @@
       });
       const data = await res.json();
       if (!res.ok || data.error) { showError(data.error || (editing ? 'Failed to update QSO.' : 'Failed to log QSO.')); return; }
-      callInput.value = ''; exchInput.value = '';
+      callInput.value = ''; exchInput.value = ''; _exchAuto = false; renderHint({}, '');
       if (editing) cancelEdit();
       callInput.focus();
       window.VKA.invalidateQsosCache();
