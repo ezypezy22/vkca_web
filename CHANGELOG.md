@@ -1,5 +1,15 @@
 # Changelog
 
+## 26.10.8
+
+### Enhancements
+
+Log Entry tab reordered: Worked This Session on top, a slim Summary strip in the middle, and a larger entry window (bigger text, call field and band buttons) at the bottom
+
+### Bugfixes
+
+Fix the Log Entry band buttons and summary tiles staying empty when the log was created or loaded after the page started; they now rebuild whenever a log loads or the contest's lists change
+
 ## 26.10.7
 
 ### Enhancements
