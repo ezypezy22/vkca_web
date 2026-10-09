@@ -1,5 +1,13 @@
 # Changelog
 
+## 26.10.4
+
+### Enhancements
+
+Log Entry now uses a VKCL-style one-row entry bar: Recall Last, Clear, live UTC clock, Call Sign, Exch Sent (RST + serial), Exch Rcvd, Cmnt and Log QSO, with function-key hints under each control (F2 recall, F5-F8 field focus, Esc/F12 clear, Enter log)
+Add a "VK" call-prefix box, ticked by default for VK Shires, Remembrance Day and Trans-Tasman: a call typed starting with a digit (2YI) becomes VK2YI
+Add a comment field to the entry bar, stored with the QSO and reloaded when editing or recalling it; its checkbox keeps the comment after logging
+
 ## 26.10.3
 
 ### Enhancements
