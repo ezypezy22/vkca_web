@@ -1,5 +1,15 @@
 # Changelog
 
+## 26.10.9
+
+### Enhancements
+
+The main window is now a fixed size (1400x860, reduced to fit a small screen): it can no longer be resized or maximized, and the maximize button and edge-drag resize strips are gone. A previously saved size or maximized state is ignored; only the window position is remembered
+
+### Bugfixes
+
+Fix the Log Entry fields blending into the window background (invisible in the Light theme): they now have their own fill and a visible border in every theme
+
 ## 26.10.8
 
 ### Enhancements
