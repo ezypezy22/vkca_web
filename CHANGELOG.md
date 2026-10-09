@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.10.6
+
+### Bugfixes
+
+Stop pre-filling the Log Entry's received exchange with the looked-up CQ zone: it was only a country-wide default (e.g. 5 for every W), changed as the callsign was typed, and the received exchange is whatever the other station sends. The zone is still shown in the Station being worked card
+
 ## 26.10.5
 
 ### Enhancements
