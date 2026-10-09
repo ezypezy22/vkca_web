@@ -509,13 +509,11 @@
   });
 
   // ── Live callsign hint: country / zone / needed-mult / dupe + Super Check
-  // Partial, from /api/lookup. Pre-fills the received exchange with the
-  // looked-up CQ zone for zone-scored contests (only while the operator
-  // hasn't typed their own value — cty.dat can't know W6 is zone 3, so the
-  // operator's typed zone always wins). ──────────────────────────────────────
+  // Partial, from /api/lookup. Display only — it never fills in the received
+  // exchange, which is whatever the other station sends. ─────────────────────
   const hintEl = document.getElementById('ew-hint');
   const scpEl  = document.getElementById('ew-scp');
-  let _lookupTimer = null, _lookupSeq = 0, _exchAuto = false;
+  let _lookupTimer = null, _lookupSeq = 0;
 
   function renderHint(d, call) {
     if (!hintEl) return;
@@ -542,16 +540,12 @@
         return `<span data-call="${window.VKA.escapeHtml(x)}">${label}</span>`;
       }).join('');
     }
-    if (d.found && d.zone_scored && !_editingQsoId && (_exchAuto || !exchInput.value.trim())) {
-      exchInput.value = String(d.cq);
-      _exchAuto = true;
-    }
   }
 
   async function doLookup() {
     const call = effectiveCall();
     const seq = ++_lookupSeq;
-    if (call.length < 2) { renderHint({}, ''); if (_exchAuto) { exchInput.value = ''; _exchAuto = false; } return; }
+    if (call.length < 2) { renderHint({}, ''); return; }
     try {
       const res = await fetch(`/api/lookup?call=${encodeURIComponent(call)}&band=${encodeURIComponent(_activeBand || '')}`);
       const d = await res.json();
@@ -559,7 +553,6 @@
     } catch (e) { /* hint is best-effort */ }
   }
   callInput.addEventListener('input', () => { clearTimeout(_lookupTimer); _lookupTimer = setTimeout(doLookup, 120); });
-  exchInput.addEventListener('input', () => { _exchAuto = false; });
   bandsWrap.addEventListener('click', () => setTimeout(doLookup, 0));
   scpEl?.addEventListener('click', e => {
     const sp = e.target.closest('span[data-call]');
@@ -568,7 +561,7 @@
   renderHint({}, '');   // initial placeholder
 
   function clearForm() {
-    _exchAuto = false; renderHint({}, '');
+    renderHint({}, '');
     clearError();
     callInput.value = ''; exchInput.value = '';
     if (commentInput) commentInput.value = '';
@@ -605,7 +598,7 @@
       });
       const data = await res.json();
       if (!res.ok || data.error) { showError(data.error || (editing ? 'Failed to update QSO.' : 'Failed to log QSO.')); return; }
-      callInput.value = ''; exchInput.value = ''; _exchAuto = false; renderHint({}, '');
+      callInput.value = ''; exchInput.value = ''; renderHint({}, '');
       if (commentInput) commentInput.value = '';
       if (editing) cancelEdit();
       callInput.focus();
