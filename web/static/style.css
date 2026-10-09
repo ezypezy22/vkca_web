@@ -422,7 +422,10 @@ html.operator-hud-mode #operator-hud-close{display:block;}
 .ew-cell{display:flex;flex-direction:column;gap:4px;}
 .ew-cell .ew-key{font-size:0.72em;color:var(--muted);text-align:center;font-family:var(--font-mono);}
 .ew-lbl{font-size:0.72em;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
-.ew-cell input[type=text]{background:var(--bg);color:var(--fg);border:1px solid var(--bg3);
+/* Fields get their own fill (the card colour) and a clearly visible border, so
+   they stand out from the window background in every theme — the window itself
+   is var(--bg), which the fields used to share. */
+.ew-cell input[type=text]{background:var(--bg2);color:var(--fg);border:1px solid var(--muted);
   border-radius:3px;padding:7px 9px;font-family:var(--font-mono);font-size:1em;min-width:0;}
 .ew-cell input[type=text]:focus{outline:none;border-color:var(--accent);}
 .ew-cell input#ew-call{width:10.5em;font-size:1.25em;font-weight:bold;letter-spacing:.04em;}
