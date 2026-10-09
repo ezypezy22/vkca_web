@@ -1,5 +1,21 @@
 # Changelog
 
+## 26.10.2
+
+### Enhancements
+
+Add a callsign lookup (dxcc.py, from data/wl_cty.dat) giving country, continent, CQ and ITU zone for any call, including /P, /MM and prefix/call forms
+Standalone logging now scores CQ WW: each logged QSO gets its country, zone, continent, points (0/1/2/3) and per-band new-country / new-zone flags, via a new per-contest hook
+Add "CQ WW DX SSB" and "CQ WW DX CW" to the + New Log picker, with the contest weekend computed (last full weekend of October / November)
+Log Entry form shows country, continent, zones, NEW COUNTRY / NEW ZONE / DUPE tags and points as you type a call, lists Super Check Partial suggestions (data/master.scp), and pre-fills the received CQ zone
+Add Linux desktop entry and fix the Linux PyInstaller build (system GTK/WebKit stack)
+
+### Bugfixes
+
+Fix the CQ WW plugin reading the WPX prefix as the country, which inflated country lists and per-band efficiency (score was unaffected)
+Fix the VK call-area CQ zones: VK6 and VK8 are zone 29, all other areas zone 30
+Fix solid-black WebKit window on Linux VMs by disabling WebKit's own GPU compositing
+
 ## 26.10.1
 
 ### Enhancements
