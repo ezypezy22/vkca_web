@@ -352,14 +352,18 @@ html.operator-hud-mode #operator-hud-close{display:block;}
    pale-blue) so it matches whichever theme (dark/light/high-contrast/
    colorblind) the user has active. */
 #entry-window-view{display:flex;flex-direction:column;width:100%;flex-shrink:0;
-  background:var(--bg);color:var(--fg);font-family:var(--font-mono);font-size:18px;
+  background:var(--bg);color:var(--fg);font-family:var(--font-mono);font-size:22px;
   border:1px solid var(--bg3);border-top:2px solid var(--accent);border-radius:var(--radius);
   overflow:hidden;}
 /* Log Entry tab: entry form full-width on top, worked-list stacked below it
    and stretched to fill the rest of the window's height, instead of two
    narrow, short cards stranded in the corner. */
 #tab-logentry.active{flex:1;min-height:0;}
-#tab-logentry .panel-box{flex:1;min-height:0;display:flex;flex-direction:column;}
+#tab-logentry .panel-box{min-height:0;display:flex;flex-direction:column;}
+/* Top to bottom: worked list (takes the spare height), a slim summary strip,
+   then the larger entry window at the bottom. */
+#tab-logentry .le-worked{flex:1 1 auto;min-height:160px;}
+#tab-logentry .le-summary{flex:none;padding:6px 12px 8px;gap:4px;}
 #tab-logentry .panel-box .table-wrap{flex:1;max-height:none;}
 #ew-header{display:flex;align-items:baseline;gap:18px;padding:10px 16px;
   background:var(--bg2);border-bottom:1px solid var(--bg3);flex-shrink:0;}
@@ -387,7 +391,7 @@ html.operator-hud-mode #operator-hud-close{display:block;}
 #ew-body{flex:1;display:flex;min-height:0;}
 #ew-bands{display:flex;flex-direction:column;width:90px;flex-shrink:0;
   background:var(--bg2);border-right:1px solid var(--bg3);overflow-y:auto;}
-#ew-bands button{padding:13px 4px;border:none;border-bottom:1px solid var(--bg3);
+#ew-bands button{padding:17px 4px;border:none;border-bottom:1px solid var(--bg3);
   background:transparent;color:var(--fg);font-weight:bold;font-size:0.9em;cursor:pointer;}
 #ew-bands button:hover{background:var(--bg3);}
 #ew-bands button.active{background:var(--accent);color:var(--bg);}
@@ -421,7 +425,7 @@ html.operator-hud-mode #operator-hud-close{display:block;}
 .ew-cell input[type=text]{background:var(--bg);color:var(--fg);border:1px solid var(--bg3);
   border-radius:3px;padding:7px 9px;font-family:var(--font-mono);font-size:1em;min-width:0;}
 .ew-cell input[type=text]:focus{outline:none;border-color:var(--accent);}
-.ew-cell input#ew-call{width:10.5em;font-weight:bold;letter-spacing:.04em;}
+.ew-cell input#ew-call{width:10.5em;font-size:1.25em;font-weight:bold;letter-spacing:.04em;}
 .ew-pair{display:flex;gap:5px;}
 .ew-pair .ew-rst{width:3.2em;text-align:center;}
 .ew-pair .ew-nr{width:3.8em;text-align:center;opacity:.8;}
@@ -456,12 +460,12 @@ html.operator-hud-mode #operator-hud-close{display:block;}
    Overview's own gauges use, as plain stat tiles rather than the full
    animated arc gauges (those are tightly coupled to Overview's own DOM
    ids/state — see entrywindow.js's buildSummary()). */
-#le-summary-row{display:flex;flex-wrap:wrap;gap:10px;}
-.le-stat-tile{flex:1 1 110px;background:var(--bg3);border-radius:var(--radius);
-  padding:8px 10px;text-align:center;}
-.le-stat-tile-value{font-family:var(--font-mono);font-size:1.5em;font-weight:bold;}
-.le-stat-tile-label{font-family:var(--font-mono);font-size:0.72em;color:var(--muted);
-  letter-spacing:.06em;text-transform:uppercase;margin-top:2px;}
+#le-summary-row{display:flex;flex-wrap:wrap;gap:6px;}
+.le-stat-tile{flex:1 1 90px;background:var(--bg3);border-radius:var(--radius);
+  padding:3px 8px;text-align:center;}
+.le-stat-tile-value{font-family:var(--font-mono);font-size:1.05em;font-weight:bold;}
+.le-stat-tile-label{font-family:var(--font-mono);font-size:0.62em;color:var(--muted);
+  letter-spacing:.06em;text-transform:uppercase;}
 
 /* ── Spectator Mode (rendered only for a read-only LAN viewer, /spectator)
    A single full-bleed scoreboard — no titlebar, no tabs, nothing clickable —

@@ -1083,6 +1083,24 @@
        comment above; STATE.is_standalone_log gates both this tab's
        visibility and the /api/qsos/add endpoint itself) ── -->
   <section id="tab-logentry" class="tab-panel">
+    <div class="panel-box le-worked">
+      <div class="panel-header">
+        <span style="color:var(--accent3)">●</span> WORKED THIS SESSION
+        <input id="le-search-input" class="filter-input" placeholder="Search callsign…" type="text">
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th id="le-th-call" class="sortable-th">Call</th><th>Band</th><th>Mode</th><th>Sent#</th><th>Exch</th><th id="le-th-time" class="sortable-th">Time (UTC)</th><th id="le-th-countdown">Next Block In</th><th></th></tr></thead>
+          <tbody id="le-recent-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel-box le-summary">
+      <div class="panel-header"><span style="color:var(--accent3)">●</span> SUMMARY</div>
+      <div id="le-summary-row"></div>
+    </div>
+
     <!-- ── N1MM-style Entry Window, embedded inline (see entrywindow.js).
          Themed with this app's own --bg/--accent tokens so it matches
          whichever theme (dark/light/high-contrast/colorblind) is active. -->
@@ -1147,24 +1165,6 @@
             <div id="ew-scp" class="ew-scp"></div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <div class="panel-box">
-      <div class="panel-header"><span style="color:var(--accent3)">●</span> SUMMARY</div>
-      <div id="le-summary-row"></div>
-    </div>
-
-    <div class="panel-box">
-      <div class="panel-header">
-        <span style="color:var(--accent3)">●</span> WORKED THIS SESSION
-        <input id="le-search-input" class="filter-input" placeholder="Search callsign…" type="text">
-      </div>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead><tr><th id="le-th-call" class="sortable-th">Call</th><th>Band</th><th>Mode</th><th>Sent#</th><th>Exch</th><th id="le-th-time" class="sortable-th">Time (UTC)</th><th id="le-th-countdown">Next Block In</th><th></th></tr></thead>
-          <tbody id="le-recent-tbody"></tbody>
-        </table>
       </div>
     </div>
   </section>

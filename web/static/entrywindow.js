@@ -77,16 +77,29 @@
     ).join('');
   }
 
+  // Band buttons + summary tiles come from the loaded plugin. They're built
+  // at startup (before any log exists, so empty) and again whenever a log is
+  // loaded or the plugin's list changes — see applyPluginLists().
+  let _listsKey = '';
+  function applyPluginLists(meta) {
+    const bands = (meta && meta.loaded !== false && meta.bands) || [];
+    const defs  = (meta && meta.loaded !== false && meta.gauge_defs) || [];
+    const key = JSON.stringify([bands, defs.map(g => [g.label, g.value_key, g.fmt, g.colour])]);
+    if (key === _listsKey) return;
+    _listsKey = key;
+    _bands = bands;
+    if (!_bands.includes(_activeBand)) _activeBand = _bands[0] || null;
+    renderBands();
+    buildSummary(defs);
+  }
+
   async function loadBands() {
     try {
       const res  = await fetch('/api/plugin_meta');
-      const meta = await res.json();
-      _bands = meta.bands || [];
-      if (!_activeBand && _bands.length) _activeBand = _bands[0];
-      renderBands();
-      buildSummary(meta.gauge_defs || []);
+      applyPluginLists(await res.json());
     } catch (e) { console.warn('entrywindow: loadBands failed:', e); }
   }
+  window.addEventListener('vka:loaded', () => { loadBands(); refreshRigStatus(); });
 
   // ── Summary — the same gauge_defs (label/value_key/colour/fmt) Overview's
   // own gauges use, as plain stat tiles rather than the full animated arc
@@ -247,6 +260,7 @@
       _noBlocks = !!meta.loaded && meta.uses_block_structure === false && !_reworkWindowHours;
       _bandDefaults = cfg.band_defaults || {};
       _contestMode = meta.loaded ? (meta.contest_mode || null) : null;
+      applyPluginLists(meta);
     } catch (e) {
       console.warn('entrywindow: refreshRigStatus failed:', e);
       _rigctldConnected = false;
