@@ -1,5 +1,19 @@
 # Changelog
 
+## 26.10.3
+
+### Enhancements
+
+Log Entry: always-visible mode buttons (also commanding the rig when rigctld is connected), a SUMMARY stat-tile row, and sortable Call/Time columns in the worked list
+
+### Removed
+
+Remove the CW F-key macro bar and rigctld send_morse/stop_morse support (and the Settings macro fields); rig control is now read plus mode/frequency set only
+
+### Bugfixes
+
+Fix the Log Entry callsign-hint boxes being placed inside the entry table (invalid HTML), which made them render above the table instead of below it
+
 ## 26.10.2
 
 ### Enhancements
