@@ -50,6 +50,11 @@
       _lastSessJSON = sessJSON;
       renderSessionTable(JSON.parse(sessJSON));
     }
+    // A contest with no operating blocks (CQ WW, WPX, ...) has no sessions to
+    // break down — the app only slices it into 12 h chunks internally.
+    const sessPanel = document.getElementById('rate-sess-panel');
+    if (sessPanel) sessPanel.style.display =
+      window.VKA?.lastSnap?.()?._uses_block_structure === false ? 'none' : '';
   }
 
   // r.hour is a naive-UTC full datetime ("2025-07-19T08:00:00", not just an

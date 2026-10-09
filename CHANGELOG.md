@@ -1,5 +1,12 @@
 # Changelog
 
+## 26.10.7
+
+### Enhancements
+
+Log Entry's Call field now only accepts a real callsign: it ignores anything but letters, digits and "/", refuses to log a malformed call (TEST, 2YI, VK5...), and the server re-checks it
+Contests with no operating blocks (CQ WW, WPX, ...) no longer show block wording: the session bar reads "Contest" / "Contest ended" with whole-contest time remaining instead of "B4 (ended)", and the Block / Next Block In columns, "Best session" and the Rate tab's Session Breakdown are hidden
+
 ## 26.10.6
 
 ### Bugfixes
