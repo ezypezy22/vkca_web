@@ -20,7 +20,6 @@
   const rstRcvd      = document.getElementById('ew-rst-rcvd');
   const exchInput    = document.getElementById('ew-exchange');
   const errEl        = document.getElementById('ew-error');
-  const wipeBtn      = document.getElementById('ew-wipe');
   const logItBtn     = document.getElementById('ew-log-it');
   const recentTbody  = document.getElementById('le-recent-tbody');
   const radioBandEl  = document.getElementById('ew-radio-band');
@@ -31,10 +30,7 @@
   const sentNrEl     = document.getElementById('ew-sent-nr-field');
   const searchInput  = document.getElementById('le-search-input');
   const summaryRowEl = document.getElementById('le-summary-row');
-  const recallBtn    = document.getElementById('ew-recall');
-  const vkChk        = document.getElementById('ew-vk-prefix');
   const commentInput = document.getElementById('ew-comment');
-  const commentKeep  = document.getElementById('ew-comment-keep');
   const clockDateEl  = document.getElementById('ew-clock-date');
   const clockTimeEl  = document.getElementById('ew-clock-time');
   const callTh       = document.getElementById('le-th-call');
@@ -43,14 +39,7 @@
   function showError(msg) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
   function clearError()   { errEl.textContent = ''; }
 
-  // "VK" call-prefix box (VKCL): with it ticked, a call typed starting with
-  // a digit (2YI) means VK2YI. Anything starting with a letter — VK2YI,
-  // ZL1AA, K1ABC — is left exactly as typed, so a DX station in a VK
-  // contest (e.g. a ZL in Trans-Tasman) doesn't need the box unticked.
-  function effectiveCall() {
-    const v = callInput.value.trim().toUpperCase();
-    return (vkChk?.checked && /^\d/.test(v)) ? 'VK' + v : v;
-  }
+  const effectiveCall = () => callInput.value.trim().toUpperCase();
 
   // Live UTC clock (the VKCL Date/Time box).
   function tickClock() {
@@ -141,7 +130,6 @@
   let _activeMode = null;        // the mode this QSO will actually be logged with
   let _bandDefaults = {};        // band -> freq_hz, from Settings → Rig Control (unset unless configured)
   let _contestMode = null;       // "CW"/"SSB" when the log's contest name pins one (e.g. Oceania DX CW)
-  let _vkDefaultFor = null;      // plugin display_name the VK-prefix box default was last applied for
   let _rstDefaultFor = null;     // effective mode the RST fields' default was last applied for
 
   // RST defaults to 59 for phone and 599 for CW. Only ever swaps a value
@@ -249,13 +237,6 @@
       _reworkWindowHours = meta.loaded ? (meta.rework_window_hours || null) : null;
       _bandDefaults = cfg.band_defaults || {};
       _contestMode = meta.loaded ? (meta.contest_mode || null) : null;
-      // Tick the VK box by default for VK-domestic contests — but only when
-      // the plugin changes, so the operator's own toggle isn't fought.
-      const plugKey = meta.loaded ? (meta.display_name || '') : '';
-      if (plugKey !== _vkDefaultFor) {
-        _vkDefaultFor = plugKey;
-        if (vkChk) vkChk.checked = !!(meta.loaded && meta.vk_prefix_default);
-      }
     } catch (e) {
       console.warn('entrywindow: refreshRigStatus failed:', e);
       _rigctldConnected = false;
@@ -396,7 +377,7 @@
         <td>${(q.band || '').toLowerCase()}</td>
         <td>${q.mode || '—'}</td>
         <td>${q.sent_nr != null ? String(q.sent_nr).padStart(3, '0') : '—'}</td>
-        <td>${window.VKA.escapeHtml(q.mult1 || '—')}</td>
+        <td>${window.VKA.escapeHtml(q.exchange || q.mult1 || '—')}</td>
         <td>${fmtTime(q.time)}</td>
         <td class="ew-countdown" data-at="${q._countdownAt || ''}">${q._countdownAt ? fmtRemaining(q._countdownAt - Date.now()) : '—'}</td>
         <td class="le-actions">
@@ -442,7 +423,7 @@
     callInput.value = q.call || '';
     rstSent.value = q.rst_sent || rstSent.value;
     rstRcvd.value = q.rst_rcvd || rstRcvd.value;
-    exchInput.value = q.mult1 || '';
+    exchInput.value = q.exchange || q.mult1 || '';
     if (commentInput) commentInput.value = q.comment || '';
     const band = (q.band || '').toUpperCase();
     if (_bands.includes(band)) { _activeBand = band; renderBands(); }
@@ -538,11 +519,13 @@
 
   function renderHint(d, call) {
     if (!hintEl) return;
-    if (!call || !d.found) {
-      hintEl.innerHTML = call ? '<span class="ew-tag">unknown prefix</span>' : '';
+    if (!call) {
+      hintEl.innerHTML = '<span class="ew-ph">Type a callsign to see its country, zones and what it is worth.</span>';
+    } else if (!d.found) {
+      hintEl.innerHTML = `<span class="ew-call">${window.VKA.escapeHtml(call)}</span><span class="ew-tag">unknown prefix</span>`;
     } else {
       const esc = window.VKA.escapeHtml;
-      let h = `<span class="ew-ent">${esc(d.country)}</span><span>${esc(d.cont)} · CQ ${d.cq} · ITU ${d.itu}</span>`;
+      let h = `<span class="ew-call">${esc(call)}</span><span class="ew-ent">${esc(d.country)}</span><span>${esc(d.cont)} · CQ ${d.cq} · ITU ${d.itu}</span>`;
       if (d.dupe) h += '<span class="ew-tag dupe">DUPE</span>';
       else {
         if (d.new_country) h += '<span class="ew-tag new">NEW COUNTRY</span>';
@@ -577,12 +560,12 @@
   }
   callInput.addEventListener('input', () => { clearTimeout(_lookupTimer); _lookupTimer = setTimeout(doLookup, 120); });
   exchInput.addEventListener('input', () => { _exchAuto = false; });
-  vkChk?.addEventListener('change', doLookup);
   bandsWrap.addEventListener('click', () => setTimeout(doLookup, 0));
   scpEl?.addEventListener('click', e => {
     const sp = e.target.closest('span[data-call]');
     if (sp) { callInput.value = sp.dataset.call; callInput.focus(); doLookup(); }
   });
+  renderHint({}, '');   // initial placeholder
 
   function clearForm() {
     _exchAuto = false; renderHint({}, '');
@@ -592,15 +575,6 @@
     if (_editingQsoId) cancelEdit();
     callInput.focus();
   }
-  wipeBtn.addEventListener('click', clearForm);
-
-  // Recall Last (VKCL F2): load the most recently logged QSO back into the
-  // form for correction — same flow as the per-row edit button.
-  recallBtn?.addEventListener('click', () => {
-    const last = [..._lastQsos].sort((a, b) => (a.time < b.time ? 1 : a.time > b.time ? -1 : 0))[0];
-    if (!last) { showError('No QSOs logged yet.'); return; }
-    startEdit(last);
-  });
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -632,7 +606,7 @@
       const data = await res.json();
       if (!res.ok || data.error) { showError(data.error || (editing ? 'Failed to update QSO.' : 'Failed to log QSO.')); return; }
       callInput.value = ''; exchInput.value = ''; _exchAuto = false; renderHint({}, '');
-      if (commentInput && !commentKeep?.checked) commentInput.value = '';
+      if (commentInput) commentInput.value = '';
       if (editing) cancelEdit();
       callInput.focus();
       window.VKA.invalidateQsosCache();
@@ -646,18 +620,20 @@
     }
   });
 
-  // VKCL function keys (only while the Log Entry tab is the visible one):
-  // F2 Recall Last, F5 Call, F6 Exch Sent, F7 Exch Rcvd, F8 Cmnt, Esc/F12
-  // Clear. Enter already submits natively via the form. Escape just closes
-  // the right-click menu if one's open.
+  // Function keys (only while the Log Entry tab is the visible one): F5 Call,
+  // F6 Exch Sent, F7 Exch Rcvd, F8 Cmnt, Esc / F12 clear the form. Enter
+  // already submits natively via the form. Escape first closes the
+  // right-click menu if one's open, and is left alone while typing in an
+  // input elsewhere (e.g. the worked-list search box).
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && _ctxMenuEl) { closeCtxMenu(); return; }
     if (!document.getElementById('tab-logentry')?.classList.contains('active')) return;
+    const t = e.target;
+    if (e.key === 'Escape' && t?.closest && !t.closest('#ew-form') &&
+        /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
     const focusKey = {F5: callInput, F6: rstSent, F7: rstRcvd, F8: commentInput}[e.key];
     if (focusKey) { e.preventDefault(); focusKey.focus(); focusKey.select?.(); }
-    else if (e.key === 'F2') { e.preventDefault(); recallBtn?.click(); }
-    else if (e.key === 'F12') { e.preventDefault(); clearForm(); }
-    else if (e.key === 'Escape') { clearForm(); }
+    else if (e.key === 'F12' || e.key === 'Escape') { e.preventDefault(); clearForm(); }
   });
 
   function updateHeader(snap) {

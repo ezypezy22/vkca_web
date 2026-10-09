@@ -1092,63 +1092,45 @@
         <span id="ew-radio-freq">—</span>
         <input id="ew-freq-input" class="hidden" type="text" inputmode="decimal" title="Set frequency (MHz) — Enter to QSY">
         <span id="ew-mode-buttons"></span>
+        <span id="ew-clock" title="Current date and time, UTC"><span id="ew-clock-date">—</span><b id="ew-clock-time">—</b><i>UTC</i></span>
         <span id="ew-qso-count-wrap">NrOfQSOs<b id="ew-qso-count">0</b></span>
       </div>
-      <!-- VKCL-style one-row entry bar (Recall Last / Clear / UTC clock /
-           Call Sign / Exch Sent / Exch Rcvd / Cmnt / Log QSO), with the
-           classic function-key hints underneath each control. -->
+      <!-- Entry bar (top): Call Sign / Exch Sent / Exch Rcvd / Cmnt / Log QSO,
+           with the classic function-key hints under each field. -->
       <form id="ew-form" autocomplete="off">
         <div id="ew-bar">
           <div class="ew-cell">
-            <button type="button" id="ew-recall" class="ew-bigbtn" title="Reload the last logged QSO into the form to correct it">Recall Last</button>
-            <span class="ew-key">&lt; F2 &gt;</span>
-          </div>
-          <div class="ew-cell">
-            <button type="button" id="ew-wipe" class="ew-bigbtn">Clear</button>
-            <span class="ew-key">&lt; Esc &gt;</span>
-          </div>
-          <fieldset id="ew-clock">
-            <legend>Date/Time (UTC)</legend>
-            <div id="ew-clock-date">—</div>
-            <div id="ew-clock-time">—</div>
-          </fieldset>
-          <div class="ew-cell ew-cell-call">
-            <label class="ew-lbl">Call Sign:
-              <input type="checkbox" id="ew-vk-prefix"
-                     title="When ticked, a call you type starting with a digit (e.g. 2YI) gets VK added in front"> VK</label>
+            <label class="ew-lbl" for="ew-call">Call Sign</label>
             <input id="ew-call" type="text" autocomplete="off" style="text-transform:uppercase" required>
             <span class="ew-key">&lt; F5 &gt;</span>
           </div>
           <div class="ew-cell">
-            <span class="ew-lbl">Exch Sent:</span>
+            <span class="ew-lbl">Exch Sent</span>
             <span class="ew-pair">
-              <input id="ew-rst-sent" class="ew-rst" type="text" value="59">
+              <input id="ew-rst-sent" class="ew-rst" type="text" value="59" aria-label="RST sent">
               <input id="ew-sent-nr-field" class="ew-nr" type="text" value="001" readonly tabindex="-1"
                      title="Next progressive serial number — sent with this QSO's exchange when logged, auto-incrementing">
             </span>
             <span class="ew-key">&lt; F6 &gt;</span>
           </div>
           <div class="ew-cell">
-            <span class="ew-lbl">Exch Rcvd:</span>
+            <span class="ew-lbl">Exch Rcvd</span>
             <span class="ew-pair">
-              <input id="ew-rst-rcvd" class="ew-rst" type="text" value="59">
-              <input id="ew-exchange" class="ew-exch" type="text" autocomplete="off">
+              <input id="ew-rst-rcvd" class="ew-rst" type="text" value="59" aria-label="RST received">
+              <input id="ew-exchange" class="ew-exch" type="text" autocomplete="off" aria-label="Exchange received">
             </span>
             <span class="ew-key">&lt; F7 &gt;</span>
           </div>
           <div class="ew-cell">
-            <label class="ew-lbl">Cmnt:
-              <input type="checkbox" id="ew-comment-keep" title="Keep the comment after logging (don't clear it)"></label>
+            <label class="ew-lbl" for="ew-comment">Cmnt</label>
             <input id="ew-comment" type="text" autocomplete="off">
             <span class="ew-key">&lt; F8 &gt;</span>
           </div>
           <div class="ew-cell">
-            <button type="submit" id="ew-log-it" class="ew-bigbtn ew-logbtn">Log QSO</button>
+            <button type="submit" id="ew-log-it" class="ew-bigbtn">Log QSO</button>
             <span class="ew-key">&lt; Enter &gt;</span>
           </div>
         </div>
-        <div id="ew-hint" class="ew-hint"></div>
-        <div id="ew-scp" class="ew-scp"></div>
         <div id="ew-error" class="hidden"></div>
       </form>
       <div id="ew-body">
@@ -1157,6 +1139,12 @@
           <div id="ew-runsp">
             <label><input type="radio" name="ew-runsp" id="ew-run" checked> Run</label>
             <label><input type="radio" name="ew-runsp" id="ew-sp"> S&amp;P</label>
+          </div>
+          <div id="ew-info">
+            <div class="ew-info-h">Station being worked</div>
+            <div id="ew-hint" class="ew-hint"></div>
+            <div class="ew-info-h">Super Check Partial</div>
+            <div id="ew-scp" class="ew-scp"></div>
           </div>
         </div>
       </div>

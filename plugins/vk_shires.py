@@ -242,8 +242,6 @@ class VKShiresPlugin(ContestPlugin):
     Score = total valid points × (shire band/mode mults + CQ zone band/mode mults).
     """
 
-    vk_prefix_default = True
-
     def identify(self, contest_name: str) -> bool:
         cn = contest_name.upper()
         return "SHIRES" in cn or "VKSHIRES" in cn

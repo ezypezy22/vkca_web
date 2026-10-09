@@ -3119,9 +3119,6 @@ async def api_plugin_meta():
         "is_standalone_log": STATE.is_standalone_log,
         "rigctld_connected": STATE.rigctld_conn is not None and STATE.rigctld_status is None,
         "contest_mode":     p.contest_mode(getattr(STATE.contest_log, "contest_name", "")),
-        # Log Entry bar: tick the "VK" call-prefix box by default (VK-domestic
-        # contests, where operators type just "2YI").
-        "vk_prefix_default": bool(getattr(p, "vk_prefix_default", False)),
     }
 
 

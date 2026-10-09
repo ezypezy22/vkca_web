@@ -412,31 +412,37 @@ html.operator-hud-mode #operator-hud-close{display:block;}
 #ew-field-table input#ew-sent-nr-field{font-weight:bold;font-size:1.4em;text-align:center;
   color:var(--bg);background:var(--accent);border-color:var(--accent);cursor:default;}
 #ew-error{color:var(--red);font-size:0.85em;margin:-2px 0 6px;}
-/* VKCL-style entry bar */
-#ew-form{margin:0 0 8px;padding:8px 10px 0;}
-#ew-bar{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-start;}
-.ew-cell{display:flex;flex-direction:column;align-items:stretch;gap:3px;}
-.ew-cell .ew-key{font-size:0.75em;color:var(--muted);text-align:center;font-family:var(--font-mono);}
-.ew-lbl{font-size:0.82em;font-weight:bold;color:var(--fg);white-space:nowrap;display:flex;align-items:center;gap:4px;}
+/* Entry bar — on top of the window; station information sits below it. */
+#ew-form{margin:0;padding:14px 16px 6px;border-bottom:1px solid var(--bg3);}
+#ew-bar{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-start;}
+.ew-cell{display:flex;flex-direction:column;gap:4px;}
+.ew-cell .ew-key{font-size:0.72em;color:var(--muted);text-align:center;font-family:var(--font-mono);}
+.ew-lbl{font-size:0.72em;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
 .ew-cell input[type=text]{background:var(--bg);color:var(--fg);border:1px solid var(--bg3);
-  border-radius:3px;padding:6px 8px;font-family:var(--font-mono);font-size:1.05em;min-width:0;}
+  border-radius:3px;padding:7px 9px;font-family:var(--font-mono);font-size:1em;min-width:0;}
 .ew-cell input[type=text]:focus{outline:none;border-color:var(--accent);}
-.ew-cell-call input#ew-call{width:11em;font-weight:bold;}
-.ew-pair{display:flex;gap:4px;}
+.ew-cell input#ew-call{width:10.5em;font-weight:bold;letter-spacing:.04em;}
+.ew-pair{display:flex;gap:5px;}
 .ew-pair .ew-rst{width:3.2em;text-align:center;}
-.ew-pair .ew-nr{width:3.6em;text-align:center;opacity:.8;}
-.ew-pair .ew-exch{width:7em;}
-.ew-cell input#ew-comment{width:11em;}
-.ew-bigbtn{min-width:90px;padding:12px 10px;font-weight:bold;border:1px solid var(--bg3);
-  border-radius:3px;background:var(--bg2);color:var(--fg);font-family:inherit;cursor:pointer;}
-.ew-bigbtn:hover{background:var(--bg3);border-color:var(--accent);}
-#ew-wipe:hover{border-color:var(--red);color:var(--red);}
-.ew-logbtn{background:var(--accent);color:var(--bg);border-color:var(--accent);}
-.ew-logbtn:hover{filter:brightness(1.1);background:var(--accent);color:var(--bg);}
-#ew-clock{border:1px solid var(--bg3);border-radius:3px;padding:2px 12px 4px;text-align:center;
-  font-family:var(--font-mono);margin:0;}
-#ew-clock legend{font-size:0.78em;font-weight:bold;padding:0 4px;}
-#ew-clock-date,#ew-clock-time{font-weight:bold;}
+.ew-pair .ew-nr{width:3.8em;text-align:center;opacity:.8;}
+.ew-pair .ew-exch{width:6.5em;}
+.ew-cell input#ew-comment{width:12em;}
+.ew-bigbtn{min-width:110px;height:2.6em;font-weight:bold;border:1px solid var(--accent);
+  border-radius:3px;background:var(--accent);color:var(--bg);font-family:inherit;cursor:pointer;}
+.ew-bigbtn:hover{filter:brightness(1.1);}
+.ew-bigbtn:disabled{opacity:.6;cursor:default;}
+/* UTC clock — one slim line in the header, beside the QSO count. */
+#ew-clock{margin-left:auto;display:inline-flex;align-items:baseline;gap:8px;
+  font-size:0.8em;color:var(--muted);font-variant-numeric:tabular-nums;}
+#ew-clock b{color:var(--fg);font-size:1.1em;letter-spacing:.03em;}
+#ew-clock i{font-style:normal;font-size:0.8em;letter-spacing:.08em;}
+#ew-qso-count-wrap{margin-left:14px;}
+/* Station information card (below the bar, right of the band column). */
+#ew-info{border:1px solid var(--bg3);border-radius:var(--radius);background:var(--bg2);
+  padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
+.ew-info-h{font-size:0.7em;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
+.ew-hint .ew-call{font-size:1.25em;font-weight:bold;}
+.ew-hint .ew-ph{color:var(--muted);font-size:0.85em;}
 .ew-hint{min-height:1.4em;margin:6px 0 2px;font-size:0.9em;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;}
 .ew-hint .ew-ent{font-weight:600;}
 .ew-hint .ew-tag{padding:1px 7px;border-radius:9px;font-size:0.85em;font-weight:600;background:var(--surface2,#2a2f3a);}

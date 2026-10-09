@@ -643,6 +643,7 @@ class ContestLog:
         # Entry tab's worked-list "Sent#" column.
         sent_nr_col  = col(["SentNr","sentnr","SENTNR"])
         comment_col  = col(["Comment","comment"])
+        exch1_col    = col(["Exchange1","exchange1"])
 
         logging.info(
             "Using columns: call=%s band=%s freq=%s mode=%s time=%s "
@@ -654,7 +655,7 @@ class ContestLog:
         sel_cols = [call_col, band_col, freq_col, mode_col, time_col,
                     mult_col, zone_col, m1_col, m2_col,
                     dupe_col, pts_col, id_col, op_col, continent_col,
-                    rst_sent_col, rst_rcvd_col, sent_nr_col, comment_col]
+                    rst_sent_col, rst_rcvd_col, sent_nr_col, comment_col, exch1_col]
         sel_cols += sect_pref_cols
         sel_cols = [cn for cn in sel_cols if cn]
         seen = set(); sel_cols_dedup = []
@@ -966,6 +967,10 @@ class ContestLog:
                     "rst_rcvd":    rst_rcvd,
                     "sent_nr":     sent_nr,
                     "comment":     str(d.get(comment_col) or "").strip() if comment_col else "",
+                    # The exchange exactly as logged (Exchange1) — "mult1" is
+                    # the plugin-resolved multiplier (e.g. CQWW country prefix),
+                    # which is NOT what the operator typed in the exchange box.
+                    "exchange":    str(d.get(exch1_col) or "").strip() if exch1_col else "",
                     "freq":        raw_freq,
                     "_table":      target,
                     # Populated asynchronously by web/server.py's QRZ lookup
