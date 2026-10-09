@@ -1,5 +1,17 @@
 # Changelog
 
+## 26.10.5
+
+### Enhancements
+
+Log Entry reworked: the entry bar (Call Sign, Exch Sent, Exch Rcvd, Cmnt, Log QSO) is now on top, with the band column, Run / S&P and a "Station being worked" card (country, zones, NEW COUNTRY / NEW ZONE tags, points, Super Check Partial) underneath
+UTC date and time moved to a single slim line in the Log Entry header
+Remove Recall Last, Clear, the VK prefix box and the comment checkbox; Esc / F12 still clear the form, and Esc is now ignored while typing in the worked-list search box
+
+### Bugfixes
+
+Fix the Worked list's Exch column and the edit action showing the multiplier (e.g. the CQ WW country prefix) instead of the exchange as logged
+
 ## 26.10.4
 
 ### Enhancements
