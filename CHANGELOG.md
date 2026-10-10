@@ -1,5 +1,17 @@
 # Changelog
 
+## 26.10.10
+
+### Enhancements
+
+Add the WIA VHF/UHF Field Day plugin (Summer, Winter and Spring events): distance scoring from the 6-character locators (1 pt/km x band multiplier, flattened to 1 pt/100 km beyond 700 km on 6m/2m/70cm only, each contact rounded up, nothing for the same sub-square), the 2-hour rework rule that reopens a station when either side is in a different 4-character square, the 6m to 24 GHz band set, computed event dates and VK6's later start. Scored by the rules rather than the N1MM UDC, which flattens every band and has table typos
+Add a roaming locator for portable stations: a Change Location button and dialog in the Log Entry header (opens by itself when no position is set), with every QSO stamped with where you were; the entry bar gains received serial and locator boxes and a sent locator, and the station card shows distance, points and dupe as you type
+Cabrillo export for this contest writes serial and locator on both sides (your locator as it was at each QSO) and the VHF band tokens
+
+### Bugfixes
+
+Stop the standalone logger silently dropping a QSO after repeated same-second collisions on the same callsign
+
 ## 26.10.9
 
 ### Enhancements
