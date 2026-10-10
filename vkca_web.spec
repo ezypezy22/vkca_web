@@ -82,6 +82,8 @@ datas += [(str(ROOT / 'contest_log.py'), '.')]
 
 # Callsign -> country/zone lookup + its data files (cty.dat, Super Check Partial).
 datas += [(str(ROOT / 'dxcc.py'), '.')]
+# Maidenhead locator / distance helpers (WIA VHF/UHF plugin).
+datas += [(str(ROOT / 'maidenhead.py'), '.')]
 datas += [(str(ROOT / 'data'), 'data')]
 
 # Single canonical version file (see web/server.py's own VERSION read) —
