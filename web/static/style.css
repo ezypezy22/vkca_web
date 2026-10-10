@@ -1535,3 +1535,32 @@ body:has(#tab-map.active) #content {
 }
 /* Fixed-size main window: no maximize button, no edge-drag resize strips. */
 #btn-win-maximize,.resize-handle{display:none !important;}
+
+/* WIA VHF/UHF: roaming locator display, extra exchange fields, Change Location dialog */
+#ew-location{display:inline-flex;align-items:center;gap:8px;font-size:0.8em;}
+#ew-location.hidden{display:none;}
+#ew-loc-grid{font-size:1.1em;letter-spacing:.06em;color:var(--accent);}
+#ew-loc-btn{font-family:inherit;font-size:0.85em;padding:3px 10px;border:1px solid var(--accent);
+  border-radius:3px;background:transparent;color:var(--accent);cursor:pointer;}
+#ew-loc-btn:hover{background:var(--accent);color:var(--bg);}
+.ew-pair .ew-grid{width:6.5em;text-align:center;letter-spacing:.04em;}
+.ew-pair .ew-grid[readonly]{opacity:.85;}
+.ew-pair .hidden,#ew-exchange.hidden{display:none;}
+.ew-modal{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);display:flex;
+  align-items:center;justify-content:center;}
+.ew-modal.hidden{display:none;}
+.ew-modal-box{background:var(--bg2);color:var(--fg);border:1px solid var(--accent);border-radius:6px;
+  padding:18px 20px;width:min(440px,92vw);display:flex;flex-direction:column;gap:10px;
+  font-family:var(--font-mono);}
+.ew-modal-box h3{margin:0;font-size:1.05em;color:var(--accent);}
+.ew-modal-hint{margin:0;font-size:0.82em;color:var(--muted);line-height:1.4;}
+.ew-modal-box input{background:var(--bg);color:var(--fg);border:1px solid var(--muted);border-radius:3px;
+  padding:10px;font-family:var(--font-mono);font-size:1.5em;letter-spacing:.12em;text-align:center;}
+.ew-modal-box input:focus{outline:none;border-color:var(--accent);}
+.ew-modal-info{font-size:0.82em;color:var(--muted);text-align:center;min-height:1.2em;}
+.ew-modal-err{font-size:0.82em;color:var(--red);}
+.ew-modal-err.hidden{display:none;}
+.ew-modal-btns{display:flex;gap:8px;justify-content:flex-end;}
+.ew-modal-btns button{font-family:inherit;padding:8px 16px;border:1px solid var(--bg3);border-radius:3px;
+  background:var(--bg3);color:var(--fg);cursor:pointer;}
+#ew-loc-save{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:bold;}

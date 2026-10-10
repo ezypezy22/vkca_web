@@ -197,6 +197,23 @@ class ContestPlugin(ABC):
     # for every contest, showing e.g. "Next Block In 2h 27m" identically
     # for every QSO regardless of when THAT specific contact happened,
     # which is meaningless for a rolling per-contact rule like RD's.
+    # True for VHF/UHF/microwave contests: the loader then names bands above 2m
+    # (70CM, 23CM, 13CM ... 1MM) instead of the legacy "432.00MHz" label.
+    vhf_band_names: bool = False
+    # The rework window is per mode group (CW/digital vs phone, e.g. VK RD).
+    # False when a station can be worked again after the window regardless of
+    # mode (WIA VHF/UHF) — only affects the Worked list's countdown column.
+    rework_by_mode: bool = True
+
+    def start_hour_for(self, my_call, contest_name=None) -> Optional[int]:
+        """UTC hour the contest starts for this operator, when it depends on who
+        they are (e.g. VK6's later start). None = use session_config()."""
+        return None
+
+    def new_log_start(self, contest_name: str, now) -> Optional["datetime"]:
+        """Start datetime for a brand-new standalone log of this contest, if the
+        contest name pins a specific upcoming event. None = just use `now`."""
+        return None
     rework_window_hours: Optional[float] = None
 
     # The CONTEST: identifier a Cabrillo submission for this contest
@@ -222,7 +239,7 @@ class ContestPlugin(ABC):
         return None
 
     def standalone_qso_fields(self, call: str, band: str, mode: str, exchange: str,
-                              prior_qsos: list, my_call: str) -> dict:
+                              prior_qsos: list, my_call: str, fields: Optional[dict] = None) -> dict:
         """
         Extra DXLOG column values (e.g. CountryPrefix, ZN, Continent, Points,
         IsMultiplier1/2) for a QSO logged by this app's standalone logger, so
@@ -230,8 +247,36 @@ class ContestPlugin(ABC):
         prior_qsos are the already-loaded, earlier QSOs of this log. Not
         called for a dupe (its points/mult flags stay 0). Default: none —
         add_qso() then writes its neutral placeholder Points.
+
+        `fields` carries the extra values the entry form sent for this QSO
+        (e.g. NR, GridSquare) plus RoverLocation, the operator's own current
+        locator, for contests that declare entry_fields() / roaming_locator.
         """
         return {}
+
+    def is_repeat_contact(self, new: dict, prior: list) -> bool:
+        """Would `new` ({call, band, mode, time, grid, my_grid}) be a dupe of an
+        already-logged QSO in `prior`? Default: same call on the same band (and
+        same mode group when mode_scoped_dupes). A contest with a rework window
+        or location-dependent dupes (WIA VHF/UHF) overrides this."""
+        mode_scoped = getattr(self, "mode_scoped_dupes", False)
+        key = self.dupe_mode_key({"mode": new["mode"]}) if mode_scoped else None
+        return any(
+            not q["dupe"] and q["call"] == new["call"] and q["band"] == new["band"]
+            and (not mode_scoped or self.dupe_mode_key(q) == key)
+            for q in prior
+        )
+
+    # Roaming stations (portable operators who move during the contest): the
+    # Log Entry shows the current locator and a Change Location button, and
+    # stamps each QSO with where the operator was.
+    roaming_locator: bool = False
+
+    def entry_fields(self) -> Optional[dict]:
+        """Extra Log Entry fields for this contest, or None for the standard
+        RST + free-text exchange. {"rcvd_nr": bool, "rcvd_grid": bool,
+        "sent_grid": bool} — see entrywindow.js."""
+        return None
 
     # ── UI hints ──────────────────────────────────────────────────────────────
 

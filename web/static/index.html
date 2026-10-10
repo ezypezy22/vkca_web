@@ -1096,6 +1096,22 @@
       </div>
     </div>
 
+    <div id="ew-loc-dialog" class="ew-modal hidden" role="dialog" aria-modal="true" aria-labelledby="ew-loc-title">
+      <div class="ew-modal-box">
+        <h3 id="ew-loc-title">Change Location</h3>
+        <p class="ew-modal-hint">Enter the 6-character Maidenhead locator of where you are now (for example QF56LB).
+          Every QSO from now on is stamped with it, your sent exchange updates, and stations you worked
+          from your previous spot can be worked again right away.</p>
+        <input id="ew-loc-input" type="text" maxlength="6" autocomplete="off" spellcheck="false" style="text-transform:uppercase" aria-label="New locator">
+        <div id="ew-loc-info" class="ew-modal-info">&nbsp;</div>
+        <div id="ew-loc-err" class="ew-modal-err hidden"></div>
+        <div class="ew-modal-btns">
+          <button type="button" id="ew-loc-cancel">Cancel</button>
+          <button type="button" id="ew-loc-save">Set Location</button>
+        </div>
+      </div>
+    </div>
+
     <div class="panel-box le-summary">
       <div class="panel-header"><span style="color:var(--accent3)">●</span> SUMMARY</div>
       <div id="le-summary-row"></div>
@@ -1110,6 +1126,10 @@
         <span id="ew-radio-freq">—</span>
         <input id="ew-freq-input" class="hidden" type="text" inputmode="decimal" title="Set frequency (MHz) — Enter to QSY">
         <span id="ew-mode-buttons"></span>
+        <span id="ew-location" class="hidden" title="Where you are operating from (6-character locator). Every QSO is stamped with it.">
+          <span class="ew-loc-pin">&#128205;</span><b id="ew-loc-grid">&mdash;</b>
+          <button type="button" id="ew-loc-btn">Change Location</button>
+        </span>
         <span id="ew-clock" title="Current date and time, UTC"><span id="ew-clock-date">—</span><b id="ew-clock-time">—</b><i>UTC</i></span>
         <span id="ew-qso-count-wrap">NrOfQSOs<b id="ew-qso-count">0</b></span>
       </div>
@@ -1128,6 +1148,8 @@
               <input id="ew-rst-sent" class="ew-rst" type="text" value="59" aria-label="RST sent">
               <input id="ew-sent-nr-field" class="ew-nr" type="text" value="001" readonly tabindex="-1"
                      title="Next progressive serial number — sent with this QSO's exchange when logged, auto-incrementing">
+              <input id="ew-sent-grid" class="ew-grid hidden" type="text" readonly tabindex="-1"
+                     title="Your current locator — change it with Change Location" aria-label="Locator sent">
             </span>
             <span class="ew-key">&lt; F6 &gt;</span>
           </div>
@@ -1135,6 +1157,8 @@
             <span class="ew-lbl">Exch Rcvd</span>
             <span class="ew-pair">
               <input id="ew-rst-rcvd" class="ew-rst" type="text" value="59" aria-label="RST received">
+              <input id="ew-rcvd-nr" class="ew-nr hidden" type="text" inputmode="numeric" autocomplete="off" placeholder="Nr" aria-label="Serial number received">
+              <input id="ew-rcvd-grid" class="ew-grid hidden" type="text" autocomplete="off" maxlength="6" placeholder="Locator" style="text-transform:uppercase" aria-label="Locator received">
               <input id="ew-exchange" class="ew-exch" type="text" autocomplete="off" aria-label="Exchange received">
             </span>
             <span class="ew-key">&lt; F7 &gt;</span>

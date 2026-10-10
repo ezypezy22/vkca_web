@@ -165,7 +165,7 @@ class CQWWPlugin(ContestPlugin):
 
     _ZONE_RE = re.compile(r"(?<!\d)(\d{1,2})(?!\d)")
 
-    def standalone_qso_fields(self, call, band, mode, exchange, prior_qsos, my_call):
+    def standalone_qso_fields(self, call, band, mode, exchange, prior_qsos, my_call, fields=None):
         """Country/zone/continent + CQWW points and per-band mult flags, so a
         QSO logged in this app scores like N1MM's own (IsMultiplier1 = new
         zone on this band, IsMultiplier2 = new country on this band)."""

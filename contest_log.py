@@ -58,6 +58,26 @@ def _freq_to_band(freq_raw):
     else:                    return f"{f:.2f}MHz"
 
 
+# Named VHF/UHF/microwave bands (MHz ranges), used only by plugins that opt in
+# with ContestPlugin.vhf_band_names — other plugins keep the legacy "432.00MHz"
+# style label above 2m, which e.g. vk_rd.py's scoring still relies on.
+_VHF_BANDS = [
+    (50.0, 54.0, "6M"), (144.0, 148.0, "2M"), (420.0, 450.0, "70CM"),
+    (1240.0, 1300.0, "23CM"), (2300.0, 2450.0, "13CM"), (3300.0, 3500.0, "9CM"),
+    (5650.0, 5925.0, "6CM"), (10000.0, 10500.0, "3CM"), (24000.0, 24250.0, "1.2CM"),
+    (47000.0, 47200.0, "6MM"), (75500.0, 81000.0, "4MM"), (119980.0, 123000.0, "2.5MM"),
+    (134000.0, 141000.0, "2MM"), (241000.0, 250000.0, "1MM"),
+]
+
+
+def _mhz_to_vhf_band(mhz: float):
+    """Named band for a frequency in MHz, or None if it isn't a VHF+ band."""
+    for lo, hi, name in _VHF_BANDS:
+        if lo <= mhz < hi:
+            return name
+    return None
+
+
 # Inverse of _freq_to_band's band-name half — a nominal mid-band frequency
 # per band label, for logentry.js's entry form (band, not frequency, is
 # what the operator picks). Matches the same band labels used throughout
@@ -66,6 +86,9 @@ _BAND_TO_MHZ = {
     "160M": 1.85, "80M": 3.6, "60M": 5.35, "40M": 7.1, "30M": 10.12,
     "20M": 14.1, "17M": 18.1, "15M": 21.2, "12M": 24.9, "10M": 28.4,
     "6M": 50.1, "2M": 144.1, "70CM": 432.1,
+    "23CM": 1296.1, "13CM": 2304.1, "9CM": 3400.1, "6CM": 5760.1, "3CM": 10368.1,
+    "1.2CM": 24048.1, "6MM": 47088.1, "4MM": 76032.1, "2.5MM": 122250.1,
+    "2MM": 134928.1, "1MM": 241000.1,
 }
 
 
@@ -248,7 +271,8 @@ class ContestLog:
             return False
 
     @staticmethod
-    def create_new_log(db_path, contest_name: str, my_call: str, cq_zone: int = 0) -> None:
+    def create_new_log(db_path, contest_name: str, my_call: str, cq_zone: int = 0,
+                       start_dt=None) -> None:
         """
         Create a brand-new, empty contest log at `db_path` for standalone
         logging mode (this app as the sole writer — never a file N1MM might
@@ -326,7 +350,7 @@ class ContestLog:
                 CREATE TABLE VKCA_Meta (key TEXT PRIMARY KEY, value TEXT);
                 INSERT INTO VKCA_Meta (key, value) VALUES ('standalone', '1');
             """)
-            now = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+            now = start_dt or datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
             conn.execute(
                 "INSERT INTO ContestInstance (ContestName, StartDate, ContestNR) VALUES (?, ?, 1)",
                 (contest_name, now.strftime("%Y-%m-%d %H:%M:%S")),
@@ -342,15 +366,16 @@ class ContestLog:
     _STANDALONE_EXTRA_COLS = frozenset({
         "CountryPrefix", "ZN", "Continent", "IsMultiplier1", "IsMultiplier2",
         "WPXPrefix", "Sect", "Prec", "CK",
+        "NR", "GridSquare", "RoverLocation",
     })
 
-    def _standalone_extra(self, call_u, band_u, mode_u, exchange, is_repeat, prior):
+    def _standalone_extra(self, call_u, band_u, mode_u, exchange, is_repeat, prior, fields=None):
         """Plugin-supplied DXLOG columns (country/zone/continent/points/mult
         flags) for a standalone-logged QSO — see ContestPlugin.
         standalone_qso_fields(). A dupe keeps 0 points and no mult flags."""
         try:
             f = self.plugin.standalone_qso_fields(
-                call_u, band_u, mode_u, exchange or "", prior, self.my_call or "") or {}
+                call_u, band_u, mode_u, exchange or "", prior, self.my_call or "", fields) or {}
         except Exception:
             logging.exception("standalone_qso_fields failed for %s", call_u)
             f = {}
@@ -359,12 +384,17 @@ class ContestLog:
             pts = 0
             f.pop("IsMultiplier1", None)
             f.pop("IsMultiplier2", None)
+        # The entry form's own extra values (received serial, locator...) ride
+        # along even when the plugin adds nothing for them.
+        for k, v in (fields or {}).items():
+            if k in self._STANDALONE_EXTRA_COLS and k not in f:
+                f[k] = v
         f = {k: v for k, v in f.items() if k in self._STANDALONE_EXTRA_COLS}
         return pts, f
 
     def add_qso(self, call: str, band: str, mode: str, rst_sent: str,
                 rst_rcvd: str, exchange: str, is_run: bool = False,
-                comment: str = "") -> tuple:
+                comment: str = "", fields: Optional[dict] = None) -> tuple:
         """
         Insert one new QSO into this (standalone-only, see the caller's own
         gate in web/server.py) log at the current time, and return
@@ -410,20 +440,22 @@ class ContestLog:
         call_u = call.strip().upper()
         band_u = band.strip().upper()
         mode_u = mode.strip().upper()
-        mode_scoped = getattr(self.plugin, "mode_scoped_dupes", False)
-        new_mode_key = self.plugin.dupe_mode_key({"mode": mode_u}) if mode_scoped else None
-        is_repeat = any(
-            not q["dupe"] and q["call"] == call_u and q["band"] == band_u
-            and (not mode_scoped or self.plugin.dupe_mode_key(q) == new_mode_key)
-            for q in self.qsos
-        )
+        fields = dict(fields or {})
+        if getattr(self.plugin, "roaming_locator", False) and self.my_grid:
+            fields.setdefault("RoverLocation", self.my_grid)
+        now_t = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+        is_repeat = self.plugin.is_repeat_contact(
+            {"call": call_u, "band": band_u, "mode": mode_u, "time": now_t,
+             "grid": (fields.get("GridSquare") or "").upper(),
+             "my_grid": (fields.get("RoverLocation") or "").upper()},
+            self.qsos)
         contact_type = "D" if is_repeat else ""
         # A neutral non-zero placeholder for a genuine non-repeat, not a
         # real score (see the docstring above) — just enough to keep the
         # base loader's pts==0-implies-dupe heuristic from misflagging it.
         pts = 0 if is_repeat else 1
         plugin_pts, extra = self._standalone_extra(
-            call_u, band_u, mode_u, exchange, is_repeat, self.qsos)
+            call_u, band_u, mode_u, exchange, is_repeat, self.qsos, fields)
         if plugin_pts is not None:
             pts = plugin_pts
         extra_cols = "".join(f", {k}" for k in extra)
@@ -454,14 +486,30 @@ class ContestLog:
                     break
                 except sqlite3.IntegrityError:
                     ts += timedelta(seconds=1)
+            else:
+                # Every retry collided — never drop the QSO silently.
+                raise RuntimeError(f"Could not log {call_u}: too many contacts with this call in the same second.")
             conn.commit()
         finally:
             conn.close()
         return new_id, sent_nr
 
+    def set_my_grid(self, grid: str) -> None:
+        """Record the operator's current locator (roaming stations): later QSOs
+        are stamped with it. Stored in this app's own VKCA_Meta marker table."""
+        grid = (grid or "").strip().upper()
+        conn = sqlite3.connect(self.db_path)
+        try:
+            conn.execute("INSERT INTO VKCA_Meta (key, value) VALUES ('my_grid', ?) "
+                         "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (grid,))
+            conn.commit()
+        finally:
+            conn.close()
+        self.my_grid = grid
+
     def update_qso(self, qso_id: str, call: str, band: str, mode: str, rst_sent: str,
                     rst_rcvd: str, exchange: str, is_run: bool = False,
-                    comment: str = "") -> None:
+                    comment: str = "", fields: Optional[dict] = None) -> None:
         """
         Edit an existing standalone-logged QSO in place (Call/Band/Mode/
         RST/Exchange/Run flag) — same connect/execute/commit/close pattern
@@ -478,13 +526,18 @@ class ContestLog:
         call_u = call.strip().upper()
         band_u = band.strip().upper()
         mode_u = mode.strip().upper()
-        mode_scoped = getattr(self.plugin, "mode_scoped_dupes", False)
-        new_mode_key = self.plugin.dupe_mode_key({"mode": mode_u}) if mode_scoped else None
-        is_repeat = any(
-            not q["dupe"] and q.get("qso_id") != qso_id and q["call"] == call_u and q["band"] == band_u
-            and (not mode_scoped or self.plugin.dupe_mode_key(q) == new_mode_key)
-            for q in self.qsos
-        )
+        fields = dict(fields or {})
+        this_q = next((q for q in self.qsos if q.get("qso_id") == qso_id), None)
+        if getattr(self.plugin, "roaming_locator", False):
+            # Editing keeps where the QSO was made unless the form says otherwise.
+            fields.setdefault("RoverLocation", (this_q or {}).get("my_grid") or self.my_grid)
+        others = [q for q in self.qsos if q.get("qso_id") != qso_id]
+        is_repeat = self.plugin.is_repeat_contact(
+            {"call": call_u, "band": band_u, "mode": mode_u,
+             "time": (this_q or {}).get("time") or datetime.now(timezone.utc).replace(tzinfo=None),
+             "grid": (fields.get("GridSquare") or "").upper(),
+             "my_grid": (fields.get("RoverLocation") or "").upper()},
+            others)
         contact_type = "D" if is_repeat else ""
         pts = 0 if is_repeat else 1
         # Mult flags are "new on this band" relative to what came BEFORE this
@@ -493,7 +546,7 @@ class ContestLog:
         prior = [q for q in self.qsos if q.get("qso_id") != qso_id
                  and (this_t is None or q["time"] < this_t)]
         plugin_pts, extra = self._standalone_extra(
-            call_u, band_u, mode_u, exchange, is_repeat, prior)
+            call_u, band_u, mode_u, exchange, is_repeat, prior, fields)
         if plugin_pts is not None:
             pts = plugin_pts
         extra_set = "".join(f", {k}=?" for k in extra)
@@ -572,6 +625,22 @@ class ContestLog:
                 self.my_call = str(row[0]).strip().upper() or None
         except Exception as e:
             logging.info("Could not read Station.Call (live ranking will be unavailable): %s", e)
+
+        # The operator's own locator: this app's roaming "current location"
+        # (VKCA_Meta) wins, else the N1MM station-data grid (Station.GridSquare).
+        self.my_grid = ""
+        try:
+            row = c.execute("SELECT GridSquare FROM Station LIMIT 1").fetchone()
+            if row and row[0]:
+                self.my_grid = str(row[0]).strip().upper()
+        except Exception:
+            pass
+        try:
+            row = c.execute("SELECT value FROM VKCA_Meta WHERE key='my_grid'").fetchone()
+            if row and row[0]:
+                self.my_grid = str(row[0]).strip().upper()
+        except Exception:
+            pass
 
         target = None
         for t in tables:
@@ -661,6 +730,9 @@ class ContestLog:
         sent_nr_col  = col(["SentNr","sentnr","SENTNR"])
         comment_col  = col(["Comment","comment"])
         exch1_col    = col(["Exchange1","exchange1"])
+        grid_col     = col(["GridSquare","gridsquare"])      # the WORKED station's locator
+        nr_col       = col(["NR","nr"])                      # received serial number
+        rover_col    = col(["RoverLocation","roverlocation"])  # operator's own locator at QSO time
 
         logging.info(
             "Using columns: call=%s band=%s freq=%s mode=%s time=%s "
@@ -672,7 +744,8 @@ class ContestLog:
         sel_cols = [call_col, band_col, freq_col, mode_col, time_col,
                     mult_col, zone_col, m1_col, m2_col,
                     dupe_col, pts_col, id_col, op_col, continent_col,
-                    rst_sent_col, rst_rcvd_col, sent_nr_col, comment_col, exch1_col]
+                    rst_sent_col, rst_rcvd_col, sent_nr_col, comment_col, exch1_col,
+                    grid_col, nr_col, rover_col]
         sel_cols += sect_pref_cols
         sel_cols = [cn for cn in sel_cols if cn]
         seen = set(); sel_cols_dedup = []
@@ -708,6 +781,7 @@ class ContestLog:
         # mode_scoped_dupes correction pass after this loop.
         _dupe_is_heuristic = []
         # Hoist mult list/set and regexes outside the per-QSO loop (fixes per-row recompute)
+        _vhf_names = bool(getattr(self.plugin, "vhf_band_names", False))
         _plugin_mult_list = self.plugin.mult_list()
         _plugin_mult_set  = set(_plugin_mult_list) if _plugin_mult_list else set()
         for r in rows:
@@ -858,7 +932,11 @@ class ContestLog:
             if band_raw:
                 try:
                     band_float = float(band_raw)
-                    if 1.0 <= band_float <= 1500.0:
+                    # N1MM's Band column is the band in MHz (144, 432, 1296 ...)
+                    named = _mhz_to_vhf_band(band_float) if _vhf_names else None
+                    if named:
+                        band = named
+                    elif 1.0 <= band_float <= 1500.0:
                         band = _freq_to_band(band_float)
                     else:
                         band = band_raw.upper()
@@ -866,7 +944,13 @@ class ContestLog:
                     band = band_raw.upper()
             if not band and freq_col:
                 try:
-                    band = _freq_to_band(float(d.get(freq_col) or 0))
+                    _f = float(d.get(freq_col) or 0)
+                    if _vhf_names:
+                        # Freq may be kHz, Hz*100 etc. — normalise to MHz first.
+                        _m = _f / 1_000_000 if _f > 1_000_000_000 else (_f / 1_000 if _f > 300_000 else _f)
+                        band = _mhz_to_vhf_band(_m) or _mhz_to_vhf_band(_f) or _freq_to_band(_f)
+                    else:
+                        band = _freq_to_band(_f)
                 except Exception:
                     band = "?"
 
@@ -988,6 +1072,11 @@ class ContestLog:
                     # the plugin-resolved multiplier (e.g. CQWW country prefix),
                     # which is NOT what the operator typed in the exchange box.
                     "exchange":    str(d.get(exch1_col) or "").strip() if exch1_col else "",
+                    # VHF/UHF contests: the worked station's locator, the serial
+                    # they sent, and where the operator was (roaming stations).
+                    "grid":        str(d.get(grid_col) or "").strip().upper() if grid_col else "",
+                    "rcvd_nr":     (int(d.get(nr_col)) if nr_col and str(d.get(nr_col) or "").strip().isdigit() else None),
+                    "my_grid":     (str(d.get(rover_col) or "").strip().upper() if rover_col else "") or self.my_grid,
                     "freq":        raw_freq,
                     "_table":      target,
                     # Populated asynchronously by web/server.py's QRZ lookup
@@ -1173,6 +1262,11 @@ class ContestLog:
         creation date rather than the contest date) is overridden.
         """
         start_h = self.plugin.session_config().start_hour or 0
+        _per_call = getattr(self.plugin, "start_hour_for", None)
+        if _per_call:
+            _h = _per_call(self.my_call, self.contest_name)
+            if _h is not None:
+                start_h = _h
 
         # ── Plugin provides an authoritative date calculation ─────────────────
         if hasattr(self.plugin, "contest_saturday"):
@@ -1193,7 +1287,11 @@ class ContestLog:
                 takes_name = False
             sat = (self.plugin.contest_saturday(year, contest_name=self.contest_name)
                    if takes_name else self.plugin.contest_saturday(year))
-            return datetime(sat.year, sat.month, sat.day, start_h, 0, 0)
+            if sat is not None:
+                return datetime(sat.year, sat.month, sat.day, start_h, 0, 0)
+            # else: the plugin can't tell the date from the name (e.g. an N1MM
+            # log of a contest that runs three times a year) — fall through to
+            # the log's own stored start date below.
 
         if self._contest_start_dt:
             cs = self._contest_start_dt

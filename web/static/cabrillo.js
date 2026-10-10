@@ -50,8 +50,17 @@
     return only === 'CW' ? 'CW' : only === 'RY' ? 'RTTY' : only === 'PH' ? 'SSB' : 'DIGI';
   }
 
+  // Cabrillo frequency tokens for the VHF+ bands (the spec's band names), used
+  // when a QSO has no recorded frequency.
+  const VHF_CAB_BAND = {'6M':'50','2M':'144','70CM':'432','23CM':'1.2G','13CM':'2.3G','9CM':'3.4G',
+    '6CM':'5.7G','3CM':'10G','1.2CM':'24G','6MM':'47G','4MM':'75G','2.5MM':'122G','2MM':'134G','1MM':'241G'};
+
   async function buildCabrilloText() {
     const qsos = await window.VKA.fetchQsos();
+    // A contest with its own exchange fields (WIA VHF/UHF): serial + locator on
+    // both sides, with the operator's own locator as it was at each QSO.
+    const meta = await fetch('/api/plugin_meta').then(r => r.json()).catch(() => ({}));
+    const own  = !!(meta && meta.entry_fields);
     const myCall   = val('cab-callsign').toUpperCase();
     const sentExch = val('cab-sent-exch');
 
@@ -84,16 +93,25 @@
       .map(q => {
         const { date, time } = qsoDateParts(q.time);
         const khz = freqToKhz(q.freq);
-        if (khz == null) missingFreq++;
+        if (khz == null && !(own && VHF_CAB_BAND[String(q.band || '').toUpperCase()])) missingFreq++;
         // Falls back to a bare band designator (e.g. "40") when no real
         // frequency was ever captured — syntactically acceptable to most
         // Cabrillo checkers, but flagged via cab-freq-warning below so the
         // operator knows to double check before submitting.
-        const freqTok = khz != null ? khz : String(q.band || '').replace(/CM$/i, '').replace(/M$/i, '');
+        const bandUp  = String(q.band || '').toUpperCase();
+        const freqTok = khz != null ? khz
+          : (own && VHF_CAB_BAND[bandUp]) ? VHF_CAB_BAND[bandUp]
+          : String(q.band || '').replace(/CM$/i, '').replace(/M$/i, '');
         const mode  = cabrilloMode(q.mode);
         const rstS  = q.rst_sent || '599';
         const rstR  = q.rst_rcvd || '599';
         const exchR = q.mult1 || '';
+        if (own) {
+          const pad3  = n => String(n ?? '').padStart(3, '0');
+          const sent  = `${rstS} ${pad3(q.sent_nr)} ${(q.my_grid || '').toUpperCase()}`;
+          const rcvd  = `${rstR} ${pad3(q.rcvd_nr)} ${(q.grid || '').toUpperCase()}`;
+          return `QSO: ${freqTok} ${mode} ${date} ${time} ${myCall} ${sent} ${q.call} ${rcvd}`;
+        }
         return `QSO: ${freqTok} ${mode} ${date} ${time} ${myCall} ${rstS} ${sentExch} ${q.call} ${rstR} ${exchR}`;
       });
 

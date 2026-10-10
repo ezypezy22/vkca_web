@@ -28,6 +28,18 @@
   const modeBtnsEl   = document.getElementById('ew-mode-buttons');
   const qsoCountEl   = document.getElementById('ew-qso-count');
   const sentNrEl     = document.getElementById('ew-sent-nr-field');
+  const sentGridEl   = document.getElementById('ew-sent-grid');
+  const rcvdNrEl     = document.getElementById('ew-rcvd-nr');
+  const rcvdGridEl   = document.getElementById('ew-rcvd-grid');
+  const locWrapEl    = document.getElementById('ew-location');
+  const locGridEl    = document.getElementById('ew-loc-grid');
+  const locBtn       = document.getElementById('ew-loc-btn');
+  const locDialog    = document.getElementById('ew-loc-dialog');
+  const locInput     = document.getElementById('ew-loc-input');
+  const locInfo      = document.getElementById('ew-loc-info');
+  const locErr       = document.getElementById('ew-loc-err');
+  const locSave      = document.getElementById('ew-loc-save');
+  const locCancel    = document.getElementById('ew-loc-cancel');
   const searchInput  = document.getElementById('le-search-input');
   const summaryRowEl = document.getElementById('le-summary-row');
   const commentInput = document.getElementById('ew-comment');
@@ -152,7 +164,12 @@
   let _activeMode = null;        // the mode this QSO will actually be logged with
   let _bandDefaults = {};        // band -> freq_hz, from Settings → Rig Control (unset unless configured)
   let _contestMode = null;       // "CW"/"SSB" when the log's contest name pins one (e.g. Oceania DX CW)
-  let _rstDefaultFor = null;     // effective mode the RST fields' default was last applied for
+  let _rstDefaultFor = null;
+  let _roaming = false;          // contest has a roaming locator (WIA VHF/UHF)
+  let _entryFields = null;       // extra exchange fields the plugin asks for, or null
+  let _myGrid = '';              // operator's current locator
+  let _reworkByMode = true;
+  let _locPrompted = false;      // auto-open Change Location once if none is set yet     // effective mode the RST fields' default was last applied for
 
   // RST defaults to 59 for phone and 599 for CW. Only ever swaps a value
   // that is still exactly the other default (or blank), so anything the
@@ -261,6 +278,8 @@
       _bandDefaults = cfg.band_defaults || {};
       _contestMode = meta.loaded ? (meta.contest_mode || null) : null;
       applyPluginLists(meta);
+      _reworkByMode = meta.rework_by_mode !== false;
+      applyEntryLayout(meta);
     } catch (e) {
       console.warn('entrywindow: refreshRigStatus failed:', e);
       _rigctldConnected = false;
@@ -316,6 +335,7 @@
   }
 
   function reworkModeKey(mode) {
+    if (!_reworkByMode) return 'ANY';
     const m = (mode || '').toUpperCase();
     return (m === 'CW' || m.includes('RTTY') || m.includes('FSK')) ? 'CW_DIGITAL' : 'PHONE';
   }
@@ -452,6 +472,8 @@
     rstSent.value = q.rst_sent || rstSent.value;
     rstRcvd.value = q.rst_rcvd || rstRcvd.value;
     exchInput.value = q.exchange || q.mult1 || '';
+    if (rcvdNrEl) rcvdNrEl.value = q.rcvd_nr != null ? String(q.rcvd_nr) : '';
+    if (rcvdGridEl) rcvdGridEl.value = q.grid || '';
     if (commentInput) commentInput.value = q.comment || '';
     const band = (q.band || '').toUpperCase();
     if (_bands.includes(band)) { _activeBand = band; renderBands(); }
@@ -536,6 +558,105 @@
     if (_ctxMenuEl && !_ctxMenuEl.contains(e.target)) closeCtxMenu();
   });
 
+
+  // ── Per-contest entry layout + roaming locator (WIA VHF/UHF Field Day) ──────
+  const GRID_RE = /^[A-R]{2}[0-9]{2}[A-X]{2}$/;
+
+  function applyEntryLayout(meta) {
+    const loaded = meta && meta.loaded !== false;
+    _roaming = !!(loaded && meta.roaming_locator);
+    _entryFields = loaded ? (meta.entry_fields || null) : null;
+    _myGrid = (loaded && meta.my_grid) || '';
+    const ef = _entryFields;
+    rcvdNrEl?.classList.toggle('hidden', !(ef && ef.rcvd_nr));
+    rcvdGridEl?.classList.toggle('hidden', !(ef && ef.rcvd_grid));
+    sentGridEl?.classList.toggle('hidden', !(ef && ef.sent_grid));
+    // The free-text exchange box is replaced when the contest has its own fields.
+    exchInput.classList.toggle('hidden', !!(ef && (ef.rcvd_nr || ef.rcvd_grid)));
+    locWrapEl?.classList.toggle('hidden', !_roaming);
+    if (locGridEl) locGridEl.textContent = _myGrid || '—';
+    if (sentGridEl) sentGridEl.value = _myGrid;
+    // First time into a roaming contest with no position set: ask straight away.
+    if (_roaming && !_myGrid && !_locPrompted && locDialog?.classList.contains('hidden')) {
+      _locPrompted = true;
+      openLocDialog();
+    }
+  }
+
+  function locDialogOpen() { return !!locDialog && !locDialog.classList.contains('hidden'); }
+
+  function validateLocInput() {
+    const v = locInput.value.trim().toUpperCase();
+    locErr.classList.add('hidden');
+    if (!v) { locInfo.innerHTML = '&nbsp;'; return false; }
+    if (!GRID_RE.test(v)) { locInfo.textContent = 'Keep typing: 2 letters, 2 digits, 2 letters'; return false; }
+    locInfo.textContent = `Square ${v.slice(0, 4)} · sub-square ${v}`;
+    return true;
+  }
+
+  function openLocDialog() {
+    locInput.value = _myGrid || '';
+    validateLocInput();
+    locDialog.classList.remove('hidden');
+    locInput.focus(); locInput.select();
+  }
+  function closeLocDialog() { locDialog.classList.add('hidden'); callInput.focus(); }
+
+  async function saveLocation() {
+    const v = locInput.value.trim().toUpperCase();
+    if (!GRID_RE.test(v)) {
+      locErr.textContent = `"${v}" is not a 6-character locator (for example QF56LB).`;
+      locErr.classList.remove('hidden'); return;
+    }
+    locSave.disabled = true;
+    try {
+      const res  = await fetch('/api/location', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({grid: v}),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) { locErr.textContent = data.error || 'Failed to set location.'; locErr.classList.remove('hidden'); return; }
+      _myGrid = data.my_grid || v;
+      if (locGridEl) locGridEl.textContent = _myGrid;
+      if (sentGridEl) sentGridEl.value = _myGrid;
+      closeLocDialog();
+      window.VKA.invalidateQsosCache();
+      window.dispatchEvent(new CustomEvent('vka:qsos_changed'));
+      loadRecent();
+      window.VKA?.showToast?.('Location set', _myGrid, '\u{1F4CD}');
+      doLookup();
+    } catch (e) {
+      locErr.textContent = `Set location failed: ${e.message}`;
+      locErr.classList.remove('hidden');
+    } finally {
+      locSave.disabled = false;
+    }
+  }
+
+  locBtn?.addEventListener('click', openLocDialog);
+  locCancel?.addEventListener('click', closeLocDialog);
+  locSave?.addEventListener('click', saveLocation);
+  locInput?.addEventListener('input', () => {
+    const clean = locInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (clean !== locInput.value) locInput.value = clean;
+    validateLocInput();
+  });
+  locInput?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); saveLocation(); }
+  });
+  locDialog?.addEventListener('mousedown', e => { if (e.target === locDialog) closeLocDialog(); });
+
+  // Received locator: callsign-style tidy-up (letters/digits only, upper case).
+  rcvdGridEl?.addEventListener('input', () => {
+    const clean = rcvdGridEl.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (clean !== rcvdGridEl.value) rcvdGridEl.value = clean;
+    clearTimeout(_lookupTimer); _lookupTimer = setTimeout(doLookup, 120);
+  });
+  rcvdNrEl?.addEventListener('input', () => {
+    const clean = rcvdNrEl.value.replace(/[^0-9]/g, '');
+    if (clean !== rcvdNrEl.value) rcvdNrEl.value = clean;
+  });
+
   // ── Live callsign hint: country / zone / needed-mult / dupe + Super Check
   // Partial, from /api/lookup. Display only — it never fills in the received
   // exchange, which is whatever the other station sends. ─────────────────────
@@ -558,7 +679,8 @@
       else {
         if (d.new_country) h += '<span class="ew-tag new">NEW COUNTRY</span>';
         if (d.new_zone)    h += '<span class="ew-tag new">NEW ZONE</span>';
-        if (d.points != null) h += `<span class="ew-tag">${d.points} pt${d.points === 1 ? '' : 's'}</span>`;
+        if (d.distance_km != null) h += `<span class="ew-tag">${d.distance_km.toLocaleString('en-AU')} km</span>`;
+        if (d.points != null) h += `<span class="ew-tag">${d.points.toLocaleString('en-AU')} pt${d.points === 1 ? '' : 's'}</span>`;
       }
       hintEl.innerHTML = h;
     }
@@ -577,7 +699,9 @@
     const seq = ++_lookupSeq;
     if (call.length < 2) { renderHint({}, ''); return; }
     try {
-      const res = await fetch(`/api/lookup?call=${encodeURIComponent(call)}&band=${encodeURIComponent(_activeBand || '')}`);
+      const g = (rcvdGridEl && !rcvdGridEl.classList.contains('hidden') && GRID_RE.test(rcvdGridEl.value.trim().toUpperCase()))
+        ? rcvdGridEl.value.trim().toUpperCase() : '';
+      const res = await fetch(`/api/lookup?call=${encodeURIComponent(call)}&band=${encodeURIComponent(_activeBand || '')}&grid=${g}`);
       const d = await res.json();
       if (seq === _lookupSeq) renderHint(d, call);
     } catch (e) { /* hint is best-effort */ }
@@ -594,6 +718,7 @@
     renderHint({}, '');
     clearError();
     callInput.value = ''; exchInput.value = '';
+    if (rcvdNrEl) rcvdNrEl.value = ''; if (rcvdGridEl) rcvdGridEl.value = '';
     if (commentInput) commentInput.value = '';
     if (_editingQsoId) cancelEdit();
     callInput.focus();
@@ -613,13 +738,22 @@
     }
     if (!_activeBand && _bands.length) { _activeBand = _bands[0]; renderBands(); }
     if (!_activeBand) { showError('Pick a band.'); return; }
+    if (_roaming && !_myGrid) { showError('Set your location first (Change Location).'); openLocDialog(); return; }
+    let rcvdNr = '', rcvdGrid = '';
+    if (_entryFields) {
+      rcvdNr   = rcvdNrEl ? rcvdNrEl.value.trim() : '';
+      rcvdGrid = rcvdGridEl ? rcvdGridEl.value.trim().toUpperCase() : '';
+      if (_entryFields.rcvd_nr && !/^\d+$/.test(rcvdNr)) { showError('Enter the serial number you received.'); rcvdNrEl.focus(); return; }
+      if (_entryFields.rcvd_grid && !GRID_RE.test(rcvdGrid)) { showError(`"${rcvdGrid}" is not a 6-character locator (for example QF56LB).`); rcvdGridEl.focus(); return; }
+    }
     const editing = !!_editingQsoId;
     const body = {
       call, band: _activeBand, mode: _activeMode || 'SSB',
       rst_sent: rstSent.value.trim(), rst_rcvd: rstRcvd.value.trim(),
-      exchange: exchInput.value.trim(), is_run: !!runRadio.checked,
+      exchange: _entryFields ? `${rcvdNr} ${rcvdGrid}`.trim() : exchInput.value.trim(), is_run: !!runRadio.checked,
       comment: commentInput ? commentInput.value.trim() : '',
     };
+    if (_entryFields) { body.rcvd_nr = rcvdNr; body.rcvd_grid = rcvdGrid; }
     if (editing) body.qso_id = _editingQsoId;
     logItBtn.disabled = true;
     try {
@@ -630,6 +764,7 @@
       const data = await res.json();
       if (!res.ok || data.error) { showError(data.error || (editing ? 'Failed to update QSO.' : 'Failed to log QSO.')); return; }
       callInput.value = ''; exchInput.value = ''; renderHint({}, '');
+      if (rcvdNrEl) rcvdNrEl.value = ''; if (rcvdGridEl) rcvdGridEl.value = '';
       if (commentInput) commentInput.value = '';
       if (editing) cancelEdit();
       callInput.focus();
@@ -651,6 +786,7 @@
   // input elsewhere (e.g. the worked-list search box).
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && _ctxMenuEl) { closeCtxMenu(); return; }
+    if (locDialogOpen()) { if (e.key === 'Escape') { e.preventDefault(); closeLocDialog(); } return; }
     if (!document.getElementById('tab-logentry')?.classList.contains('active')) return;
     const t = e.target;
     if (e.key === 'Escape' && t?.closest && !t.closest('#ew-form') &&

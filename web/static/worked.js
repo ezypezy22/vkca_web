@@ -37,6 +37,7 @@
   // ContestPlugin.rework_window_hours) — null means this contest uses the
   // block schedule above instead.
   let _reworkWindowHours = null;
+  let _reworkByMode = true;   // false: the rework window ignores mode (WIA VHF/UHF)
 
   const tbody       = document.getElementById('worked-tbody');
   const countEl     = document.getElementById('worked-count');
@@ -80,6 +81,7 @@
       const res  = await fetch('/api/plugin_meta');
       const meta = await res.json();
       _reworkWindowHours = meta.loaded ? (meta.rework_window_hours || null) : null;
+      _reworkByMode = meta.rework_by_mode !== false;
       _noBlocks = !!meta.loaded && meta.uses_block_structure === false && !_reworkWindowHours;
     } catch { _reworkWindowHours = null; _noBlocks = false; }
     if (thBlock)     thBlock.style.display = (_reworkWindowHours || _noBlocks) ? 'none' : '';
@@ -114,6 +116,7 @@
   // mode; SSB and FM count as one mode"). Only meaningful in rework-
   // window mode; block-mode contests don't group rows at all.
   function reworkModeKey(mode) {
+    if (!_reworkByMode) return 'ANY';
     const m = (mode || '').toUpperCase();
     return (m === 'CW' || m.includes('RTTY') || m.includes('FSK')) ? 'CW_DIGITAL' : 'PHONE';
   }

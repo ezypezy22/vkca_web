@@ -1733,7 +1733,9 @@ async def api_new_log(body: dict):
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
         await asyncio.get_event_loop().run_in_executor(
-            None, ContestLog.create_new_log, str(p), contest_display_name, my_call, cq_zone)
+            None, lambda: ContestLog.create_new_log(
+                str(p), contest_display_name, my_call, cq_zone,
+                start_dt=plugin.new_log_start(contest_display_name, datetime.utcnow())))
     except Exception as exc:
         log.exception("create_new_log failed")
         return JSONResponse({"error": str(exc)}, status_code=500)
@@ -1758,13 +1760,13 @@ async def api_new_log(body: dict):
 
 
 def _add_qso(call: str, band: str, mode: str, rst_sent: str, rst_rcvd: str, exchange: str,
-              is_run: bool = False, comment: str = "") -> dict:
+              is_run: bool = False, comment: str = "", fields: Optional[dict] = None) -> dict:
     with STATE._lock:
         cl = STATE.contest_log
         if not cl or not STATE.is_standalone_log:
             return {"error": "Logging is only available for a log created via + New Log."}
         try:
-            new_id, sent_nr = cl.add_qso(call, band, mode, rst_sent, rst_rcvd, exchange, is_run, comment)
+            new_id, sent_nr = cl.add_qso(call, band, mode, rst_sent, rst_rcvd, exchange, is_run, comment, fields)
         except Exception as e:
             log.exception("add_qso failed")
             return {"error": str(e)}
@@ -1780,7 +1782,7 @@ def _add_qso(call: str, band: str, mode: str, rst_sent: str, rst_rcvd: str, exch
 
 
 @app.get("/api/lookup")
-def api_lookup(call: str = "", band: str = ""):
+def api_lookup(call: str = "", band: str = "", grid: str = ""):
     """Log Entry form helper: country/zone/continent for a callsign, whether
     it would be a dupe / new country / new zone on `band`, what it would be
     worth, and Super Check Partial suggestions. Read-only."""
@@ -1798,15 +1800,21 @@ def api_lookup(call: str = "", band: str = ""):
         cl = STATE.contest_log
         if not cl:
             return out
-        out["dupe"] = any(not q["dupe"] and q["call"] == call_u and q["band"] == band_u
-                          for q in cl.qsos) if band_u else False
-        if ent and band_u:
+        grid_u = (grid or "").strip().upper()
+        my_grid = cl.my_grid if getattr(cl.plugin, "roaming_locator", False) else ""
+        out["dupe"] = bool(band_u) and cl.plugin.is_repeat_contact(
+            {"call": call_u, "band": band_u, "mode": "", "time": datetime.utcnow(),
+             "grid": grid_u, "my_grid": my_grid}, cl.qsos)
+        if (ent or grid_u) and band_u:
             try:
                 f = cl.plugin.standalone_qso_fields(
-                    call_u, band_u, "", "", cl.qsos, cl.my_call or "") or {}
+                    call_u, band_u, "", "", cl.qsos, cl.my_call or "",
+                    {"GridSquare": grid_u, "RoverLocation": my_grid}) or {}
             except Exception:
                 log.exception("lookup: standalone_qso_fields failed")
                 f = {}
+            if "_distance_km" in f:
+                out["distance_km"] = round(f["_distance_km"])
             if "IsMultiplier2" in f:
                 out["new_country"] = bool(f["IsMultiplier2"])
             if "IsMultiplier1" in f:
@@ -1815,6 +1823,69 @@ def api_lookup(call: str = "", band: str = ""):
                 out["points"] = f["Points"]
         out["zone_scored"] = bool(cl.plugin.uses_cq_zone_scoring())
     return out
+
+
+def _qso_extra_fields(body: dict):
+    """(fields, error) from a QSO add/update body: the received serial and
+    locator for contests whose plugin declares entry_fields() (WIA VHF/UHF).
+    The locator must be a complete 6-character sub-square, since the contest
+    scores from sub-square centres."""
+    cl = STATE.contest_log
+    ef = cl.plugin.entry_fields() if cl else None
+    if not ef:
+        return None, None
+    fields = {}
+    if ef.get("rcvd_nr"):
+        nr = str(body.get("rcvd_nr") or "").strip()
+        if not nr.isdigit():
+            return None, "Enter the serial number you received."
+        fields["NR"] = int(nr)
+    if ef.get("rcvd_grid"):
+        import maidenhead
+        g = (body.get("rcvd_grid") or "").strip().upper()
+        if not maidenhead.is_full_locator(g):
+            return None, f"'{g}' is not a 6-character locator (e.g. QF56LB)."
+        fields["GridSquare"] = g
+    return fields, None
+
+
+@app.get("/api/location")
+async def api_location_get():
+    """The operator's current locator (roaming stations)."""
+    with STATE._lock:
+        cl = STATE.contest_log
+        return {"enabled": bool(cl and getattr(cl.plugin, "roaming_locator", False)),
+                "my_grid": (cl.my_grid if cl else "") or ""}
+
+
+@app.post("/api/location")
+async def api_location_set(body: dict):
+    """Change Location: record where the operator is now. Later QSOs are stamped
+    with it and the sent exchange follows. Body: {grid} — a 6-char locator."""
+    import maidenhead
+    grid = (body.get("grid") or "").strip().upper()
+    if not maidenhead.is_full_locator(grid):
+        return JSONResponse({"error": f"'{grid}' is not a 6-character locator (e.g. QF56LB)."},
+                            status_code=400)
+    with STATE._lock:
+        cl = STATE.contest_log
+        if not cl or not STATE.is_standalone_log:
+            return JSONResponse({"error": "Changing location is only available for a log created via + New Log."},
+                                status_code=400)
+        if not getattr(cl.plugin, "roaming_locator", False):
+            return JSONResponse({"error": "This contest has no roaming locator."}, status_code=400)
+        try:
+            cl.set_my_grid(grid)
+        except Exception as e:
+            log.exception("set_my_grid failed")
+            return JSONResponse({"error": str(e)}, status_code=500)
+    # Reload so every QSO is rescored / re-dupe-checked against the new position
+    # data exactly as it would be for an N1MM log.
+    result = STATE.load_db(STATE.db_path, STATE.contest_nr, STATE.plugin, True)
+    if "error" in result:
+        return JSONResponse(result, status_code=500)
+    await _broadcast(STATE.snapshot())
+    return {"ok": True, "my_grid": grid}
 
 
 @app.post("/api/qsos/add")
@@ -1834,10 +1905,13 @@ async def api_qsos_add(body: dict):
     if not is_valid_callsign(call):
         return JSONResponse({"error": f"'{call}' is not a valid callsign."}, status_code=400)
 
+    _fields, _ferr = _qso_extra_fields(body)
+    if _ferr:
+        return JSONResponse({"error": _ferr}, status_code=400)
     result = await asyncio.get_event_loop().run_in_executor(
         None, _add_qso, call, band, mode,
         body.get("rst_sent") or "", body.get("rst_rcvd") or "", body.get("exchange") or "",
-        bool(body.get("is_run")), (body.get("comment") or "").strip())
+        bool(body.get("is_run")), (body.get("comment") or "").strip(), _fields)
     if "error" in result:
         return JSONResponse(result, status_code=400)
     await _broadcast(STATE.snapshot())
@@ -1845,7 +1919,7 @@ async def api_qsos_add(body: dict):
 
 
 def _update_qso(qso_id: str, call: str, band: str, mode: str, rst_sent: str, rst_rcvd: str,
-                 exchange: str, is_run: bool = False, comment: str = "") -> dict:
+                 exchange: str, is_run: bool = False, comment: str = "", fields: Optional[dict] = None) -> dict:
     with STATE._lock:
         cl = STATE.contest_log
         if not cl or not STATE.is_standalone_log:
@@ -1853,7 +1927,7 @@ def _update_qso(qso_id: str, call: str, band: str, mode: str, rst_sent: str, rst
         if not any(q.get("qso_id") == qso_id for q in cl.qsos):
             return {"error": "QSO not found."}
         try:
-            cl.update_qso(qso_id, call, band, mode, rst_sent, rst_rcvd, exchange, is_run, comment)
+            cl.update_qso(qso_id, call, band, mode, rst_sent, rst_rcvd, exchange, is_run, comment, fields)
         except Exception as e:
             log.exception("update_qso failed")
             return {"error": str(e)}
@@ -1882,10 +1956,13 @@ async def api_qsos_update(body: dict):
     if not is_valid_callsign(call):
         return JSONResponse({"error": f"'{call}' is not a valid callsign."}, status_code=400)
 
+    _fields, _ferr = _qso_extra_fields(body)
+    if _ferr:
+        return JSONResponse({"error": _ferr}, status_code=400)
     result = await asyncio.get_event_loop().run_in_executor(
         None, _update_qso, qso_id, call, band, mode,
         body.get("rst_sent") or "", body.get("rst_rcvd") or "", body.get("exchange") or "",
-        bool(body.get("is_run")), (body.get("comment") or "").strip())
+        bool(body.get("is_run")), (body.get("comment") or "").strip(), _fields)
     if "error" in result:
         return JSONResponse(result, status_code=400)
     await _broadcast(STATE.snapshot())
@@ -3126,6 +3203,12 @@ async def api_plugin_meta():
         # False for contests with no operating blocks (CQ WW, WPX, ...): the UI
         # hides the Block / "Next Block In" columns and "Best session".
         "uses_block_structure": bool(getattr(p, "uses_block_structure", lambda: True)()),
+        # Roaming stations (WIA VHF/UHF): Log Entry shows the current locator and a
+        # Change Location button; entry_fields adds received serial / locator boxes.
+        "roaming_locator":  bool(getattr(p, "roaming_locator", False)),
+        "my_grid":          getattr(STATE.contest_log, "my_grid", "") or "",
+        "entry_fields":     p.entry_fields(),
+        "rework_by_mode":   bool(getattr(p, "rework_by_mode", True)),
     }
 
 
