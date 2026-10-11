@@ -1,5 +1,13 @@
 # Changelog
 
+## 26.10.12
+
+### Enhancements
+
+Rig Control: new "Start rigctld for me (Hamlib)" option with Hamlib model, radio address (Flex: the radio's IP, model 23005 = SmartSDR Slice A) and optional rigctld.exe path. rigctld is found automatically, started when a standalone log loads, and stopped when the app closes; a rigctld already listening on the port is reused
+Rig Control: the frequency readout now follows the radio within about 0.2 s (polled 5x per second instead of once a second; mode and PTT are read less often)
+Rig Control: Band QSY defaults now cover every band, 160m to 3cm including the WARC and VHF/UHF bands, and clicking a band with no frequency set shows a message instead of doing nothing
+
 ## 26.10.11
 
 ### Enhancements

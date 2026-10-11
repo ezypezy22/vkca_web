@@ -1579,6 +1579,15 @@
           directly, and never sends anything outside standalone Logger mode.
         </div>
         <label class="dialog-label"><input id="rigctl-enabled" type="checkbox"> Enable Rig Control</label>
+        <label class="dialog-label"><input id="rigctl-launch" type="checkbox"> Start rigctld for me (Hamlib)</label>
+        <div id="rigctl-launch-opts">
+          <label class="dialog-label">Hamlib model <span class="dialog-hint">(23005 = FlexRadio SmartSDR Slice A, 23006 = Slice B)</span></label>
+          <input id="rigctl-model" class="dialog-input" type="number" min="1" placeholder="23005">
+          <label class="dialog-label">Radio address <span class="dialog-hint">(Flex: the radio's IP, not 127.0.0.1; other rigs: COM port)</span></label>
+          <input id="rigctl-rigpath" class="dialog-input" type="text" placeholder="e.g. 10.43.10.80 or COM8">
+          <label class="dialog-label">rigctld.exe <span class="dialog-hint">(leave blank to auto-detect)</span></label>
+          <input id="rigctl-exe" class="dialog-input" type="text" placeholder="auto">
+        </div>
         <label class="dialog-label">Host</label>
         <input id="rigctl-host" class="dialog-input" type="text" placeholder="127.0.0.1">
         <label class="dialog-label">Port</label>
@@ -1593,18 +1602,42 @@
           blank on purpose: enter your own preferred spot for each band (this app won't guess a
           frequency for you — a wrong guess could transmit outside your licensed segment).
         </div>
-        <label class="dialog-label">160m</label>
+<label class="dialog-label">160m</label>
         <input id="rigctl-band-160M" class="dialog-input" type="number" step="any" placeholder="e.g. 1843">
         <label class="dialog-label">80m</label>
         <input id="rigctl-band-80M" class="dialog-input" type="number" step="any" placeholder="e.g. 3535">
+        <label class="dialog-label">60m</label>
+        <input id="rigctl-band-60M" class="dialog-input" type="number" step="any" placeholder="e.g. 5357">
         <label class="dialog-label">40m</label>
         <input id="rigctl-band-40M" class="dialog-input" type="number" step="any" placeholder="e.g. 7035">
+        <label class="dialog-label">30m</label>
+        <input id="rigctl-band-30M" class="dialog-input" type="number" step="any" placeholder="e.g. 10120">
         <label class="dialog-label">20m</label>
         <input id="rigctl-band-20M" class="dialog-input" type="number" step="any" placeholder="e.g. 14035">
+        <label class="dialog-label">17m</label>
+        <input id="rigctl-band-17M" class="dialog-input" type="number" step="any" placeholder="e.g. 18085">
         <label class="dialog-label">15m</label>
         <input id="rigctl-band-15M" class="dialog-input" type="number" step="any" placeholder="e.g. 21035">
+        <label class="dialog-label">12m</label>
+        <input id="rigctl-band-12M" class="dialog-input" type="number" step="any" placeholder="e.g. 24905">
         <label class="dialog-label">10m</label>
         <input id="rigctl-band-10M" class="dialog-input" type="number" step="any" placeholder="e.g. 28035">
+        <label class="dialog-label">6m</label>
+        <input id="rigctl-band-6M" class="dialog-input" type="number" step="any" placeholder="e.g. 50150">
+        <label class="dialog-label">2m</label>
+        <input id="rigctl-band-2M" class="dialog-input" type="number" step="any" placeholder="e.g. 144150">
+        <label class="dialog-label">70cm</label>
+        <input id="rigctl-band-70CM" class="dialog-input" type="number" step="any" placeholder="e.g. 432150">
+        <label class="dialog-label">23cm</label>
+        <input id="rigctl-band-23CM" class="dialog-input" type="number" step="any" placeholder="e.g. 1296150">
+        <label class="dialog-label">13cm</label>
+        <input id="rigctl-band-13CM" class="dialog-input" type="number" step="any" placeholder="e.g. 2304150">
+        <label class="dialog-label">9cm</label>
+        <input id="rigctl-band-9CM" class="dialog-input" type="number" step="any" placeholder="e.g. 3400150">
+        <label class="dialog-label">6cm</label>
+        <input id="rigctl-band-6CM" class="dialog-input" type="number" step="any" placeholder="e.g. 5760150">
+        <label class="dialog-label">3cm</label>
+        <input id="rigctl-band-3CM" class="dialog-input" type="number" step="any" placeholder="e.g. 10368150">
 
         <button id="btn-rigctl-save" class="btn btn--primary" style="margin-top:12px;width:100%">💾 Save &amp; Apply</button>
       </div>

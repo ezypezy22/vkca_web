@@ -207,6 +207,7 @@
     if (!_rigctldConnected) return;
     const target = _lastFreqByBand[band] ?? _bandDefaults[band];
     if (target) setFreqHz(target);
+    else showError(`No QSY frequency set for ${band} — enter one in Settings → Rig Control (Band QSY defaults).`);
   }
 
   // Always rendered and clickable, regardless of rig-control status — see

@@ -277,6 +277,7 @@ class AppState:
         self._rigctld_thread                       = None   # threading.Thread
         self._rigctld_stop                         = None   # threading.Event
         self.rigctld_status: Optional[str]          = None
+        self._rigctld_proc                         = None   # rigctld subprocess we launched
         # Enrich All batch progress — reset by _qrz_enrich_all() to the size
         # of that batch, then _qrz_batch_remaining counts down as the worker
         # finishes each item (see _qrz_worker_loop). The same worker/queue
@@ -724,6 +725,49 @@ def _start_radio_listener(port: int):
     t.start()
 
 
+def _stop_rigctld_process():
+    proc = STATE._rigctld_proc
+    STATE._rigctld_proc = None
+    if proc and proc.poll() is None:
+        try:
+            proc.terminate()
+            proc.wait(timeout=3)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
+
+def _launch_rigctld(cfg) -> Optional[str]:
+    """Starts rigctld ourselves when "launch" is on. Returns an error string,
+    or None when it is running (or one is already listening on that port)."""
+    host = cfg.get("host") or rigctld.DEFAULT_HOST
+    port = int(cfg.get("port") or rigctld.DEFAULT_PORT)
+    if host not in ("127.0.0.1", "localhost"):
+        return None                       # remote rigctld: not ours to start
+    if rigctld.port_in_use(host, port):
+        return None                       # one is already running; just use it
+    exe = rigctld.find_rigctld(cfg.get("exe") or "")
+    if not exe:
+        return "rigctld.exe not found. Install Hamlib, or enter its full path in Settings > Rig Control."
+    try:
+        proc, errpath = rigctld.start_rigctld_process(
+            exe, cfg.get("model") or rigctld.DEFAULT_MODEL, (cfg.get("rig_path") or "").strip(), port)
+    except OSError as exc:
+        return f"Could not start rigctld: {exc}"
+    STATE._rigctld_proc = proc
+    time.sleep(1.2)
+    if proc.poll() is not None:
+        STATE._rigctld_proc = None
+        try:
+            lines = [l.strip() for l in open(errpath, errors="replace") if l.strip()]
+        except OSError:
+            lines = []
+        return "rigctld exited: " + (lines[-1] if lines else f"code {proc.returncode}")
+    return None
+
+
 def _sync_rigctld():
     """(Re)evaluates whether the rigctld poller should be running — it's
     only ever active for a standalone log (STATE.is_standalone_log) with
@@ -743,6 +787,7 @@ def _sync_rigctld():
         STATE._rigctld_stop.set()
         old_thread.join(timeout=3.0)   # loop polls stop_check ~1x/sec
     STATE._rigctld_thread = None
+    _stop_rigctld_process()
 
     if not should_run:
         with STATE._lock:
@@ -750,10 +795,13 @@ def _sync_rigctld():
             STATE.rigctld_status = None                # linger and look still-live
         return
 
+    launch_err = _launch_rigctld(cfg) if cfg.get("launch") else None
     host = cfg.get("host") or rigctld.DEFAULT_HOST
     port = cfg.get("port") or rigctld.DEFAULT_PORT
     stop_event = threading.Event()
     STATE._rigctld_stop = stop_event
+    with STATE._lock:
+        STATE.rigctld_status = launch_err
     t = threading.Thread(
         target=rigctld.run_rigctld_poller,
         args=(STATE, _freq_to_band_str,
@@ -1070,7 +1118,7 @@ async def api_radio_port_post(body: dict):
 # own guess at band-plan segment edges — an assumed default a few kHz
 # outside the operator's actual license privileges is a real-world
 # transmit-out-of-band risk, not just a UI nicety to get "close enough".
-_RIGCTLD_BAND_KEYS = ["160M", "80M", "40M", "20M", "15M", "10M"]
+_RIGCTLD_BAND_KEYS = ["160M", "80M", "60M", "40M", "30M", "20M", "17M", "15M", "12M", "10M", "6M", "2M", "70CM", "23CM", "13CM", "9CM", "6CM", "3CM"]
 
 
 @app.get("/api/settings/rigctld")
@@ -1086,6 +1134,11 @@ async def api_rigctld_get():
         "host":          cfg.get("host") or rigctld.DEFAULT_HOST,
         "port":          cfg.get("port") or rigctld.DEFAULT_PORT,
         "band_defaults": band_defaults,
+        "launch":        bool(cfg.get("launch")),
+        "model":         cfg.get("model") or rigctld.DEFAULT_MODEL,
+        "rig_path":      cfg.get("rig_path") or "",
+        "exe":           cfg.get("exe") or "",
+        "exe_found":     rigctld.find_rigctld(cfg.get("exe") or ""),
         "status":        status,
         "connected":     connected,
     }
@@ -1101,6 +1154,14 @@ async def api_rigctld_post(body: dict):
         return JSONResponse({"error": "Port must be a number."}, status_code=400)
     if not (1 <= port <= 65535):
         return JSONResponse({"error": "Port must be between 1 and 65535."}, status_code=400)
+
+    launch = bool(body.get("launch"))
+    try:
+        model = int(body.get("model") or rigctld.DEFAULT_MODEL)
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "Hamlib model must be a number."}, status_code=400)
+    rig_path = (body.get("rig_path") or "").strip()
+    exe = (body.get("exe") or "").strip()
 
     band_defaults_in = body.get("band_defaults") or {}
     band_defaults = {}
@@ -1118,6 +1179,7 @@ async def api_rigctld_post(body: dict):
 
     def _mutate(settings):
         settings["rigctld"] = {"enabled": enabled, "host": host, "port": port,
+                                "launch": launch, "model": model, "rig_path": rig_path, "exe": exe,
                                 "band_defaults": band_defaults}
 
     await asyncio.get_event_loop().run_in_executor(
@@ -1127,7 +1189,7 @@ async def api_rigctld_post(body: dict):
     # the poller's first connect attempt happens synchronously at thread
     # start, so a brief pause lets a bad host/port show up as a real error
     # instead of always reporting "connecting..." on the first read-back.
-    await asyncio.sleep(0.3)
+    await asyncio.sleep(1.5 if launch else 0.3)
     with STATE._lock:
         status    = STATE.rigctld_status
         connected = STATE.rigctld_conn is not None and status is None
@@ -4650,6 +4712,7 @@ def launch_webview(db_path: Optional[str] = None, port: Optional[int] = None):
             # during the up-to-2s graceful-uvicorn-stop window before the
             # final os._exit()).
             STATE._shutting_down = True
+            _stop_rigctld_process()
 
             def _shutdown():
                 # Redirect stderr to suppress the noisy WebView2/Chromium window-class

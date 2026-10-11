@@ -21,8 +21,14 @@ anything else) for the same rig.
 
 from __future__ import annotations
 
+import glob
 import logging
+import os
+import shutil
 import socket
+import subprocess
+import sys
+import tempfile
 import threading
 import time
 from typing import Callable, Optional
@@ -37,9 +43,17 @@ DEFAULT_PORT = 4532
 # radio_udp's 20s is appropriate here.
 STALE_AFTER_SECS = 10.0
 
+# Hamlib model 23005 = "SmartSDR Slice A" (FlexRadio 6000/8000 series): talks
+# to the radio's own network API, so rig_path is the radio's IP address.
+DEFAULT_MODEL = 23005
+
 _CONNECT_TIMEOUT = 2.0
 _RECV_TIMEOUT = 2.0
-_POLL_INTERVAL = 1.0
+# Frequency is polled fast so the readout follows the VFO; mode and PTT
+# change rarely, so they are read every Nth pass to keep rigctld traffic low.
+_POLL_INTERVAL = 0.2
+_MODE_EVERY = 5
+_PTT_EVERY = 2
 _MAX_BACKOFF = 10.0
 
 
@@ -187,13 +201,18 @@ def run_rigctld_poller(
     conn = RigctldConnection(host, port)
     state.rigctld_conn = conn
     backoff = 1.0
+    tick = 0
+    mode, ptt = "", False
     log.info("rigctld poller connecting to %s:%d", host, port)
     try:
         while not stop_check():
             try:
                 freq_hz = conn.get_freq_hz()
-                mode = conn.get_mode()
-                ptt = conn.get_ptt()
+                if tick % _MODE_EVERY == 0:
+                    mode = conn.get_mode()
+                if tick % _PTT_EVERY == 0:
+                    ptt = conn.get_ptt()
+                tick += 1
             except Exception as exc:
                 with state._lock:
                     state.rigctld_status = f"Could not reach rigctld at {host}:{port} ({exc})"
@@ -227,3 +246,42 @@ def run_rigctld_poller(
             if state.rigctld_conn is conn:
                 state.rigctld_conn = None
         log.info("rigctld poller stopped")
+
+
+def find_rigctld(configured: str = "") -> Optional[str]:
+    """Path of rigctld(.exe): the configured one, PATH, then the usual
+    Hamlib install folders on Windows."""
+    if configured and os.path.isfile(configured):
+        return configured
+    found = shutil.which("rigctld")
+    if found:
+        return found
+    if sys.platform == "win32":
+        for root in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles"), "C:\\"):
+            if not root:
+                continue
+            hits = sorted(glob.glob(os.path.join(root, "hamlib*", "bin", "rigctld.exe")), reverse=True)
+            if hits:
+                return hits[0]
+    return None
+
+
+def port_in_use(host: str, port: int) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+def start_rigctld_process(exe: str, model: int, rig_path: str, port: int):
+    """Launch rigctld bound to localhost. Returns (Popen, stderr_log_path)."""
+    args = [exe, "-m", str(int(model)), "-t", str(int(port)), "-T", "127.0.0.1"]
+    if rig_path:
+        args += ["-r", rig_path]
+    errpath = os.path.join(tempfile.gettempdir(), "vkca_rigctld.log")
+    errf = open(errpath, "w")
+    flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=errf,
+                            stdin=subprocess.DEVNULL, creationflags=flags)
+    return proc, errpath

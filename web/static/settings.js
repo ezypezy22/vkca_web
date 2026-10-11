@@ -379,10 +379,14 @@
   });
 
   // ── Rig Control (Hamlib rigctld — standalone Logger mode only) ─────────
-  const RIGCTL_BAND_KEYS  = ['160M', '80M', '40M', '20M', '15M', '10M'];
+  const RIGCTL_BAND_KEYS  = ['160M', '80M', '60M', '40M', '30M', '20M', '17M', '15M', '12M', '10M', '6M', '2M', '70CM', '23CM', '13CM', '9CM', '6CM', '3CM'];
   const rigctlEnabled = document.getElementById('rigctl-enabled');
   const rigctlHost    = document.getElementById('rigctl-host');
   const rigctlPort    = document.getElementById('rigctl-port');
+  const rigctlLaunch  = document.getElementById('rigctl-launch');
+  const rigctlModel   = document.getElementById('rigctl-model');
+  const rigctlRigPath = document.getElementById('rigctl-rigpath');
+  const rigctlExe     = document.getElementById('rigctl-exe');
   const rigctlError   = document.getElementById('rigctl-error');
   const rigctlStatus  = document.getElementById('rigctl-status');
   const btnRigctlSave = document.getElementById('btn-rigctl-save');
@@ -412,6 +416,11 @@
       rigctlEnabled.checked = !!data.enabled;
       rigctlHost.value = data.host;
       rigctlPort.value = data.port;
+      rigctlLaunch.checked = !!data.launch;
+      rigctlModel.value = data.model;
+      rigctlRigPath.value = data.rig_path || '';
+      rigctlExe.value = data.exe || '';
+      rigctlExe.placeholder = data.exe_found ? `auto (${data.exe_found})` : 'auto (not found)';
       RIGCTL_BAND_KEYS.forEach(b => {
         const el = document.getElementById(`rigctl-band-${b}`);
         const hz = (data.band_defaults || {})[b];
@@ -442,6 +451,8 @@
           enabled: rigctlEnabled.checked,
           host: rigctlHost.value.trim() || '127.0.0.1',
           port, band_defaults: bandDefaults,
+          launch: rigctlLaunch.checked, model: rigctlModel.value || 23005,
+          rig_path: rigctlRigPath.value.trim(), exe: rigctlExe.value.trim(),
         }),
       });
       const data = await res.json();
