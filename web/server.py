@@ -754,7 +754,7 @@ def _launch_rigctld(cfg) -> Optional[str]:
         return None                       # one is already running; just use it
     exe = rigctld.find_rigctld(cfg.get("exe") or "")
     if not exe:
-        return "rigctld.exe not found. Install Hamlib, or enter its full path in Settings > Rig Control."
+        return "rigctld not found. Install Hamlib, or enter its full path in Settings > Rig Control."
     try:
         proc, errpath = rigctld.start_rigctld_process(
             exe, cfg.get("model") or rigctld.DEFAULT_MODEL, (cfg.get("rig_path") or "").strip(), port)
