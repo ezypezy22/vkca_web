@@ -358,12 +358,13 @@ html.operator-hud-mode #operator-hud-close{display:block;}
 /* Log Entry tab: entry form full-width on top, worked-list stacked below it
    and stretched to fill the rest of the window's height, instead of two
    narrow, short cards stranded in the corner. */
-#tab-logentry.active{flex:1;min-height:0;}
+#tab-logentry.active{flex:1;min-height:0;overflow:hidden;}
 #tab-logentry .panel-box{min-height:0;display:flex;flex-direction:column;}
 /* Top to bottom: worked list (takes the spare height), a slim summary strip,
    then the larger entry window at the bottom. */
-#tab-logentry .le-worked{flex:1 1 auto;min-height:160px;}
+#tab-logentry .le-worked{flex:1 1 0;min-height:96px;}
 #tab-logentry .le-summary{flex:none;padding:6px 12px 8px;gap:4px;}
+#tab-logentry #entry-window-view{flex:none;}
 #tab-logentry .panel-box .table-wrap{flex:1;max-height:none;}
 #ew-header{display:flex;align-items:baseline;gap:18px;padding:10px 16px;
   background:var(--bg2);border-bottom:1px solid var(--bg3);flex-shrink:0;}
@@ -388,16 +389,18 @@ html.operator-hud-mode #operator-hud-close{display:block;}
 .ew-mode-btn.active{background:var(--accent);color:var(--bg);border-color:var(--accent);}
 #ew-qso-count-wrap{margin-left:auto;font-size:0.85em;color:var(--muted);}
 #ew-qso-count{font-size:1.2em;margin-left:6px;color:var(--accent);}
-#ew-body{flex:1;display:flex;min-height:0;}
-#ew-bands{display:flex;flex-direction:column;width:90px;flex-shrink:0;
-  background:var(--bg2);border-right:1px solid var(--bg3);overflow-y:auto;}
-#ew-bands button{padding:17px 4px;border:none;border-bottom:1px solid var(--bg3);
+/* Bands run across the window as one row (a tall column pushed the rest of the
+   entry window off the bottom of the fixed-size window). */
+#ew-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+#ew-bands{display:flex;flex-direction:row;flex-wrap:wrap;flex-shrink:0;
+  background:var(--bg2);border-bottom:1px solid var(--bg3);}
+#ew-bands button{flex:1 1 0;min-width:64px;padding:11px 6px;border:none;border-right:1px solid var(--bg3);
   background:transparent;color:var(--fg);font-weight:bold;font-size:0.9em;cursor:pointer;}
+#ew-bands button:last-child{border-right:none;}
 #ew-bands button:hover{background:var(--bg3);}
 #ew-bands button.active{background:var(--accent);color:var(--bg);}
-#ew-main{flex:1;display:flex;flex-direction:column;padding:16px 20px;
-  min-height:0;overflow-y:auto;}
-#ew-runsp{display:flex;gap:20px;margin-bottom:12px;font-weight:bold;font-size:1.05em;}
+#ew-main{flex:1;display:flex;flex-direction:column;padding:10px 20px 12px;min-height:0;}
+#ew-runsp{display:flex;gap:20px;margin-bottom:8px;font-weight:bold;font-size:1.05em;}
 #ew-runsp label{display:flex;align-items:center;gap:6px;cursor:pointer;}
 #ew-field-table{width:100%;border-collapse:collapse;table-layout:fixed;}
 #ew-field-table th{text-align:left;font-size:0.72em;color:var(--muted);
@@ -417,8 +420,8 @@ html.operator-hud-mode #operator-hud-close{display:block;}
   color:var(--bg);background:var(--accent);border-color:var(--accent);cursor:default;}
 #ew-error{color:var(--red);font-size:0.85em;margin:-2px 0 6px;}
 /* Entry bar — on top of the window; station information sits below it. */
-#ew-form{margin:0;padding:14px 16px 6px;border-bottom:1px solid var(--bg3);}
-#ew-bar{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-start;}
+#ew-form{margin:0;padding:10px 16px 4px;border-bottom:1px solid var(--bg3);}
+#ew-bar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-start;}
 .ew-cell{display:flex;flex-direction:column;gap:4px;}
 .ew-cell .ew-key{font-size:0.72em;color:var(--muted);text-align:center;font-family:var(--font-mono);}
 .ew-lbl{font-size:0.72em;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
@@ -428,12 +431,12 @@ html.operator-hud-mode #operator-hud-close{display:block;}
 .ew-cell input[type=text]{background:var(--bg2);color:var(--fg);border:1px solid var(--muted);
   border-radius:3px;padding:7px 9px;font-family:var(--font-mono);font-size:1em;min-width:0;}
 .ew-cell input[type=text]:focus{outline:none;border-color:var(--accent);}
-.ew-cell input#ew-call{width:10.5em;font-size:1.25em;font-weight:bold;letter-spacing:.04em;}
+.ew-cell input#ew-call{width:9em;font-size:1.25em;font-weight:bold;letter-spacing:.04em;}
 .ew-pair{display:flex;gap:5px;}
 .ew-pair .ew-rst{width:3.2em;text-align:center;}
 .ew-pair .ew-nr{width:3.8em;text-align:center;opacity:.8;}
 .ew-pair .ew-exch{width:6.5em;}
-.ew-cell input#ew-comment{width:12em;}
+.ew-cell input#ew-comment{width:9em;}
 .ew-bigbtn{min-width:110px;height:2.6em;font-weight:bold;border:1px solid var(--accent);
   border-radius:3px;background:var(--accent);color:var(--bg);font-family:inherit;cursor:pointer;}
 .ew-bigbtn:hover{filter:brightness(1.1);}
@@ -446,7 +449,7 @@ html.operator-hud-mode #operator-hud-close{display:block;}
 #ew-qso-count-wrap{margin-left:14px;}
 /* Station information card (below the bar, right of the band column). */
 #ew-info{border:1px solid var(--bg3);border-radius:var(--radius);background:var(--bg2);
-  padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
+  padding:8px 12px;display:flex;flex-direction:column;gap:5px;}
 .ew-info-h{font-size:0.7em;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
 .ew-hint .ew-call{font-size:1.25em;font-weight:bold;}
 .ew-hint .ew-ph{color:var(--muted);font-size:0.85em;}
