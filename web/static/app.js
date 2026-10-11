@@ -670,7 +670,9 @@ Users are responsible for verifying all information against N1MM before making d
       // Plain fixed-decimal, not toLocaleString — ham-radio frequency
       // convention doesn't use a thousands separator (e.g. "3.601", not
       // "3,601" or "3,601.000").
-      freqStr: freqMhz.toFixed(3),
+      // 3 decimals (kHz) minimum, but keep any finer digits the rig reports
+      // (14.1495, 14.149525) rather than rounding them away.
+      freqStr: freqMhz.toFixed(6).replace(/0{1,3}$/, ''),
       modeStr: entry.mode || '',
       opCall: entry.op_call || '',
       radioNr: entry.radio_nr || '1',

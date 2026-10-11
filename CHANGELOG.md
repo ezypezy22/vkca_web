@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.10.14
+
+### Bug Fixes
+
+Rig Control: the frequency readout rounded to 3 decimals, so a Flex on 14.1495 MHz showed as 14.149; it now shows the finer digits the rig reports (14.1495, 14.149525) and still shows 3 decimals when they are exact (7.000)
+
 ## 26.10.13
 
 ### Bug Fixes
