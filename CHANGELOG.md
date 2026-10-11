@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.10.16
+
+### Bug Fixes
+
+Rig Control: the frequency readout lagged the radio by 0.5 to 1 s because Hamlib's rigctld caches the frequency; the app now turns that cache off when it connects (rigctld then follows the radio within about 10 ms) and polls 10 times a second
+
 ## 26.10.15
 
 ### Enhancements

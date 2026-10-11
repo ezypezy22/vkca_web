@@ -51,7 +51,7 @@ _CONNECT_TIMEOUT = 2.0
 _RECV_TIMEOUT = 2.0
 # Frequency is polled fast so the readout follows the VFO; mode and PTT
 # change rarely, so they are read every Nth pass to keep rigctld traffic low.
-_POLL_INTERVAL = 0.2
+_POLL_INTERVAL = 0.1
 _MODE_EVERY = 2
 _PTT_EVERY = 2
 _MAX_BACKOFF = 10.0
@@ -115,6 +115,18 @@ class RigctldConnection:
         sock.settimeout(_RECV_TIMEOUT)
         self._sock = sock
         self._rfile = sock.makefile("r", encoding="ascii", newline="\n")
+        # Hamlib caches get_freq/get_mode for ~0.5 s and, with a Flex, kept
+        # returning the old value for up to a second after the radio had
+        # moved. Switch the cache off so the readout tracks the VFO.
+        try:
+            sock.sendall(b"\\set_cache 0\n")
+            while True:
+                line = self._rfile.readline()
+                if not line or line.startswith("RPRT"):
+                    break
+        except Exception:
+            self._close_locked()
+            raise
 
     def _cmd_locked(self, text: str, expect_lines: int = 0) -> list[str]:
         """Send one long-form rigctld command (e.g. "\\get_freq") and
