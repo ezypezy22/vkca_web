@@ -421,8 +421,12 @@ html.operator-hud-mode #operator-hud-close{display:block;}
 #ew-error{color:var(--red);font-size:0.85em;margin:-2px 0 6px;}
 /* Entry bar — on top of the window; station information sits below it. */
 #ew-form{margin:0;padding:10px 16px 4px;border-bottom:1px solid var(--bg3);}
-#ew-bar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-start;}
-.ew-cell{display:flex;flex-direction:column;gap:4px;}
+#ew-bar{display:flex;flex-wrap:nowrap;gap:10px 12px;align-items:flex-start;}
+.ew-cell{display:flex;flex-direction:column;gap:4px;min-width:0;}
+/* The fields share the full width of the window in proportion, instead of
+   bunching on the left. */
+.ew-cell.c-call{flex:2 1 0;}.ew-cell.c-sent{flex:3 1 0;}.ew-cell.c-rcvd{flex:3 1 0;}
+.ew-cell.c-cmnt{flex:2.2 1 0;}.ew-cell.c-log{flex:1 1 0;min-width:112px;}
 .ew-cell .ew-key{font-size:0.72em;color:var(--muted);text-align:center;font-family:var(--font-mono);}
 .ew-lbl{font-size:0.72em;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
 /* Fields get their own fill (the card colour) and a clearly visible border, so
@@ -431,13 +435,14 @@ html.operator-hud-mode #operator-hud-close{display:block;}
 .ew-cell input[type=text]{background:var(--bg2);color:var(--fg);border:1px solid var(--muted);
   border-radius:3px;padding:7px 9px;font-family:var(--font-mono);font-size:1em;min-width:0;}
 .ew-cell input[type=text]:focus{outline:none;border-color:var(--accent);}
-.ew-cell input#ew-call{width:9em;font-size:1.25em;font-weight:bold;letter-spacing:.04em;}
+.ew-cell input#ew-call{width:100%;font-size:1.25em;font-weight:bold;letter-spacing:.04em;}
 .ew-pair{display:flex;gap:5px;}
-.ew-pair .ew-rst{width:3.2em;text-align:center;}
-.ew-pair .ew-nr{width:3.8em;text-align:center;opacity:.8;}
-.ew-pair .ew-exch{width:6.5em;}
-.ew-cell input#ew-comment{width:9em;}
-.ew-bigbtn{min-width:110px;height:2.6em;font-weight:bold;border:1px solid var(--accent);
+.ew-pair input{min-width:0;}
+.ew-pair .ew-rst{flex:0 0 3.2em;text-align:center;}
+.ew-pair .ew-nr{flex:1 1 0;text-align:center;opacity:.8;}
+.ew-pair .ew-exch{flex:1 1 0;}
+.ew-cell input#ew-comment{width:100%;}
+.ew-bigbtn{width:100%;height:2.6em;font-weight:bold;border:1px solid var(--accent);
   border-radius:3px;background:var(--accent);color:var(--bg);font-family:inherit;cursor:pointer;}
 .ew-bigbtn:hover{filter:brightness(1.1);}
 .ew-bigbtn:disabled{opacity:.6;cursor:default;}
@@ -1546,7 +1551,7 @@ body:has(#tab-map.active) #content {
 #ew-loc-btn{font-family:inherit;font-size:0.85em;padding:3px 10px;border:1px solid var(--accent);
   border-radius:3px;background:transparent;color:var(--accent);cursor:pointer;}
 #ew-loc-btn:hover{background:var(--accent);color:var(--bg);}
-.ew-pair .ew-grid{width:6.5em;text-align:center;letter-spacing:.04em;}
+.ew-pair .ew-grid{flex:1.6 1 0;text-align:center;letter-spacing:.04em;}
 .ew-pair .ew-grid[readonly]{opacity:.85;}
 .ew-pair .hidden,#ew-exchange.hidden{display:none;}
 .ew-modal{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);display:flex;
