@@ -1,5 +1,12 @@
 # Changelog
 
+## 26.10.11
+
+### Enhancements
+
+Log Entry: the band buttons are now one row under the entry bar instead of a tall column that ran off the bottom of the fixed-size window (all 9 VHF/UHF bands now show at once), and Call Sign, Exch Sent, Exch Rcvd, Cmnt and Log QSO spread evenly across the full width on a single row
+The Worked list now gives up height instead of the Log Entry tab scrolling, and the station card is more compact
+
 ## 26.10.10
 
 ### Enhancements
