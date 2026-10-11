@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.10.15
+
+### Enhancements
+
+Rig Control: the live frequency readout now uses the radio's own MHz.kHz.Hz style (a Flex on 14.104.700 shows 14.104.7), in the header, titlebar, Overview, HUD and cluster board; the frequency entry box accepts that style as well as plain MHz
+
 ## 26.10.14
 
 ### Bug Fixes

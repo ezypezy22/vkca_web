@@ -659,6 +659,21 @@ Users are responsible for verifying all information against N1MM before making d
   // module docstring for the packet format, and AppState._own_and_all_radios()
   // for the shape). Returns null for a missing/falsy entry.
   window.VKA.RADIO_STALE_MS = 20000;   // matches web/radio_udp.py's STALE_AFTER_SECS
+  window.VKA.fmtFreqDotted = function (hz) {
+    hz = Math.round(hz);
+    const mhz = Math.floor(hz / 1e6);
+    const khz = String(Math.floor((hz % 1e6) / 1000)).padStart(3, '0');
+    const sub = String(hz % 1000).padStart(3, '0').replace(/0+$/, '') || '0';
+    return `${mhz}.${khz}.${sub}`;
+  };
+  // Inverse, for the frequency entry box: accepts 14.104.7 (radio style) or
+  // plain 14.1047 MHz. Returns MHz, or NaN.
+  window.VKA.parseFreqMhz = function (str) {
+    const t = String(str || '').trim();
+    const m = t.match(/^(\d+)\.(\d{1,3})\.(\d{1,3})$/);
+    if (m) return parseInt(m[1], 10) + parseInt(m[2].padEnd(3, '0'), 10) / 1e3 + parseInt(m[3].padEnd(3, '0'), 10) / 1e6;
+    return parseFloat(t);
+  };
   window.VKA.formatRadio = function (entry) {
     if (!entry) return null;
     const band = (entry.band || '?').toUpperCase();
@@ -670,9 +685,9 @@ Users are responsible for verifying all information against N1MM before making d
       // Plain fixed-decimal, not toLocaleString — ham-radio frequency
       // convention doesn't use a thousands separator (e.g. "3.601", not
       // "3,601" or "3,601.000").
-      // 3 decimals (kHz) minimum, but keep any finer digits the rig reports
-      // (14.1495, 14.149525) rather than rounding them away.
-      freqStr: freqMhz.toFixed(6).replace(/0{1,3}$/, ''),
+      // Shown the way the radio shows it: MHz.kHz.Hz with trailing Hz zeros
+      // trimmed, e.g. 14.104.7 (= 14.1047 MHz), 7.035.0, 14.149.525.
+      freqStr: window.VKA.fmtFreqDotted(entry.freq_hz || 0),
       modeStr: entry.mode || '',
       opCall: entry.op_call || '',
       radioNr: entry.radio_nr || '1',

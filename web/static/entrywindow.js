@@ -236,7 +236,7 @@
   freqInputEl.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const mhz = parseFloat(freqInputEl.value);
+      const mhz = window.VKA.parseFreqMhz(freqInputEl.value);
       if (!isNaN(mhz) && mhz > 0) setFreqHz(mhz * 1e6);
       freqInputEl.blur();
     } else if (e.key === 'Escape') {
