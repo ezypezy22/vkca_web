@@ -654,7 +654,11 @@ def _radio_info_maybe_broadcast():
         return
     STATE._radio_last_broadcast = now
     if STATE._main_loop is not None:
-        asyncio.run_coroutine_threadsafe(_broadcast(STATE.snapshot()), STATE._main_loop)
+        # Radio-only message: the full snapshot (whole log, every panel) made
+        # every tab re-render on each frequency step and lagged the readout.
+        with STATE._lock:
+            ri = STATE._own_and_all_radios()
+        asyncio.run_coroutine_threadsafe(_broadcast({"radio_info": ri}, "radio"), STATE._main_loop)
 
 
 def _qrz_worker_loop():
@@ -4126,7 +4130,7 @@ async def ws_live(ws: WebSocket):
             pass
 
 
-async def _broadcast(data: dict):
+async def _broadcast(data: dict, kind: str = "snapshot"):
     """Sends are awaited one at a time, each under its own short timeout —
     without that timeout, a single client whose socket isn't draining fast
     enough (a minimized/OS-throttled HUD popout, a half-dead connection
@@ -4135,7 +4139,7 @@ async def _broadcast(data: dict):
     readout — until it clears. Same category of bug as the DX Cluster's
     own socket blocking the app for up to 30s on a slow/hung peer (#41);
     this is the general /ws/live broadcast path that fix didn't cover."""
-    msg  = json.dumps({"type": "snapshot", "data": data})
+    msg  = json.dumps({"type": kind, "data": data})
     dead = []
     for ws in list(STATE._clients):
         try:

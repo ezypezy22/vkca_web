@@ -561,6 +561,7 @@ Users are responsible for verifying all information against N1MM before making d
     setStatus('connected', statusFromSnapshot(e.detail));
     updateRadioBadge(e.detail);
   });
+  window.addEventListener('vka:radio', e => updateRadioBadge(e.detail));
 
   function connectWS() {
     ws = new WebSocket(`ws://${location.host}/ws/live`);
@@ -576,6 +577,11 @@ Users are responsible for verifying all information against N1MM before making d
         emit('vka:snapshot', msg.data);   // statusFromSnapshot listener above handles status text
         const hasSess = msg.data?.session_status?.state;
         document.body.classList.toggle('has-session-bar',!!hasSess);
+      } else if (msg.type==='radio') {
+        // Live frequency/mode only: keep the cached snapshot's radio fields
+        // current and tell the few radio readouts, without a full re-render.
+        if (_lastSnap) _lastSnap.radio_info = msg.data.radio_info;
+        emit('vka:radio', msg.data);
       }
     };
 

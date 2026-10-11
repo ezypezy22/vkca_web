@@ -1,5 +1,12 @@
 # Changelog
 
+## 26.10.13
+
+### Bug Fixes
+
+Rig Control: the frequency readout lagged badly because every frequency step re-sent the whole snapshot and re-rendered every tab. Frequency and mode now go out as a small radio-only message that only updates the radio readouts (header, titlebar, Overview radio panel, HUD)
+Rig Control: choosing LSB (or any mode) in the analyzer no longer flips straight back to USB; for 3 seconds after you pick a mode the stale rig reading is ignored, and the mode is read from the rig twice as often
+
 ## 26.10.12
 
 ### Enhancements

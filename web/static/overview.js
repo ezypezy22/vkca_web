@@ -3205,6 +3205,12 @@
     document.querySelectorAll('.info-panel').forEach(addPopoutButton);
   }
 
+  window.addEventListener('vka:radio',e=>{
+    if (SPECTATOR_MODE || OPERATOR_HUD_MODE) return;
+    if (HUD_MODE) { updateHudRadio(e.detail); return; }
+    updateRadioPanel(e.detail);
+  });
+
   let _firstSnap=true;
   window.addEventListener('vka:snapshot',e=>{
     trackLastQso(e.detail);

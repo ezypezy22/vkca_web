@@ -161,6 +161,7 @@
   const MODE_CHOICES = ['CW', 'USB', 'LSB', 'RTTY', 'FM'];
   let _rigctldConnected = false;
   let _liveMode = '';
+  let _modeHoldUntil = 0;        // after the operator picks a mode, ignore stale rig readings briefly
   let _activeMode = null;        // the mode this QSO will actually be logged with
   let _bandDefaults = {};        // band -> freq_hz, from Settings → Rig Control (unset unless configured)
   let _contestMode = null;       // "CW"/"SSB" when the log's contest name pins one (e.g. Oceania DX CW)
@@ -248,6 +249,7 @@
     const btn = e.target.closest('button[data-mode]');
     if (!btn) return;
     _activeMode = btn.dataset.mode;
+    _modeHoldUntil = Date.now() + 3000;
     renderModeButtons();
     applyRstDefaults();
     if (!_rigctldConnected) return;   // manual selection only — nothing to command
@@ -808,7 +810,7 @@
       // A live rig reading always wins over whatever was last manually
       // picked — the whole point of reading it is to track what the
       // operator is actually doing on the radio right now.
-      if (_liveMode && MODE_CHOICES.includes(_liveMode)) _activeMode = _liveMode;
+      if (_liveMode && MODE_CHOICES.includes(_liveMode) && Date.now() >= _modeHoldUntil) _activeMode = _liveMode;
       if (own?.freq_hz && r.band) _lastFreqByBand[r.band] = own.freq_hz;
       // Don't clobber the field while the operator is mid-edit.
       if (document.activeElement !== freqInputEl) freqInputEl.value = r.freqStr;
@@ -830,6 +832,7 @@
   }
 
   window.addEventListener('vka:snapshot', e => { updateHeader(e.detail); loadRecent(); updateSummary(e.detail); });
+  window.addEventListener('vka:radio', e => updateHeader(e.detail));
   window.addEventListener('vka:qsos_changed', loadRecent);
 
   // Unlike the old dedicated popout window (where this was the only content

@@ -52,7 +52,7 @@ _RECV_TIMEOUT = 2.0
 # Frequency is polled fast so the readout follows the VFO; mode and PTT
 # change rarely, so they are read every Nth pass to keep rigctld traffic low.
 _POLL_INTERVAL = 0.2
-_MODE_EVERY = 5
+_MODE_EVERY = 2
 _PTT_EVERY = 2
 _MAX_BACKOFF = 10.0
 
